@@ -1,0 +1,11 @@
+services:
+  noteshare-publish:
+    build: .
+    container_name: noteshare-publish
+    restart: unless-stopped
+    ports:
+      - "8788:8788"
+    environment:
+      - TOKEN=请改成一个你自己的长随机令牌
+    volumes:
+      - ./data:/data

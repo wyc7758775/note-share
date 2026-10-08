@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --paper: #faf9f7;
+  --paper-side: #f3f1ed;
+  --ink: #292524;
+  --ink-soft: #78716c;
+  --line: #e7e5e4;
+  --accent: #b45309;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "Noto Sans SC",
+    "PingFang SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif {
+  font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+}
+
+/* ---------- 通用小件 ---------- */
+@utility btn {
+  @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors select-none;
+}
+.btn-primary {
+  @apply btn bg-stone-800 text-stone-50 hover:bg-stone-700;
+}
+.btn-ghost {
+  @apply btn text-stone-600 hover:bg-stone-200/70 hover:text-stone-900;
+}
+.btn-outline {
+  @apply btn border border-stone-300 bg-white/60 text-stone-700 hover:border-stone-400 hover:text-stone-900;
+}
+.input {
+  @apply rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm outline-none;
+  @apply focus:border-amber-700/60 focus:ring-2 focus:ring-amber-700/10;
+}
+
+/* ---------- tiptap 编辑区 ---------- */
+.ProseMirror {
+  outline: none;
+  min-height: 55vh;
+  font-size: 17px;
+  line-height: 1.85;
+}
+.ProseMirror > * + * {
+  margin-top: 0.8em;
+}
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4 {
+  font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 1.5em 0 0.5em;
+}
+.ProseMirror h1 { font-size: 1.55em; }
+.ProseMirror h2 { font-size: 1.32em; }
+.ProseMirror h3 { font-size: 1.12em; }
+.ProseMirror p { margin: 0.75em 0; }
+.ProseMirror a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid #d6b48a;
+  cursor: pointer;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid var(--line);
+  background: #f5f4f2;
+  color: #57534e;
+  padding: 0.2em 1.2em;
+  border-radius: 0 6px 6px 0;
+  margin: 1.1em 0;
+}
+.ProseMirror pre {
+  background: #1c1917;
+  color: #e7e5e4;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 0.86em;
+  line-height: 1.6;
+  overflow-x: auto;
+  font-family: Consolas, "JetBrains Mono", monospace;
+}
+.ProseMirror code {
+  font-family: Consolas, "JetBrains Mono", monospace;
+}
+.ProseMirror :not(pre) > code {
+  background: #eee9e2;
+  color: #7c2d12;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em;
+}
+.ProseMirror ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.3em;
+}
+.ProseMirror li[data-item-type="task"] {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+.ProseMirror li[data-item-type="task"] > label {
+  flex: none;
+  user-select: none;
+  margin-top: 0.45em;
+}
+.ProseMirror img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2.2em auto;
+  width: 60%;
+}
+.ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #a8a29e;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 画板块在编辑器里的样子 */
+.excalidraw-fig {
+  border: 1px dashed #d6d3d1;
+  border-radius: 10px;
+  padding: 8px;
+  margin: 1.2em 0;
+  background: #fff;
+  position: relative;
+  text-align: center;
+}
+.excalidraw-fig img {
+  border-radius: 6px;
+}
+.excalidraw-fig .fig-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.excalidraw-fig:hover .fig-actions {
+  opacity: 1;
+}
+.excalidraw-fig .fig-empty {
+  color: #a8a29e;
+  padding: 40px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 6px;
+  border: 2px solid var(--paper);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
