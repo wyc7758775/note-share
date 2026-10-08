@@ -1,6 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
@@ -52,7 +54,14 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     extensions: [
       // 放最前：待办输入规则要抢在内置 taskItem 规则之前处理列表内场景
       SmartTaskInput,
-      StarterKit,
+      StarterKit.configure({
+        // 用带语法高亮的版本替换基础 codeBlock
+        codeBlock: false,
+      }),
+      CodeBlockLowlight.configure({
+        lowlight: createLowlight(common),
+        defaultLanguage: "plaintext",
+      }),
       CustomImage,
       TaskList,
       TaskItem.configure({ nested: true }),

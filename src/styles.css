@@ -94,6 +94,61 @@ body {
   overflow-x: auto;
   font-family: Consolas, "JetBrains Mono", monospace;
 }
+
+/* 代码块语法高亮（lowlight/highlight.js 类名，暖色调配深底） */
+.ProseMirror pre code .hljs-comment,
+.ProseMirror pre code .hljs-quote {
+  color: #857f78;
+  font-style: italic;
+}
+.ProseMirror pre code .hljs-keyword,
+.ProseMirror pre code .hljs-selector-tag,
+.ProseMirror pre code .hljs-doctag,
+.ProseMirror pre code .hljs-formula {
+  color: #f0a45d;
+}
+.ProseMirror pre code .hljs-string,
+.ProseMirror pre code .hljs-regexp {
+  color: #a9c889;
+}
+.ProseMirror pre code .hljs-number,
+.ProseMirror pre code .hljs-literal {
+  color: #e6b455;
+}
+.ProseMirror pre code .hljs-title,
+.ProseMirror pre code .hljs-title.function_,
+.ProseMirror pre code .hljs-section {
+  color: #e0af68;
+}
+.ProseMirror pre code .hljs-type,
+.ProseMirror pre code .hljs-class .hljs-title,
+.ProseMirror pre code .hljs-title.class_ {
+  color: #8fbcd4;
+}
+.ProseMirror pre code .hljs-attr,
+.ProseMirror pre code .hljs-variable,
+.ProseMirror pre code .hljs-template-variable,
+.ProseMirror pre code .hljs-property {
+  color: #d6d3d1;
+}
+.ProseMirror pre code .hljs-symbol,
+.ProseMirror pre code .hljs-bullet,
+.ProseMirror pre code .hljs-meta,
+.ProseMirror pre code .hljs-built_in {
+  color: #d3869b;
+}
+.ProseMirror pre code .hljs-addition {
+  color: #a9c889;
+}
+.ProseMirror pre code .hljs-deletion {
+  color: #ea6962;
+}
+.ProseMirror pre code .hljs-emphasis {
+  font-style: italic;
+}
+.ProseMirror pre code .hljs-strong {
+  font-weight: 700;
+}
 .ProseMirror code {
   font-family: Consolas, "JetBrains Mono", monospace;
 }
