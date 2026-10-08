@@ -16,10 +16,16 @@ export function safeDecode(s: string): string {
 }
 
 export function forEditor(markdown: string): string {
-  return markdown.replace(EMBED_RE, (_m, p: string) => {
-    const src = safeDecode(p);
-    return `![${src}](${src})`;
-  });
+  return markdown
+    .replace(EMBED_RE, (_m, p: string) => {
+      const src = safeDecode(p);
+      return `![${src}](${src})`;
+    })
+    // 任务行改用 * 标记：CommonMark 规定"标记字符变化即开始新列表"，
+    // 这样普通 "- 列表" 与 "- [ ] 任务列表" 相邻时不会被 markdown-it
+    // 合并成混合列表（混合列表会让 tiptap 解析出错乱结构）。
+    // 保存时 tiptap 统一输出 "-"，磁盘格式不受影响。
+    .replace(/^(\s*)- (\[[ xX]\] )/gm, "$1* $2");
 }
 
 export function forSave(markdown: string): string {

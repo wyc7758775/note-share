@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
+import { uiConfirm, uiPrompt } from "../lib/uiDialog";
 import { I } from "./icons";
 import FileTree from "./FileTree";
 
@@ -45,7 +46,7 @@ export default function Sidebar(props: Props) {
   };
 
   const newFolder = async (parent: string) => {
-    const name = window.prompt("新文件夹名称", "新文件夹");
+    const name = await uiPrompt("新文件夹名称", "新文件夹");
     if (!name?.trim()) return;
     await backend.createFolder(parent, name.trim());
     await onTreeChanged();
@@ -53,7 +54,7 @@ export default function Sidebar(props: Props) {
 
   const rename = async (item: TreeNode) => {
     const isNote = item.kind === "note";
-    const next = window.prompt(
+    const next = await uiPrompt(
       isNote ? "新的笔记标题（即文件名）" : "新的文件夹名称",
       isNote ? item.name.replace(/\.md$/i, "") : item.name
     );
@@ -67,7 +68,7 @@ export default function Sidebar(props: Props) {
   const remove = async (item: TreeNode) => {
     const label =
       item.kind === "note" ? `笔记「${item.name.replace(/\.md$/i, "")}」` : `文件夹「${item.name}」及其内容`;
-    if (!window.confirm(`确定把${label}移入回收站（.trash）吗？`)) return;
+    if (!(await uiConfirm(`确定把${label}移入回收站（.trash）吗？`))) return;
     const wasCurrent = currentPath === item.path || currentPath?.startsWith(item.path + "/") ||
       currentPath?.startsWith(item.path + "\\");
     await backend.deletePath(item.path);

@@ -121,8 +121,19 @@ const handlers = {
     let n = sanitizeName(newName, { keepExt: false });
     if (!n) throw new Error("名称不能为空");
     if (isNote) n += ".md";
-    const target = path.join(path.dirname(abs), n);
-    if (target !== abs && fs.existsSync(target)) throw new Error("已有同名文件");
+    let target = path.join(path.dirname(abs), n);
+    if (target !== abs && fs.existsSync(target)) {
+      // 撞名时自动加序号（与新建一致），保证自动保存不中断
+      const ext = path.extname(target);
+      const stem = path.basename(target, ext);
+      for (let i = 2; i < 1000; i++) {
+        const cand = path.join(path.dirname(abs), `${stem}-${i}${ext}`);
+        if (!fs.existsSync(cand)) {
+          target = cand;
+          break;
+        }
+      }
+    }
     fs.renameSync(abs, target);
     return toPosix(path.relative(VAULT, target));
   },

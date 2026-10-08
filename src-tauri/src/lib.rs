@@ -330,12 +330,27 @@ fn rename_path(state: State<AppState>, from: String, new_name: String) -> Result
     if is_note {
         n.push_str(".md");
     }
-    let target = abs
+    let mut target = abs
         .parent()
         .unwrap_or(Path::new("."))
         .join(&n);
     if target != abs && target.exists() {
-        return Err("已有同名文件".into());
+        // 撞名时自动加序号（与新建一致），保证自动保存不中断
+        let ext = target.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+        let stem = target.file_stem().and_then(|s| s.to_str()).unwrap_or("file").to_string();
+        let dir = target.parent().unwrap_or(Path::new("."));
+        for i in 2..1000 {
+            let name = if ext.is_empty() {
+                format!("{stem}-{i}")
+            } else {
+                format!("{stem}-{i}.{ext}")
+            };
+            let cand = dir.join(name);
+            if !cand.exists() {
+                target = cand;
+                break;
+            }
+        }
     }
     fs::rename(&abs, &target).map_err(|e| e.to_string())?;
     Ok(to_posix(&target.strip_prefix(&v).map_err(|e| e.to_string())?))

@@ -9,12 +9,14 @@ import { backend } from "../backend";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { sanitizeFileName } from "../lib/files";
+import { uiConfirm } from "../lib/uiDialog";
 import {
   CustomImage,
   SceneRevContext,
   EMPTY_SCENE_JSON,
   EDIT_SCENE_EVENT,
 } from "./ExcalidrawBlock";
+import { SmartTaskInput } from "./SmartTaskInput";
 import Toolbar from "./Toolbar";
 import PublishDialog from "./PublishDialog";
 
@@ -48,6 +50,8 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
 
   const editor = useEditor({
     extensions: [
+      // 放最前：待办输入规则要抢在内置 taskItem 规则之前处理列表内场景
+      SmartTaskInput,
       StarterKit,
       CustomImage,
       TaskList,
@@ -206,7 +210,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
               className="btn-ghost !py-1 text-stone-400 hover:!text-red-600"
               title="移入回收站"
               onClick={async () => {
-                if (!window.confirm("确定把这篇笔记移入回收站（.trash）吗？")) return;
+                if (!(await uiConfirm("确定把这篇笔记移入回收站（.trash）吗？"))) return;
                 await backend.deletePath(pathRef.current);
                 await onDeleted();
               }}

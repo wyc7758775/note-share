@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor as TipTapEditor } from "@tiptap/react";
+import { uiPrompt } from "../lib/uiDialog";
 import { I } from "./icons";
 
 interface Props {
@@ -20,9 +21,9 @@ export default function Toolbar({ editor, onInsertExcalidraw, onInsertImageFile 
     };
   }, [editor]);
 
-  const setLink = () => {
+  const setLink = async () => {
     const prev = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("链接地址（留空取消链接）", prev ?? "https://");
+    const url = await uiPrompt("链接地址（留空取消链接）", prev ?? "https://");
     if (url === null) return;
     if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
