@@ -255,49 +255,47 @@ body {
   font-size: 14px;
 }
 
-/* ---------- 自绘对话框 ---------- */
-.ui-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgb(0 0 0 / 0.35);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 22vh;
+/* ---------- 文件树动效 ---------- */
+.tree-row {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
-.ui-dialog {
-  width: 360px;
-  max-width: calc(100vw - 48px);
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 50px rgb(0 0 0 / 0.18);
-  padding: 20px;
+.tree-row:hover {
+  background-color: rgb(0 0 0 / 0.045);
 }
-.ui-msg {
-  font-size: 14px;
-  color: var(--ink);
-  margin-bottom: 14px;
-  white-space: pre-wrap;
-  line-height: 1.6;
+.tree-row-active {
+  background-color: rgb(254 243 199 / 0.6);
+  box-shadow: inset 2px 0 0 0 var(--accent);
 }
-.ui-input {
-  width: 100%;
-  border: 1px solid #d6d3d1;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 14px;
-  outline: none;
-  margin-bottom: 16px;
+.tree-row-active:hover {
+  background-color: rgb(254 243 199 / 0.75);
 }
-.ui-input:focus {
-  border-color: rgb(180 83 9 / 0.6);
-  box-shadow: 0 0 0 3px rgb(180 83 9 / 0.1);
+.tree-chev {
+  display: inline-flex;
+  transition: transform 0.2s ease;
 }
-.ui-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+.tree-chev-open {
+  transform: rotate(90deg);
+}
+/* 文件夹展开/收起：grid-template-rows 过渡动画 */
+.tree-children {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.22s ease;
+}
+.tree-children-closed {
+  grid-template-rows: 0fr;
+}
+.tree-children > div {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ---------- 锁定（阅读）模式 ---------- */
+.read-mode .ProseMirror {
+  cursor: default;
+}
+.read-mode .ProseMirror a {
+  cursor: pointer;
 }
 
 /* 滚动条 */

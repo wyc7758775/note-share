@@ -11,18 +11,18 @@ import { backend } from "../backend";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { sanitizeFileName } from "../lib/files";
-import { uiConfirm } from "../lib/uiDialog";
 import {
   CustomImage,
-  SceneRevContext,
+  EditorStateContext,
   EMPTY_SCENE_JSON,
   EDIT_SCENE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
-import Toolbar from "./Toolbar";
-import PublishDialog from "./PublishDialog";
+import PublishPanel from "./PublishPanel";
+import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
+type View = "note" | "publish" | "scene";
 
 interface Props {
   initialPath: string;
@@ -38,26 +38,25 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
   const loadingRef = useRef(true);
   const savingRef = useRef(false);
   const timerRef = useRef<number | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [publishOpen, setPublishOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [locked, setLocked] = useState(false); // 默认可编辑
+  const [view, setView] = useState<View>("note");
   const [editingScene, setEditingScene] = useState<string | null>(null);
   const [sceneRev, setSceneRev] = useState(0);
-  const [loaded, setLoaded] = useState(false);
+  const [delArmed, setDelArmed] = useState(false);
 
   titleRef.current = title;
   tagsRef.current = tagsText;
 
   const editor = useEditor({
     extensions: [
-      // 放最前：待办输入规则要抢在内置 taskItem 规则之前处理列表内场景
       SmartTaskInput,
-      StarterKit.configure({
-        // 用带语法高亮的版本替换基础 codeBlock
-        codeBlock: false,
-      }),
+      StarterKit.configure({ codeBlock: false }),
       CodeBlockLowlight.configure({
         lowlight: createLowlight(common),
         defaultLanguage: "plaintext",
@@ -65,7 +64,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
       CustomImage,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Placeholder.configure({ placeholder: "开始写点什么…" }),
+      Placeholder.configure({ placeholder: "开始写点什么…（# 标题 · 1. 列表 · - [ ] 待办 · ``` 代码）" }),
       Markdown.configure({ html: false, breaks: false, linkify: false }),
     ],
     content: "",
@@ -75,11 +74,10 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
   });
 
   const saveNow = useCallback(async () => {
-    if (!editor || savingRef.current || loadingRef.current) return;
+    if (!editor || savingRef.current || loadingRef.current || locked) return;
     savingRef.current = true;
     setSaveState("saving");
     try {
-      // 标题改了 → 先重命名文件（Obsidian：文件名即标题）
       const fileTitle = decodeURIComponent(pathRef.current.split("/").pop() ?? "").replace(
         /\.md$/i,
         ""
@@ -93,7 +91,6 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           await onRenamed(newPath);
         }
       }
-      // tiptap-markdown 在 editor.storage 上挂载 markdown 序列化器（包自带类型未覆盖到 Storage）
       const md = forSave((editor.storage as any).markdown.getMarkdown() as string);
       const fm = fmRef.current;
       setTags(fm, splitTags(tagsRef.current));
@@ -108,14 +105,14 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     } finally {
       savingRef.current = false;
     }
-  }, [editor, onRenamed]);
+  }, [editor, onRenamed, locked]);
 
   const scheduleSave = useCallback(() => {
-    if (loadingRef.current) return;
+    if (loadingRef.current || locked) return;
     setSaveState("dirty");
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => void saveNow(), 1200);
-  }, [saveNow]);
+  }, [saveNow, locked]);
 
   // 载入笔记
   useEffect(() => {
@@ -137,7 +134,12 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     };
   }, [initialPath, editor]);
 
-  // 编辑即触发自动保存
+  // 锁定 / 解锁
+  useEffect(() => {
+    editor?.setEditable(!locked);
+  }, [editor, locked]);
+
+  // 编辑事件 → 自动保存
   useEffect(() => {
     if (!editor) return;
     const cb = () => scheduleSave();
@@ -147,7 +149,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     };
   }, [editor, scheduleSave]);
 
-  // Ctrl/Cmd + S 立即保存；卸载前保存
+  // Ctrl/Cmd + S 立即保存
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -159,9 +161,13 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [saveNow]);
 
-  // 画板块请求编辑 / 发布对话框请求保存
+  // 画板块请求编辑 / 发布面板请求保存（锁定时不响应画板编辑）
   useEffect(() => {
-    const onEdit = (e: Event) => setEditingScene((e as CustomEvent<string>).detail);
+    const onEdit = (e: Event) => {
+      if (locked) return;
+      setEditingScene((e as CustomEvent<string>).detail);
+      setView("scene");
+    };
     const onSave = () => void saveNow();
     window.addEventListener(EDIT_SCENE_EVENT, onEdit);
     window.addEventListener("noteshare:save-now", onSave);
@@ -169,63 +175,116 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
       window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
       window.removeEventListener("noteshare:save-now", onSave);
     };
-  }, [saveNow]);
+  }, [saveNow, locked]);
 
-  useEffect(() => {
-    return () => {
-      window.clearTimeout(timerRef.current);
-    };
-  }, []);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
   const insertExcalidraw = useCallback(async () => {
-    if (!editor) return;
+    if (!editor || locked) return;
     const saved = await backend.saveScene(null, EMPTY_SCENE_JSON, null);
     editor.chain().focus().setImage({ src: saved.scenePath }).run();
     setEditingScene(saved.scenePath);
-  }, [editor]);
+    setView("scene");
+  }, [editor, locked]);
 
   const insertImageFile = useCallback(
     async (file: File) => {
-      if (!editor) return;
+      if (!editor || locked) return;
       const base64 = await fileToBase64(file);
       const { path } = await backend.saveAsset(file.name, base64);
       editor.chain().focus().setImage({ src: path }).run();
     },
-    [editor]
+    [editor, locked]
   );
 
   if (!editor) return null;
 
+  // ---- 视图切换：发布 / 画板（占满主区，不用全局遮罩） ----
+  if (view === "publish") {
+    return (
+      <PublishPanel
+        editor={editor}
+        pathRef={pathRef}
+        fmRef={fmRef}
+        title={titleRef}
+        onBack={() => setView("note")}
+      />
+    );
+  }
+  if (view === "scene" && editingScene !== null) {
+    return (
+      <ExcalidrawPanelLazy
+        src={editingScene}
+        onBack={() => setView("note")}
+        onSaved={() => setSceneRev((v) => v + 1)}
+      />
+    );
+  }
+
+  // ---- 笔记视图 ----
   return (
-    <SceneRevContext.Provider value={sceneRev}>
+    <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
       <div className="flex h-full flex-col">
         {/* 顶栏 */}
         <div
-          className="flex h-11 shrink-0 items-center justify-between border-b px-4"
+          className="flex h-11 shrink-0 items-center justify-between border-b px-3"
           style={{ borderColor: "var(--line)" }}
         >
-          <SaveBadge state={saveState} />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <SaveBadge state={saveState} />
+          </div>
+          <div className="flex items-center gap-1">
+            {!locked && (
+              <>
+                <IconBtn title="插入图片（也可直接拖入）" onClick={() => fileInputRef.current?.click()}>
+                  {I.image}
+                </IconBtn>
+                <IconBtn title="插入 Excalidraw 画板" onClick={insertExcalidraw}>
+                  {I.pen}
+                </IconBtn>
+                <span className="mx-1 h-4 w-px bg-stone-300" />
+              </>
+            )}
+            <button
+              className={`btn !py-1 ${locked ? "!text-stone-500" : "!text-amber-700 hover:!bg-amber-50"}`}
+              title={locked ? "当前锁定，点击切换为可编辑" : "当前可编辑，点击锁定"}
+              onClick={() => {
+                void saveNow();
+                setLocked((v) => !v);
+              }}
+            >
+              {locked ? I.lock : I.unlock}
+              <span className="hidden md:inline">{locked ? "已锁定" : "可编辑"}</span>
+            </button>
+            <span className="mx-1 h-4 w-px bg-stone-300" />
             <button
               className="btn-primary !py-1"
               onClick={async () => {
                 await saveNow();
-                setPublishOpen(true);
+                setDelArmed(false);
+                setView("publish");
               }}
             >
               发布 / 导出
             </button>
-            <button
-              className="btn-ghost !py-1 text-stone-400 hover:!text-red-600"
-              title="移入回收站"
-              onClick={async () => {
-                if (!(await uiConfirm("确定把这篇笔记移入回收站（.trash）吗？"))) return;
-                await backend.deletePath(pathRef.current);
-                await onDeleted();
-              }}
-            >
-              删除
-            </button>
+            {!locked && (
+              <button
+                className={`btn !py-1 ${delArmed ? "!bg-red-600 !text-white" : "!text-stone-400 hover:!text-red-600"}`}
+                title="移入回收站"
+                onClick={async () => {
+                  if (!delArmed) {
+                    setDelArmed(true);
+                    window.setTimeout(() => setDelArmed(false), 2600);
+                    return;
+                  }
+                  setDelArmed(false);
+                  await backend.deletePath(pathRef.current);
+                  await onDeleted();
+                }}
+              >
+                {delArmed ? "确认删除？" : "删除"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -235,15 +294,17 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
+            if (locked) return;
             for (const f of e.dataTransfer.files) {
               if (f.type.startsWith("image/")) void insertImageFile(f);
             }
           }}
         >
-          <div className="mx-auto max-w-3xl px-8 py-10">
+          <div className={`mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
             <input
               className="serif w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-stone-300"
               placeholder="无标题"
+              readOnly={locked}
               value={loaded ? title : ""}
               onChange={(e) => {
                 setTitle(e.target.value);
@@ -255,6 +316,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
               <input
                 className="flex-1 border-none bg-transparent outline-none placeholder:text-stone-300"
                 placeholder="标签，用逗号分隔"
+                readOnly={locked}
                 value={loaded ? tagsText : ""}
                 onChange={(e) => {
                   setTagsText(e.target.value);
@@ -263,41 +325,45 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
               />
             </div>
 
-            <div
-              className="mt-4 border-b pb-3"
-              style={{ borderColor: "var(--line)" }}
-            >
-              <Toolbar
-                editor={editor}
-                onInsertExcalidraw={insertExcalidraw}
-                onInsertImageFile={insertImageFile}
-              />
-            </div>
-
-            <div className="pt-6">
+            <div className="mt-6 pt-0">
               <EditorContent editor={editor} />
             </div>
           </div>
         </div>
 
-        {editingScene !== null && (
-          <ExcalidrawModalLazy
-            src={editingScene}
-            onClose={() => setEditingScene(null)}
-            onSaved={() => setSceneRev((v) => v + 1)}
-          />
-        )}
-        {publishOpen && (
-          <PublishDialog
-            editor={editor}
-            pathRef={pathRef}
-            fmRef={fmRef}
-            title={titleRef}
-            onClose={() => setPublishOpen(false)}
-          />
-        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void insertImageFile(f);
+            e.target.value = "";
+          }}
+        />
       </div>
-    </SceneRevContext.Provider>
+    </EditorStateContext.Provider>
+  );
+}
+
+function IconBtn({
+  title,
+  onClick,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-200/70 hover:text-stone-800"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -309,19 +375,19 @@ function SaveBadge({ state }: { state: SaveState }) {
     error: { text: "保存失败（重试：Ctrl+S）", cls: "text-red-600" },
   };
   const { text, cls } = map[state];
-  return <span className={`text-xs ${cls}`}>{text}</span>;
+  return <span className={`px-1 text-xs ${cls}`}>{text}</span>;
 }
 
-// Excalidraw 弹窗按需加载（它的体积很大，不该阻塞首屏）
-const ExcalidrawModalLazyImpl = lazy(() => import("./ExcalidrawModal"));
-function ExcalidrawModalLazy(props: {
+// 画板视图按需加载（体积大）
+const ExcalidrawPanelLazyImpl = lazy(() => import("./ExcalidrawPanel"));
+function ExcalidrawPanelLazy(props: {
   src: string;
-  onClose: () => void;
+  onBack: () => void;
   onSaved: () => void;
 }) {
   return (
-    <Suspense fallback={<div className="fixed inset-0 bg-black/30" />}>
-      <ExcalidrawModalLazyImpl {...props} />
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-stone-400">画板加载中…</div>}>
+      <ExcalidrawPanelLazyImpl {...props} />
     </Suspense>
   );
 }

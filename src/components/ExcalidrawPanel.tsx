@@ -1,15 +1,16 @@
+// 画板编辑视图：占满编辑器主区（视图切换，不是全局遮罩弹窗）
 import { useEffect, useRef, useState } from "react";
 import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import { backend } from "../backend";
 
 interface Props {
-  src: string; // attachments/xxx.excalidraw
-  onClose: () => void;
+  src: string;
+  onBack: () => void;
   onSaved: () => void;
 }
 
-export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
+export default function ExcalidrawPanel({ src, onBack, onSaved }: Props) {
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -28,7 +29,7 @@ export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
           },
           files: scene.files ?? {},
         });
-      } catch (e) {
+      } catch {
         setError("画板文件读取失败");
       }
     })();
@@ -47,7 +48,6 @@ export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
       const files = api.getFiles();
       const appState = api.getAppState();
 
-      // PNG 预览图：编辑器内和发布页都显示这张
       const blob = await exportToBlob({
         elements,
         files,
@@ -56,7 +56,6 @@ export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
       });
       const pngBase64 = await blobToBase64(blob);
 
-      // 场景文件：与 Obsidian Excalidraw 插件同源的 .excalidraw JSON
       const sceneJson = JSON.stringify({
         type: "excalidraw",
         version: 2,
@@ -68,7 +67,7 @@ export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
 
       await backend.saveScene(src, sceneJson, pngBase64);
       onSaved();
-      onClose();
+      onBack();
     } catch (e) {
       console.error(e);
       setError("保存失败，请重试");
@@ -77,33 +76,30 @@ export default function ExcalidrawModal({ src, onClose, onSaved }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-      <div className="flex h-[88vh] w-[92vw] max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-stone-200 px-4">
-          <div className="text-sm font-medium text-stone-700">画板（Excalidraw）</div>
-          <div className="flex items-center gap-2">
-            {error && <span className="text-xs text-red-600">{error}</span>}
-            <button className="btn-ghost" onClick={onClose}>
-              取消
-            </button>
-            <button className="btn-primary" disabled={saving} onClick={handleSave}>
-              {saving ? "保存中…" : "完成并保存"}
-            </button>
+    <div className="flex h-full flex-col">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-stone-200 px-3">
+        <button className="btn-ghost !py-1" onClick={onBack}>
+          ← 返回笔记
+        </button>
+        <div className="flex items-center gap-2">
+          {error && <span className="text-xs text-red-600">{error}</span>}
+          <button className="btn-primary !py-1" disabled={saving} onClick={handleSave}>
+            {saving ? "保存中…" : "完成并保存"}
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1">
+        {initialData ? (
+          <Excalidraw
+            excalidrawAPI={(api: any) => (apiRef.current = api)}
+            initialData={initialData}
+            theme="light"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-stone-400">
+            {error || "画板加载中…"}
           </div>
-        </div>
-        <div className="min-h-0 flex-1">
-          {initialData ? (
-            <Excalidraw
-              excalidrawAPI={(api: any) => (apiRef.current = api)}
-              initialData={initialData}
-              theme="light"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-stone-400">
-              {error || "画板加载中…"}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
