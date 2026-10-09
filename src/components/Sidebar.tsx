@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
 import { downloadDataUrl } from "../lib/download";
+import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -183,7 +184,23 @@ export default function Sidebar(props: Props) {
 
       {tab === "files" ? (
         <>
-          <div className="side-scroll">
+          <div
+            className="side-scroll"
+            onContextMenu={(e) => {
+              // 目录树空白处右键：新建笔记 / 新建文件夹（树内行有自己的菜单且不冒泡）
+              e.preventDefault();
+              showContextMenu(e.clientX, e.clientY, [
+                {
+                  label: "新建笔记",
+                  onClick: () => void handlers.onNewNote(""),
+                },
+                {
+                  label: "新建文件夹",
+                  onClick: () => setNewFolderMode(true),
+                },
+              ]);
+            }}
+          >
             {newFolderMode && (
               <InlineInputRow
                 initial=""
@@ -206,21 +223,6 @@ export default function Sidebar(props: Props) {
               confirmPath={confirmPath}
               {...handlers}
             />
-          </div>
-          <div className="flex gap-1.5 border-t border-stone-200 p-2.5">
-            <button
-              className="btn-outline flex-1 justify-center !py-1"
-              onClick={() => void handlers.onNewNote("")}
-            >
-              {I.plus} 新笔记
-            </button>
-            <button
-              className="btn-outline justify-center !py-1"
-              title="新建文件夹"
-              onClick={() => setNewFolderMode((v) => !v)}
-            >
-              {I.folderPlus}
-            </button>
           </div>
         </>
       ) : (

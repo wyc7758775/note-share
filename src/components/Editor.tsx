@@ -28,6 +28,14 @@ import { I } from "./icons";
 type SaveState = "saved" | "dirty" | "saving" | "error";
 type View = "note" | "publish" | "scene";
 
+// 快捷键修饰键的显示名（苹果设备是 Command）
+const MOD_KEY = /mac|iphone|ipad|ipod/i.test(
+  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ?? ""
+)
+  ? "⌘"
+  : "Ctrl+";
+
 interface Props {
   initialPath: string;
   onRenamed: (newPath: string) => Promise<void>;
@@ -60,7 +68,6 @@ export default function Editor({
   const [view, setView] = useState<View>("note");
   const [editingScene, setEditingScene] = useState<string | null>(null);
   const [sceneRev, setSceneRev] = useState(0);
-  const [delArmed, setDelArmed] = useState(false);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
   // 斜杠菜单里"图片/画板"两项的落点（延迟绑定到本组件的方法）
@@ -261,12 +268,18 @@ export default function Editor({
     };
   }, [editor, scheduleSave]);
 
-  // Ctrl/Cmd + S 立即保存
+  // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") {
         e.preventDefault();
         void saveNow();
+      } else if (k === "e") {
+        e.preventDefault();
+        void saveNow();
+        setLocked((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -378,45 +391,66 @@ export default function Editor({
           </div>
           <div className="flex items-center gap-1">
             <button
-              className={`btn !py-1 ${locked ? "!text-stone-500" : "!text-amber-700 hover:!bg-amber-50"}`}
-              title={locked ? "当前锁定，点击切换为可编辑" : "当前可编辑，点击锁定"}
+              className="top-icon-btn"
+              data-tip={locked ? `解锁编辑（${MOD_KEY}E）` : `锁定阅读（${MOD_KEY}E）`}
               onClick={() => {
                 void saveNow();
                 setLocked((v) => !v);
               }}
             >
               {locked ? I.lock : I.unlock}
-              <span className="hidden md:inline">{locked ? "已锁定" : "可编辑"}</span>
             </button>
-            <span className="mx-1 h-4 w-px bg-stone-300" />
             <button
-              className="btn-primary !py-1"
-              onClick={async () => {
-                await saveNow();
-                setDelArmed(false);
-                setView("publish");
+              className="top-icon-btn"
+              data-tip="更多操作"
+              onClick={(e) => {
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
+                  {
+                    label: locked ? `解锁编辑（${MOD_KEY}E）` : `锁定阅读（${MOD_KEY}E）`,
+                    checked: locked,
+                    onClick: () => {
+                      void saveNow();
+                      setLocked((v) => !v);
+                    },
+                  },
+                  { separator: true },
+                  {
+                    label: "发布 / 导出…",
+                    onClick: () => {
+                      void (async () => {
+                        await saveNow();
+                        setView("publish");
+                      })();
+                    },
+                  },
+                  { separator: true },
+                  {
+                    label: "删除笔记…",
+                    danger: true,
+                    disabled: locked,
+                    onClick: () => {
+                      // 二级确认菜单（与第一级同位置弹出）
+                      showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
+                        {
+                          label: "确认移入回收站",
+                          danger: true,
+                          onClick: () => {
+                            void (async () => {
+                              await backend.deletePath(pathRef.current);
+                              await onDeleted();
+                            })();
+                          },
+                        },
+                        { label: "取消" },
+                      ]);
+                    },
+                  },
+                ]);
               }}
             >
-              发布 / 导出
+              {I.more}
             </button>
-            {!locked && (
-              <button
-                className={`btn !py-1 ${delArmed ? "!bg-red-600 !text-white" : "!text-stone-400 hover:!text-red-600"}`}
-                title="移入回收站"
-                onClick={async () => {
-                  if (!delArmed) {
-                    setDelArmed(true);
-                    window.setTimeout(() => setDelArmed(false), 2600);
-                    return;
-                  }
-                  setDelArmed(false);
-                  await backend.deletePath(pathRef.current);
-                  await onDeleted();
-                }}
-              >
-                {delArmed ? "确认删除？" : "删除"}
-              </button>
-            )}
           </div>
         </div>
 

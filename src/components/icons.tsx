@@ -103,4 +103,11 @@ export const I = {
       <path d="M2.5 5.5h9l-2.5-2.5M13.5 10.5h-9l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  more: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <circle cx="3.4" cy="8" r="1.35" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.35" fill="currentColor" />
+      <circle cx="12.6" cy="8" r="1.35" fill="currentColor" />
+    </svg>
+  ),
 };
