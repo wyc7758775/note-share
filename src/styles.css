@@ -110,6 +110,8 @@ button:disabled {
   cursor: col-resize;
   background: transparent;
   transition: background-color 0.15s ease;
+  /* 触摸设备（iPad 等）：拖宽手势不要被页面滚动抢占 */
+  touch-action: none;
 }
 .side-resizer:hover,
 .side-resizer.dragging {
@@ -118,12 +120,13 @@ button:disabled {
 body.resizing {
   cursor: col-resize !important;
   user-select: none;
+  -webkit-user-select: none;
 }
-/* 收起侧栏浮动按钮（无笔记时） */
+/* 收起侧栏浮动按钮（无笔记时）：位置与编辑器顶栏的按钮一致（左上） */
 .side-toggle-float {
   position: absolute;
-  top: 10px;
-  right: 12px;
+  top: 8px;
+  left: 10px;
   z-index: 10;
   display: flex;
   height: 28px;
@@ -141,10 +144,63 @@ body.resizing {
   color: #44403c;
 }
 
+/* 顶栏图标按钮（收起侧栏等） */
+.top-icon-btn {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #a8a29e;
+  transition: background-color 0.13s ease, color 0.13s ease;
+}
+.top-icon-btn:hover {
+  background: rgb(0 0 0 / 0.05);
+  color: #44403c;
+}
+
+/* 即时提示气泡（Obsidian 式黑底小气泡；原生 title 在 WebKit 上延迟近 1 秒，故自绘） */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  z-index: 220;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: #1c1917;
+  color: #fafaf9;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.14s ease 0.35s, transform 0.14s ease 0.35s;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+html {
+  /* 苹果设备（iOS/iPadOS WebKit）：旋转屏不要自动放大字号；点按不要出现灰色高亮块 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -489,7 +545,10 @@ body {
 /* ---------- 图片阅览器 ---------- */
 .img-viewer {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 300;
   background: rgb(28 25 23 / 0.88);
   display: flex;
@@ -616,6 +675,8 @@ body {
   border-radius: 50%;
   box-shadow: 0 1px 5px rgb(0 0 0 / 0.3);
   z-index: 5;
+  /* 触摸设备：缩放手势不要触发页面滚动 */
+  touch-action: none;
 }
 .img-handle.tl {
   left: -8px;

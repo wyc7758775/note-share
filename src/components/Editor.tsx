@@ -33,9 +33,16 @@ interface Props {
   onRenamed: (newPath: string) => Promise<void>;
   onDeleted: () => Promise<void>;
   onToggleSidebar: () => void;
+  sideCollapsed: boolean;
 }
 
-export default function Editor({ initialPath, onRenamed, onDeleted, onToggleSidebar }: Props) {
+export default function Editor({
+  initialPath,
+  onRenamed,
+  onDeleted,
+  onToggleSidebar,
+  sideCollapsed,
+}: Props) {
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
@@ -355,10 +362,18 @@ export default function Editor({ initialPath, onRenamed, onDeleted, onToggleSide
       <div className="flex h-full flex-col">
         {/* 顶栏 */}
         <div
-          className="flex h-11 shrink-0 items-center justify-between border-b px-3"
+          className="flex h-11 shrink-0 items-center justify-between border-b px-2.5"
           style={{ borderColor: "var(--line)" }}
         >
           <div className="flex items-center gap-1">
+            <button
+              className="top-icon-btn"
+              data-tip={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
+              onClick={onToggleSidebar}
+            >
+              {I.panelLeft}
+            </button>
+            <span className="mx-0.5 h-4 w-px bg-stone-300/80" />
             <SaveBadge state={saveState} />
           </div>
           <div className="flex items-center gap-1">
@@ -402,13 +417,6 @@ export default function Editor({ initialPath, onRenamed, onDeleted, onToggleSide
                 {delArmed ? "确认删除？" : "删除"}
               </button>
             )}
-            <button
-              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-200/70 hover:text-stone-700"
-              title="收起左侧栏"
-              onClick={onToggleSidebar}
-            >
-              {I.panelLeft}
-            </button>
           </div>
         </div>
 

@@ -151,32 +151,33 @@ export default function Sidebar(props: Props) {
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       document.body.classList.remove("resizing");
       setDragging(false);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    // 触摸设备上系统打断手势（来电、手势导航）时也要解除拖拽状态
+    window.addEventListener("pointercancel", up);
   };
 
   return (
     <aside className="sidebar" style={{ width }}>
-      {/* 顶部：文件 / 搜索 双 Tab（Obsidian 式） */}
+      {/* 顶部：文件 / 搜索 双 Tab（Obsidian 式图标条，悬停有提示气泡） */}
       <div className="side-tabs">
         <button
           className={`side-tab ${tab === "files" ? "active" : ""}`}
-          title="文件"
+          data-tip="文件"
           onClick={() => setTab("files")}
         >
           {I.folder}
-          <span className="tab-label">文件</span>
         </button>
         <button
           className={`side-tab ${tab === "search" ? "active" : ""}`}
-          title="搜索"
+          data-tip="搜索"
           onClick={() => setTab("search")}
         >
           {I.search}
-          <span className="tab-label">搜索</span>
         </button>
       </div>
 

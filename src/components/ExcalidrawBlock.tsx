@@ -108,14 +108,22 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
     const startW = displayW ?? wrap?.offsetWidth ?? 400;
     const clamp = (w: number) => Math.max(80, Math.min(1400, Math.round(w)));
     const move = (ev: PointerEvent) => setDragW(clamp(startW + (ev.clientX - startX) * dir));
-    const up = (ev: PointerEvent) => {
+    const finish = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+      // 触摸设备上系统打断手势（pointercancel）时不提交宽度，只还原
+      if (ev.type === "pointercancel") {
+        setDragW(null);
+        return;
+      }
       setDragW(null);
       updateAttributes({ width: clamp(startW + (ev.clientX - startX) * dir) });
     };
+    const cancel = (ev: PointerEvent) => finish(ev);
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", cancel);
   };
 
   if (!isFig) {

@@ -133,12 +133,13 @@ export default function App() {
             onRenamed={handleRenamed}
             onDeleted={handleDeleted}
             onToggleSidebar={() => setSideCollapsed((v) => !v)}
+            sideCollapsed={sideCollapsed}
           />
         ) : (
           <div className="relative h-full">
             <button
               className="side-toggle-float"
-              title={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
+              data-tip={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
               onClick={() => setSideCollapsed((v) => !v)}
             >
               {I.panelLeft}
