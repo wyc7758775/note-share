@@ -8,7 +8,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { backend } from "../backend";
-import { useSettings, translate } from "../i18n";
+import { useSettings, translate, currentLang } from "../i18n";
+import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { sanitizeFileName } from "../lib/files";
@@ -78,79 +79,83 @@ export default function Editor({
   titleRef.current = title;
   tagsRef.current = tagsText;
 
+  // 词条惰性求值：每次呼出菜单时读当前语言，切换语言即时生效且不重建编辑器
   const slashExtension = useMemo(
     () =>
-      createSlashMenu([
-        {
-          title: t("slImage"),
-          desc: t("slImageDesc"),
-          icon: "🖼",
-          keywords: "image tupian photo",
-          onSelect: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).run();
-            slashActionsRef.current?.insertImage();
+      createSlashMenu((): SlashItem[] => {
+        const s = (k: string) => translate(currentLang(), k);
+        return [
+          {
+            title: s("slImage"),
+            desc: s("slImageDesc"),
+            icon: "🖼",
+            keywords: "image tupian photo",
+            onSelect: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              slashActionsRef.current?.insertImage();
+            },
           },
-        },
-        {
-          title: t("slCanvas"),
-          desc: t("slCanvasDesc"),
-          icon: "✏",
-          keywords: "huaban draw excalidraw shouhui",
-          onSelect: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).run();
-            slashActionsRef.current?.insertScene();
+          {
+            title: s("slCanvas"),
+            desc: s("slCanvasDesc"),
+            icon: "✏",
+            keywords: "huaban draw excalidraw shouhui",
+            onSelect: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              slashActionsRef.current?.insertScene();
+            },
           },
-        },
-        {
-          title: t("slTask"),
-          desc: t("slTaskDesc"),
-          icon: "☑",
-          keywords: "todo task daiban",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).toggleTaskList().run(),
-        },
-        {
-          title: t("slCode"),
-          desc: t("slCodeDesc"),
-          icon: "{ }",
-          keywords: "code daima",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
-        },
-        {
-          title: t("slQuote"),
-          desc: t("slQuoteDesc"),
-          icon: "❝",
-          keywords: "quote yinyong",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
-        },
-        {
-          title: t("slHr"),
-          desc: t("slHrDesc"),
-          icon: "―",
-          keywords: "hr fengexian",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
-        },
-        {
-          title: t("slH1"),
-          desc: t("slH1Desc"),
-          icon: "H1",
-          keywords: "heading biaoti",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).toggleHeading({ level: 1 }).run(),
-        },
-        {
-          title: t("slH2"),
-          desc: t("slH2Desc"),
-          icon: "H2",
-          keywords: "heading biaoti",
-          onSelect: ({ editor, range }) =>
-            editor.chain().focus().deleteRange(range).toggleHeading({ level: 2 }).run(),
-        },
-      ]),
-    [t]
+          {
+            title: s("slTask"),
+            desc: s("slTaskDesc"),
+            icon: "☑",
+            keywords: "todo task daiban",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+          },
+          {
+            title: s("slCode"),
+            desc: s("slCodeDesc"),
+            icon: "{ }",
+            keywords: "code daima",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+          },
+          {
+            title: s("slQuote"),
+            desc: s("slQuoteDesc"),
+            icon: "❝",
+            keywords: "quote yinyong",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
+          },
+          {
+            title: s("slHr"),
+            desc: s("slHrDesc"),
+            icon: "―",
+            keywords: "hr fengexian",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
+          },
+          {
+            title: s("slH1"),
+            desc: s("slH1Desc"),
+            icon: "H1",
+            keywords: "heading biaoti",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).toggleHeading({ level: 1 }).run(),
+          },
+          {
+            title: s("slH2"),
+            desc: s("slH2Desc"),
+            icon: "H2",
+            keywords: "heading biaoti",
+            onSelect: ({ editor, range }) =>
+              editor.chain().focus().deleteRange(range).toggleHeading({ level: 2 }).run(),
+          },
+        ];
+      }),
+    []
   );
 
   const editor = useEditor({
@@ -167,11 +172,7 @@ export default function Editor({
       TaskItem.configure({ nested: true }),
       // 占位符用函数式读取当前语言（切换语言后无需重建编辑器）
       Placeholder.configure({
-        placeholder: () =>
-          translate(
-            document.documentElement.lang === "en" ? "en" : "zh",
-            "editorPlaceholder"
-          ),
+        placeholder: () => translate(currentLang(), "editorPlaceholder"),
       }),
       Markdown.configure({ html: false, breaks: false, linkify: false }),
     ],
@@ -606,7 +607,7 @@ function ExcalidrawPanelLazy(props: {
     <Suspense
       fallback={
         <div className="flex h-full items-center justify-center text-sm text-faint">
-          {translate(document.documentElement.lang === "en" ? "en" : "zh", "sceneLoading")}
+          {translate(currentLang(), "sceneLoading")}
         </div>
       }
     >

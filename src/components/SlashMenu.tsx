@@ -12,14 +12,15 @@ export interface SlashItem {
   onSelect: (ctx: { editor: any; range: any }) => void;
 }
 
-export function createSlashMenu(items: SlashItem[]) {
-  return Extension.create<{ items: SlashItem[] }>({
+/** items 用 getter：每次呼出菜单时重新取词，语言切换无需重建编辑器 */
+export function createSlashMenu(items: () => SlashItem[]) {
+  return Extension.create<{ items: () => SlashItem[] }>({
     name: "slashMenu",
     addOptions() {
       return { items };
     },
     addProseMirrorPlugins() {
-      const allItems = this.options.items;
+      const getItems = this.options.items;
       return [
         Suggestion({
           editor: this.editor,
@@ -28,7 +29,7 @@ export function createSlashMenu(items: SlashItem[]) {
           allowSpaces: false,
           items: ({ query }) => {
             const q = query.toLowerCase();
-            return allItems.filter((it) =>
+            return getItems().filter((it) =>
               (it.title + (it.keywords ?? "")).toLowerCase().includes(q)
             );
           },

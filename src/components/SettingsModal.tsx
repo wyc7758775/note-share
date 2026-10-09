@@ -29,11 +29,11 @@ function Segment<T extends string>({
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t, lang, setLang, theme, setTheme } = useSettings();
 
-  // 语言切换涉及编辑器实例等一次性初始化的文案，直接刷新页面最稳妥（主题是纯 CSS，无需刷新）
+  // 语言与主题均为局部更新：Context 驱动组件重渲染；编辑器内的词条/占位符
+  // 通过 currentLang()（读 <html lang>）惰性读取，无需刷新页面、不丢编辑状态
   const changeLang = (l: Lang) => {
     if (l === lang) return;
-    localStorage.setItem("noteshare.lang", l);
-    location.reload();
+    setLang(l);
   };
 
   useEffect(() => {

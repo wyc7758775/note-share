@@ -305,6 +305,11 @@ export function translate(lang: Lang, key: string, vars?: Vars) {
   return s;
 }
 
+/** 在 React 外读当前语言（Provider 会把它同步到 <html lang>） */
+export function currentLang(): Lang {
+  return document.documentElement.lang === "en" ? "en" : "zh";
+}
+
 export function useSettings() {
   const s = useContext(Ctx);
   if (!s) throw new Error("useSettings must be used inside SettingsProvider");
