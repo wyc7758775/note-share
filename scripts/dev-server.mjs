@@ -170,7 +170,14 @@ const handlers = {
     }
     return hits;
   },
-  "scene": async ({ path: rel }) => fs.readFileSync(resolveInside(rel), "utf8"),
+  "scene": async ({ path: rel }) => {
+    try {
+      return fs.readFileSync(resolveInside(rel), "utf8");
+    } catch {
+      // 空画板（新建）或引用的文件已被删：返回空场景，进入后重画会保存回原路径自愈
+      return JSON.stringify({ type: "excalidraw", version: 2, source: "noteshare", elements: [] });
+    }
+  },
   "scene-save": async ({ name, sceneJson, pngBase64 }) => {
     const dir = path.join(VAULT, "attachments");
     fs.mkdirSync(dir, { recursive: true });

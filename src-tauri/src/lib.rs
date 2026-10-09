@@ -415,8 +415,12 @@ fn search(state: State<AppState>, q: String) -> Result<Value, String> {
 #[tauri::command]
 fn read_scene(state: State<AppState>, path: String) -> Result<String, String> {
     let v = vault_of(&state)?;
-    let abs = resolve_inside(&v, &path)?;
-    fs::read_to_string(&abs).map_err(|e| e.to_string())
+    // 空画板（新建）或引用的文件已被删：返回空场景，进入后重画会保存回原路径自愈
+    let empty = r#"{"type":"excalidraw","version":2,"source":"noteshare","elements":[]}"#.to_string();
+    match resolve_inside(&v, &path) {
+        Ok(abs) => fs::read_to_string(&abs).or(Ok(empty)),
+        Err(_) => Ok(empty),
+    }
 }
 
 #[tauri::command]

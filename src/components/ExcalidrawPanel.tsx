@@ -18,7 +18,6 @@ type SaveState = "saved" | "saving" | "error";
 export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onSaved }: Props) {
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
-  const [error, setError] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const latestRef = useRef<{ elements: any[]; files: any; appState: any } | null>(null);
   const sceneTimer = useRef<number | undefined>(undefined);
@@ -28,20 +27,22 @@ export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onS
   useEffect(() => {
     let dead = false;
     (async () => {
+      // 读不到 / 内容损坏：降级为空场景（可重画，保存时写回原路径自愈）
+      let scene: { elements?: unknown[]; appState?: { viewBackgroundColor?: string }; files?: unknown } = {};
       try {
-        const scene = JSON.parse(await backend.readScene(src));
-        if (dead) return;
-        lastSceneJson.current = JSON.stringify({ elements: scene.elements ?? [] });
-        setInitialData({
-          elements: scene.elements ?? [],
-          appState: {
-            viewBackgroundColor: scene.appState?.viewBackgroundColor ?? "#ffffff",
-          },
-          files: scene.files ?? {},
-        });
+        scene = JSON.parse(await backend.readScene(src));
       } catch {
-        setError("画板文件读取失败");
+        /* 用空场景 */
       }
+      if (dead) return;
+      lastSceneJson.current = JSON.stringify({ elements: scene.elements ?? [] });
+      setInitialData({
+        elements: scene.elements ?? [],
+        appState: {
+          viewBackgroundColor: scene.appState?.viewBackgroundColor ?? "#ffffff",
+        },
+        files: scene.files ?? {},
+      });
     })();
     return () => {
       dead = true;
@@ -157,7 +158,7 @@ export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onS
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-stone-400">
-            {error || "画板加载中…"}
+            画板加载中…
           </div>
         )}
       </div>

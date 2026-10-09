@@ -93,9 +93,7 @@ function Menu({
               it.onClick?.();
             }}
           >
-            {it.checked !== undefined && (
-              <span className="ctx-check">{it.checked ? "✓" : ""}</span>
-            )}
+            <span className="ctx-check">{it.checked ? "✓" : ""}</span>
             {it.label}
           </button>
         )
