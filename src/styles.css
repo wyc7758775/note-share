@@ -290,6 +290,71 @@ body {
   min-height: 0;
 }
 
+/* ---------- 自定义右键菜单 ---------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 176px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.13);
+  user-select: none;
+  animation: ctx-in 0.12s ease;
+}
+@keyframes ctx-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ctx-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #44403c;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.ctx-item:hover:not(:disabled) {
+  background: #faf5ef;
+  color: #1c1917;
+}
+.ctx-item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ctx-danger {
+  color: #b91c1c;
+}
+.ctx-danger:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: #e7e5e4;
+}
+.ctx-check {
+  width: 14px;
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+}
+
 /* ---------- 锁定（阅读）模式 ---------- */
 .read-mode .ProseMirror {
   cursor: default;

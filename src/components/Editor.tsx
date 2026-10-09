@@ -19,6 +19,7 @@ import {
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
 import PublishPanel from "./PublishPanel";
+import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -291,6 +292,52 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
         {/* 正文滚动区 */}
         <div
           className="min-h-0 flex-1 overflow-y-auto"
+          onContextMenu={(e) => {
+            // 画板块有自己的菜单
+            if ((e.target as HTMLElement).closest(".excalidraw-fig")) return;
+            e.preventDefault();
+            const { from, to, empty } = editor.state.selection;
+            const selText = empty ? "" : editor.state.doc.textBetween(from, to, " ");
+            if (locked) {
+              showContextMenu(e.clientX, e.clientY, [
+                { label: "复制", disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
+                { label: "全选", onClick: () => editor.chain().focus().selectAll().run() },
+              ]);
+              return;
+            }
+            showContextMenu(e.clientX, e.clientY, [
+              { label: "撤销", disabled: !editor.can().undo(), onClick: () => editor.chain().focus().undo().run() },
+              { label: "重做", disabled: !editor.can().redo(), onClick: () => editor.chain().focus().redo().run() },
+              { separator: true },
+              {
+                label: "剪切",
+                disabled: !selText,
+                onClick: async () => {
+                  await navigator.clipboard.writeText(selText);
+                  editor.chain().focus().deleteSelection().run();
+                },
+              },
+              { label: "复制", disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
+              {
+                label: "粘贴",
+                onClick: async () => {
+                  try {
+                    const t = await navigator.clipboard.readText();
+                    if (t) editor.chain().focus().insertContent(t).run();
+                  } catch {
+                    /* 剪贴板无权限时静默（Ctrl+V 仍可用） */
+                  }
+                },
+              },
+              { separator: true },
+              { label: "加粗", checked: editor.isActive("bold"), onClick: () => editor.chain().focus().toggleBold().run() },
+              { label: "斜体", checked: editor.isActive("italic"), onClick: () => editor.chain().focus().toggleItalic().run() },
+              { label: "删除线", checked: editor.isActive("strike"), onClick: () => editor.chain().focus().toggleStrike().run() },
+              { label: "行内代码", checked: editor.isActive("code"), onClick: () => editor.chain().focus().toggleCode().run() },
+              { separator: true },
+              { label: "全选", onClick: () => editor.chain().focus().selectAll().run() },
+            ]);
+          }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();

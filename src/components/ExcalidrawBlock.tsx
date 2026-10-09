@@ -3,6 +3,7 @@ import Image from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { backend } from "../backend";
 import { isExcalidrawSrc, pngSibling, safeDecode } from "../lib/markdown";
+import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
 export const EMPTY_SCENE_JSON = JSON.stringify({
@@ -90,6 +91,16 @@ function ImageView({ node, selected, deleteNode }: any) {
       <div
         className={`excalidraw-fig ${selected ? "ring-2 ring-amber-500/60" : ""}`}
         onDoubleClick={() => !locked && emitEditScene(src)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (locked) return;
+          showContextMenu(e.clientX, e.clientY, [
+            { label: "编辑画板", onClick: () => emitEditScene(src) },
+            { separator: true },
+            { label: "删除画板块", danger: true, onClick: deleteNode },
+          ]);
+        }}
       >
         {!locked && (
           <div className="fig-actions">

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { backend, type SearchHit, type TreeNode } from "./backend";
+import { useCallback, useEffect, useState } from "react";
+import { backend, type TreeNode } from "./backend";
 import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
@@ -20,6 +20,17 @@ export default function App() {
       await refreshTree();
     })();
   }, [refreshTree]);
+
+  // 屏蔽原生右键菜单（各区域用 showContextMenu 弹自绘菜单；Excalidraw 面板自带菜单，交给它）
+  useEffect(() => {
+    const onCtx = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".excalidraw")) return;
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", onCtx);
+    return () => document.removeEventListener("contextmenu", onCtx);
+  }, []);
 
   const openNote = (path: string) => {
     setSession((s) => (s && s.path === path ? s : { path, key: (s?.key ?? 0) + 1 }));

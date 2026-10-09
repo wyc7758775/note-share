@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../backend";
+import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
@@ -94,7 +95,20 @@ function TreeRow({
   if (item.kind === "folder") {
     return (
       <div>
-        <div className={`${rowCls} ${open ? "text-stone-700" : "text-stone-600"}`} style={pad}>
+        <div
+          className={`${rowCls} ${open ? "text-stone-700" : "text-stone-600"}`}
+          style={pad}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e.clientX, e.clientY, [
+              { label: "在此新建笔记", onClick: () => h.onNewNote(item.path) },
+              { separator: true },
+              { label: "重命名", onClick: () => h.onRequestRename(item) },
+              { label: "删除（移入回收站）", danger: true, onClick: () => h.onDelete(item.path) },
+            ]);
+          }}
+        >
           <button
             className="flex min-w-0 flex-1 items-center gap-1"
             onClick={() => setOpen((v) => !v)}
@@ -136,7 +150,20 @@ function TreeRow({
   if (item.kind === "note") {
     const active = currentPath === item.path;
     return (
-      <div className={`${rowCls} ${active ? "tree-row-active" : ""}`} style={pad}>
+      <div
+        className={`${rowCls} ${active ? "tree-row-active" : ""}`}
+        style={pad}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          showContextMenu(e.clientX, e.clientY, [
+            { label: "打开", onClick: () => h.onOpenNote(item.path) },
+            { separator: true },
+            { label: "重命名", onClick: () => h.onRequestRename(item) },
+            { label: "删除（移入回收站）", danger: true, onClick: () => h.onDelete(item.path) },
+          ]);
+        }}
+      >
         <button
           className="flex min-w-0 flex-1 items-center gap-1.5 pl-1"
           onClick={() => h.onOpenNote(item.path)}
