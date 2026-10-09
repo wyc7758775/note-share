@@ -7,13 +7,15 @@ import { backend } from "../backend";
 
 interface Props {
   src: string;
-  onClose: () => void;
+  onBack: () => void;
+  /** 返回按钮文案：从笔记推入时"← 返回笔记"，独立打开时"关闭" */
+  backLabel?: string;
   onSaved: () => void;
 }
 
 type SaveState = "saved" | "saving" | "error";
 
-export default function ExcalidrawPanel({ src, onClose, onSaved }: Props) {
+export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onSaved }: Props) {
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [error, setError] = useState("");
@@ -107,12 +109,12 @@ export default function ExcalidrawPanel({ src, onClose, onSaved }: Props) {
     pngTimer.current = window.setTimeout(() => void doSavePng(), 2600);
   };
 
-  const handleClose = async () => {
+  const handleBack = async () => {
     window.clearTimeout(sceneTimer.current);
     window.clearTimeout(pngTimer.current);
     await doSaveScene().catch(() => {});
     await doSavePng().catch(() => {});
-    onClose();
+    onBack();
   };
 
   useEffect(
@@ -141,8 +143,8 @@ export default function ExcalidrawPanel({ src, onClose, onSaved }: Props) {
             {saveState === "saving" ? "自动保存中…" : saveState === "error" ? "保存失败，仍在重试" : "实时保存已开启"}
           </span>
         </div>
-        <button className="btn-ghost !py-1" onClick={() => void handleClose()}>
-          关闭
+        <button className="btn-ghost !py-1" onClick={() => void handleBack()}>
+          {backLabel}
         </button>
       </div>
       <div className="min-h-0 flex-1">

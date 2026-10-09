@@ -23,6 +23,7 @@
     "@tiptap/extensions": "^3.0.0",
     "@tiptap/react": "^3.0.0",
     "@tiptap/starter-kit": "^3.0.0",
+    "@tiptap/suggestion": "^3.31.4",
     "js-yaml": "^4.1.0",
     "lowlight": "^3.3.0",
     "react": "^19.0.0",

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
@@ -22,10 +22,11 @@ import { SmartTaskInput } from "./SmartTaskInput";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import { showContextMenu } from "./ContextMenu";
+import { createSlashMenu } from "./SlashMenu";
 import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
-type View = "note" | "publish";
+type View = "note" | "publish" | "scene";
 
 interface Props {
   initialPath: string;
@@ -50,17 +51,95 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
   const [locked, setLocked] = useState(false); // 默认可编辑
   const [view, setView] = useState<View>("note");
   const [editingScene, setEditingScene] = useState<string | null>(null);
-  const [sceneOpen, setSceneOpen] = useState(false); // 画板右侧面板
   const [sceneRev, setSceneRev] = useState(0);
   const [delArmed, setDelArmed] = useState(false);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
+  // 斜杠菜单里"图片/画板"两项的落点（延迟绑定到本组件的方法）
+  const slashActionsRef = useRef<{ insertImage: () => void; insertScene: () => void } | null>(null);
+
   titleRef.current = title;
   tagsRef.current = tagsText;
+
+  const slashExtension = useMemo(
+    () =>
+      createSlashMenu([
+        {
+          title: "图片",
+          desc: "上传本地图片插入笔记",
+          icon: "🖼",
+          keywords: "image tupian photo",
+          onSelect: ({ editor, range }) => {
+            editor.chain().focus().deleteRange(range).run();
+            slashActionsRef.current?.insertImage();
+          },
+        },
+        {
+          title: "画板",
+          desc: "插入 Excalidraw 手绘图",
+          icon: "✏",
+          keywords: "huaban draw excalidraw shouhui",
+          onSelect: ({ editor, range }) => {
+            editor.chain().focus().deleteRange(range).run();
+            slashActionsRef.current?.insertScene();
+          },
+        },
+        {
+          title: "待办清单",
+          desc: "可勾选的任务列表",
+          icon: "☑",
+          keywords: "todo task daiban",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+        },
+        {
+          title: "代码块",
+          desc: "带语法高亮",
+          icon: "{ }",
+          keywords: "code daima",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+        },
+        {
+          title: "引用",
+          desc: "摘录或批注",
+          icon: "❝",
+          keywords: "quote yinyong",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
+        },
+        {
+          title: "分隔线",
+          desc: "章节之间的水平线",
+          icon: "―",
+          keywords: "hr fengexian",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
+        },
+        {
+          title: "一级标题",
+          desc: "大标题",
+          icon: "H1",
+          keywords: "heading biaoti",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).toggleHeading({ level: 1 }).run(),
+        },
+        {
+          title: "二级标题",
+          desc: "中标题",
+          icon: "H2",
+          keywords: "heading biaoti",
+          onSelect: ({ editor, range }) =>
+            editor.chain().focus().deleteRange(range).toggleHeading({ level: 2 }).run(),
+        },
+      ]),
+    []
+  );
 
   const editor = useEditor({
     extensions: [
       SmartTaskInput,
+      slashExtension,
       StarterKit.configure({ codeBlock: false }),
       CodeBlockLowlight.configure({
         lowlight: createLowlight(common),
@@ -190,7 +269,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
   useEffect(() => {
     const onEdit = (e: Event) => {
       setEditingScene((e as CustomEvent<string>).detail);
-      setSceneOpen(true);
+      setView("scene");
     };
     const onViewImg = (e: Event) => {
       const clicked = (e as CustomEvent<string>).detail;
@@ -223,8 +302,16 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     const saved = await backend.saveScene(null, EMPTY_SCENE_JSON, null);
     editor.chain().focus().setImage({ src: saved.scenePath }).run();
     setEditingScene(saved.scenePath);
-    setSceneOpen(true);
+    setView("scene");
   }, [editor, locked]);
+
+  // 斜杠菜单的两类特殊插入
+  useEffect(() => {
+    slashActionsRef.current = {
+      insertImage: () => fileInputRef.current?.click(),
+      insertScene: () => void insertExcalidraw(),
+    };
+  }, [insertExcalidraw]);
 
   const insertImageFile = useCallback(
     async (file: File) => {
@@ -238,7 +325,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
 
   if (!editor) return null;
 
-  // ---- 视图切换：发布（占满主区） ----
+  // ---- 视图切换：发布 / 画板（整区推入，返回回到笔记） ----
   if (view === "publish") {
     return (
       <PublishPanel
@@ -247,6 +334,16 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
         fmRef={fmRef}
         title={titleRef}
         onBack={() => setView("note")}
+      />
+    );
+  }
+  if (view === "scene" && editingScene !== null) {
+    return (
+      <ExcalidrawPanelLazy
+        src={editingScene}
+        onBack={() => setView("note")}
+        backLabel="← 返回笔记"
+        onSaved={() => setSceneRev((v) => v + 1)}
       />
     );
   }
@@ -264,17 +361,6 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
             <SaveBadge state={saveState} />
           </div>
           <div className="flex items-center gap-1">
-            {!locked && (
-              <>
-                <IconBtn title="插入图片（也可直接拖入）" onClick={() => fileInputRef.current?.click()}>
-                  {I.image}
-                </IconBtn>
-                <IconBtn title="插入 Excalidraw 画板" onClick={insertExcalidraw}>
-                  {I.pen}
-                </IconBtn>
-                <span className="mx-1 h-4 w-px bg-stone-300" />
-              </>
-            )}
             <button
               className={`btn !py-1 ${locked ? "!text-stone-500" : "!text-amber-700 hover:!bg-amber-50"}`}
               title={locked ? "当前锁定，点击切换为可编辑" : "当前可编辑，点击锁定"}
@@ -318,10 +404,9 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1">
         {/* 正文滚动区 */}
         <div
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+          className="min-h-0 flex-1 overflow-y-auto"
           onContextMenu={(e) => {
             // 画板块有自己的菜单
             if ((e.target as HTMLElement).closest(".excalidraw-fig")) return;
@@ -408,18 +493,6 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           </div>
         </div>
 
-          {/* 画板右侧编辑面板 */}
-          {sceneOpen && editingScene !== null && (
-            <aside className="scene-side-panel">
-              <ExcalidrawPanelLazy
-                src={editingScene}
-                onClose={() => setSceneOpen(false)}
-                onSaved={() => setSceneRev((v) => v + 1)}
-              />
-            </aside>
-          )}
-        </div>
-
         <input
           ref={fileInputRef}
           type="file"
@@ -480,7 +553,8 @@ function SaveBadge({ state }: { state: SaveState }) {
 const ExcalidrawPanelLazyImpl = lazy(() => import("./ExcalidrawPanel"));
 function ExcalidrawPanelLazy(props: {
   src: string;
-  onClose: () => void;
+  onBack: () => void;
+  backLabel?: string;
   onSaved: () => void;
 }) {
   return (

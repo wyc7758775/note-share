@@ -91,7 +91,12 @@ export default function App() {
               </div>
             }
           >
-            <ScenePanelStandalone src={sceneView} onClose={() => setSceneView(null)} onSaved={() => {}} />
+            <ScenePanelStandalone
+              src={sceneView}
+              onBack={() => setSceneView(null)}
+              backLabel="关闭"
+              onSaved={() => {}}
+            />
           </Suspense>
         ) : vaultName === null ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-stone-500">
