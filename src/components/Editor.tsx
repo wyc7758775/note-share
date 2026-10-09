@@ -131,6 +131,26 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
       setTitle(initialPath.split("/").pop()?.replace(/\.md$/i, "") ?? "");
       setTagsText(tagsOf(fm).join(", "));
       editor?.commands.setContent(forEditor(body));
+      // 把 alt 里的 Obsidian 宽度标记（![alt|300](src)）拆成 width 属性
+      if (editor) {
+        const tr = editor.state.tr;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === "image") {
+            const m = String(node.attrs.alt || "").match(/^(.*)\|(\d+)$/);
+            if (m) {
+              tr.setNodeMarkup(pos, undefined, {
+                ...node.attrs,
+                alt: m[1],
+                width: parseInt(m[2], 10),
+              });
+            }
+          }
+          return true;
+        });
+        if (tr.docChanged) {
+          editor.view.dispatch(tr.setMeta("addToHistory", false));
+        }
+      }
       loadingRef.current = false;
       setLoaded(true);
     })().catch((e) => console.error("读取笔记失败", e));

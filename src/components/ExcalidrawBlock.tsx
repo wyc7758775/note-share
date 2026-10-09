@@ -34,14 +34,17 @@ export function emitViewImage(src: string) {
   window.dispatchEvent(new CustomEvent(VIEW_IMAGE_EVENT, { detail: src }));
 }
 
-/** 图片节点：普通图片直接显示；.excalidraw 显示为可编辑画板卡片（锁定时纯展示） */
-function ImageView({ node, selected, deleteNode }: any) {
+/** 图片节点：单击选中（四角拖拽缩放，Delete 删除），双击打开阅览器；
+ *  .excalidraw 显示为可编辑画板卡片（锁定时纯展示） */
+function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPos }: any) {
   const raw: string = node.attrs.src ?? "";
   const src = safeDecode(raw);
   const { rev, locked } = useContext(EditorStateContext);
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "empty" | "noPng" | "ready">("loading");
+  const [dragW, setDragW] = useState<number | null>(null); // 拖拽过程中的宽度
   const isFig = isExcalidrawSrc(src);
+  const displayW = dragW ?? (node.attrs.width ? Number(node.attrs.width) : null);
 
   useEffect(() => {
     let dead = false;
@@ -85,31 +88,78 @@ function ImageView({ node, selected, deleteNode }: any) {
     };
   }, [src, rev, isFig]);
 
+  /** 单击：选中节点（出现缩放手柄，Delete 可删） */
+  const selectNode = (e: React.MouseEvent) => {
+    if (locked) return;
+    e.stopPropagation();
+    const pos = typeof getPos === "function" ? getPos() : undefined;
+    if (typeof pos === "number") {
+      editor.commands.focus();
+      editor.commands.setNodeSelection(pos);
+    }
+  };
+
+  /** 拖角缩放：只改宽度，高度按比例跟随 */
+  const startResize = (e: React.PointerEvent, dir: 1 | -1) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = (e.currentTarget as HTMLElement).parentElement;
+    const startX = e.clientX;
+    const startW = displayW ?? wrap?.offsetWidth ?? 400;
+    const clamp = (w: number) => Math.max(80, Math.min(1400, Math.round(w)));
+    const move = (ev: PointerEvent) => setDragW(clamp(startW + (ev.clientX - startX) * dir));
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setDragW(null);
+      updateAttributes({ width: clamp(startW + (ev.clientX - startX) * dir) });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   if (!isFig) {
+    const dataUrl = url ?? src;
     return (
       <NodeViewWrapper>
-        <img
-          src={url ?? src}
-          alt={node.attrs.alt ?? ""}
-          title="点击查看大图"
-          onClick={(e) => emitViewImage((e.target as HTMLImageElement).src)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const dataUrl = url ?? src;
-            showContextMenu(e.clientX, e.clientY, [
-              { label: "查看大图", onClick: () => emitViewImage(dataUrl) },
-              {
-                label: "下载图片",
-                onClick: () =>
-                  void downloadDataUrl(
-                    safeDecode(raw).split("/").pop() || `image.${extOfDataUrl(dataUrl)}`,
-                    dataUrl
-                  ),
-              },
-            ]);
-          }}
-        />
+        <span
+          className={`img-resize-wrap ${selected ? "img-selected" : ""}`}
+          style={displayW ? { width: displayW } : undefined}
+        >
+          <img
+            src={dataUrl}
+            alt={node.attrs.alt ?? ""}
+            title={locked ? "双击查看大图" : "单击选中（可拖角缩放，Delete 删除）· 双击查看大图"}
+            style={displayW ? { width: "100%" } : undefined}
+            onClick={selectNode}
+            onDoubleClick={() => emitViewImage(dataUrl)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              showContextMenu(e.clientX, e.clientY, [
+                { label: "查看大图", onClick: () => emitViewImage(dataUrl) },
+                {
+                  label: "下载图片",
+                  onClick: () =>
+                    void downloadDataUrl(
+                      safeDecode(raw).split("/").pop() || `image.${extOfDataUrl(dataUrl)}`,
+                      dataUrl
+                    ),
+                },
+                { separator: true },
+                { label: "删除图片", danger: true, onClick: deleteNode },
+              ]);
+            }}
+          />
+          {selected && !locked && (
+            <>
+              <span className="img-handle tl" onPointerDown={(e) => startResize(e, -1)} />
+              <span className="img-handle tr" onPointerDown={(e) => startResize(e, 1)} />
+              <span className="img-handle bl" onPointerDown={(e) => startResize(e, -1)} />
+              <span className="img-handle br" onPointerDown={(e) => startResize(e, 1)} />
+            </>
+          )}
+        </span>
       </NodeViewWrapper>
     );
   }
@@ -205,6 +255,32 @@ function ImageView({ node, selected, deleteNode }: any) {
 }
 
 export const CustomImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      // 显示宽度（像素）；保存为 Obsidian 风格 ![alt|宽度](src)
+      width: {
+        default: null,
+        renderHTML: (attributes) =>
+          attributes.width ? { width: attributes.width } : {},
+        parseHTML: (element) => element.getAttribute("width") || null,
+      },
+    };
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: any, node: any) {
+          const alt = String(node.attrs.alt || "").replace(/[\[\]|]/g, "");
+          const w = node.attrs.width ? `|${node.attrs.width}` : "";
+          state.ensureNewLine();
+          state.write(`![${alt}${w}](${node.attrs.src})`);
+          state.closeBlock(node);
+        },
+        parse: {},
+      },
+    };
+  },
   addNodeView() {
     return ReactNodeViewRenderer(ImageView);
   },

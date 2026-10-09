@@ -458,9 +458,53 @@ body {
   white-space: nowrap;
 }
 
-/* 富文本图片点击可查看的提示 */
-.ProseMirror img {
-  cursor: zoom-in;
+/* 富文本图片：可选中缩放 */
+.img-resize-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  border-radius: 8px;
+  transition: outline-color 0.12s ease;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+}
+.img-resize-wrap.img-selected {
+  outline-color: rgb(180 83 9 / 0.55);
+}
+.img-resize-wrap img {
+  border-radius: 8px;
+  cursor: pointer;
+}
+.img-handle {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  border: 2px solid #b45309;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.3);
+  z-index: 5;
+}
+.img-handle.tl {
+  left: -8px;
+  top: -8px;
+  cursor: nwse-resize;
+}
+.img-handle.tr {
+  right: -8px;
+  top: -8px;
+  cursor: nesw-resize;
+}
+.img-handle.bl {
+  left: -8px;
+  bottom: -8px;
+  cursor: nesw-resize;
+}
+.img-handle.br {
+  right: -8px;
+  bottom: -8px;
+  cursor: nwse-resize;
 }
 .excalidraw-fig img {
   cursor: pointer;
