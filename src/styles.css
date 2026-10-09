@@ -945,6 +945,15 @@ body {
   background: transparent;
 }
 
+/* "[[" 笔记链接菜单（复用 slash-menu 外观） */
+.wiki-menu {
+  width: 264px;
+}
+.wiki-create-hint {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
 /* ---------- 设置弹窗 ---------- */
 .settings-mask {
   position: fixed;

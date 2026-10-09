@@ -1,5 +1,6 @@
 // "/" 斜杠命令菜单：输入 / 呼出，继续输入过滤，↑↓ 选择，回车执行，Esc 关闭
 import { Extension } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import Suggestion from "@tiptap/suggestion";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
@@ -24,6 +25,7 @@ export function createSlashMenu(items: () => SlashItem[]) {
       return [
         Suggestion({
           editor: this.editor,
+          pluginKey: new PluginKey("slashMenu$"),
           char: "/",
           startOfLine: false,
           allowSpaces: false,

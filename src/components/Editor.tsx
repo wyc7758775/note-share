@@ -7,7 +7,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
-import { backend } from "../backend";
+import { backend, type TreeNode } from "../backend";
 import { useSettings, translate, currentLang } from "../i18n";
 import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
@@ -21,6 +21,7 @@ import {
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
+import { createWikiLinkMenu, type NoteEntry } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import { showContextMenu } from "./ContextMenu";
@@ -72,6 +73,48 @@ export default function Editor({
   const [editingScene, setEditingScene] = useState<string | null>(null);
   const [sceneRev, setSceneRev] = useState(0);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
+
+  // "[[" 双链菜单的笔记列表（挂载时拉取，呼出菜单时异步刷新，下次过滤生效）
+  const notesRef = useRef<NoteEntry[]>([]);
+  const refreshNotes = useCallback(() => {
+    void (async () => {
+      const flat: NoteEntry[] = [];
+      const walk = (nodes: TreeNode[]) => {
+        for (const n of nodes) {
+          if (n.kind === "note") flat.push({ name: n.name.replace(/\.md$/i, ""), path: n.path });
+          else if (n.kind === "folder") walk(n.children ?? []);
+        }
+      };
+      walk(await backend.tree());
+      notesRef.current = flat;
+    })();
+  }, []);
+  useEffect(() => {
+    refreshNotes();
+  }, [refreshNotes]);
+
+  const wikiLinkExtension = useMemo(
+    () =>
+      createWikiLinkMenu(
+        () => notesRef.current,
+        (ed, item) => {
+          if (item.kind === "note") {
+            ed.chain().focus().insertContent(`[[${item.name}]]`).run();
+            return;
+          }
+          // 创建新笔记：放在当前笔记的同级文件夹
+          const safe = sanitizeFileName(item.name);
+          if (!safe) return;
+          void (async () => {
+            const dir = pathRef.current.split("/").slice(0, -1).join("/");
+            const path = await backend.createNote(dir, safe);
+            notesRef.current.push({ name: safe, path });
+            ed.chain().focus().insertContent(`[[${safe}]]`).run();
+          })();
+        }
+      ),
+    []
+  );
 
   // 斜杠菜单里"图片/画板"两项的落点（延迟绑定到本组件的方法）
   const slashActionsRef = useRef<{ insertImage: () => void; insertScene: () => void } | null>(null);
@@ -162,6 +205,7 @@ export default function Editor({
     extensions: [
       SmartTaskInput,
       slashExtension,
+      wikiLinkExtension,
       StarterKit.configure({ codeBlock: false }),
       CodeBlockLowlight.configure({
         lowlight: createLowlight(common),

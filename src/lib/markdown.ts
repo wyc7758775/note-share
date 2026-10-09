@@ -17,6 +17,8 @@ export function safeDecode(s: string): string {
 
 export function forEditor(markdown: string): string {
   return markdown
+    .replace(/\\\[\\\[/g, "[[")
+    .replace(/\\\]\\\]/g, "]]")
     .replace(EMBED_RE, (_m, p: string) => {
       const src = safeDecode(p);
       return `![${src}](${src})`;
@@ -29,17 +31,23 @@ export function forEditor(markdown: string): string {
 }
 
 export function forSave(markdown: string): string {
-  return markdown.replace(IMG_RE, (m, alt: string, srcRaw: string) => {
-    const src = safeDecode(srcRaw);
-    if (src.endsWith(".excalidraw")) {
-      return `![[${src}]]`;
-    }
-    // 我们自己生成的嵌入 alt == src，转回 Obsidian 嵌入写法保持原样
-    if (alt && safeDecode(alt) === src) {
-      return `![[${src}]]`;
-    }
-    return m;
-  });
+  return (
+    markdown
+      .replace(IMG_RE, (m, alt: string, srcRaw: string) => {
+        const src = safeDecode(srcRaw);
+        if (src.endsWith(".excalidraw")) {
+          return `![[${src}]]`;
+        }
+        // 我们自己生成的嵌入 alt == src，转回 Obsidian 嵌入写法保持原样
+        if (alt && safeDecode(alt) === src) {
+          return `![[${src}]]`;
+        }
+        return m;
+      })
+      // "[[ 笔记链接是纯文本，序列化器会把 [[ / ]] 转义，还原成 Obsidian 双链写法
+      .replace(/\\\[\\\[/g, "[[")
+      .replace(/\\\]\\\]/g, "]]")
+  );
 }
 
 export function isExcalidrawSrc(src: string): boolean {
