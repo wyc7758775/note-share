@@ -8,6 +8,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { backend } from "../backend";
+import { useSettings, translate } from "../i18n";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { sanitizeFileName } from "../lib/files";
@@ -51,6 +52,7 @@ export default function Editor({
   onToggleSidebar,
   sideCollapsed,
 }: Props) {
+  const { t } = useSettings();
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
@@ -80,8 +82,8 @@ export default function Editor({
     () =>
       createSlashMenu([
         {
-          title: "图片",
-          desc: "上传本地图片插入笔记",
+          title: t("slImage"),
+          desc: t("slImageDesc"),
           icon: "🖼",
           keywords: "image tupian photo",
           onSelect: ({ editor, range }) => {
@@ -90,8 +92,8 @@ export default function Editor({
           },
         },
         {
-          title: "画板",
-          desc: "插入 Excalidraw 手绘图",
+          title: t("slCanvas"),
+          desc: t("slCanvasDesc"),
           icon: "✏",
           keywords: "huaban draw excalidraw shouhui",
           onSelect: ({ editor, range }) => {
@@ -100,55 +102,55 @@ export default function Editor({
           },
         },
         {
-          title: "待办清单",
-          desc: "可勾选的任务列表",
+          title: t("slTask"),
+          desc: t("slTaskDesc"),
           icon: "☑",
           keywords: "todo task daiban",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).toggleTaskList().run(),
         },
         {
-          title: "代码块",
-          desc: "带语法高亮",
+          title: t("slCode"),
+          desc: t("slCodeDesc"),
           icon: "{ }",
           keywords: "code daima",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
         },
         {
-          title: "引用",
-          desc: "摘录或批注",
+          title: t("slQuote"),
+          desc: t("slQuoteDesc"),
           icon: "❝",
           keywords: "quote yinyong",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
         },
         {
-          title: "分隔线",
-          desc: "章节之间的水平线",
+          title: t("slHr"),
+          desc: t("slHrDesc"),
           icon: "―",
           keywords: "hr fengexian",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
         },
         {
-          title: "一级标题",
-          desc: "大标题",
+          title: t("slH1"),
+          desc: t("slH1Desc"),
           icon: "H1",
           keywords: "heading biaoti",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).toggleHeading({ level: 1 }).run(),
         },
         {
-          title: "二级标题",
-          desc: "中标题",
+          title: t("slH2"),
+          desc: t("slH2Desc"),
           icon: "H2",
           keywords: "heading biaoti",
           onSelect: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).toggleHeading({ level: 2 }).run(),
         },
       ]),
-    []
+    [t]
   );
 
   const editor = useEditor({
@@ -163,7 +165,14 @@ export default function Editor({
       CustomImage,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Placeholder.configure({ placeholder: "开始写点什么…（# 标题 · 1. 列表 · - [ ] 待办 · ``` 代码）" }),
+      // 占位符用函数式读取当前语言（切换语言后无需重建编辑器）
+      Placeholder.configure({
+        placeholder: () =>
+          translate(
+            document.documentElement.lang === "en" ? "en" : "zh",
+            "editorPlaceholder"
+          ),
+      }),
       Markdown.configure({ html: false, breaks: false, linkify: false }),
     ],
     content: "",
@@ -366,7 +375,7 @@ export default function Editor({
         <ExcalidrawPanelLazy
           src={editingScene}
           onBack={() => setView("note")}
-          backLabel="← 返回笔记"
+          backLabel={t("backToNote")}
           onSaved={() => setSceneRev((v) => v + 1)}
         />
       </div>
@@ -385,24 +394,26 @@ export default function Editor({
           <div className="flex items-center gap-1">
             <button
               className="top-icon-btn"
-              data-tip={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
+              data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
               onClick={onToggleSidebar}
             >
               {I.panelLeft}
             </button>
             {saveState === "error" && (
-              <span className="px-1 text-xs text-red-600">保存失败（重试 Ctrl+S）</span>
+              <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
             )}
           </div>
           <div className="flex items-center gap-1">
             <button
               className="top-icon-btn"
-              data-tip="更多操作"
+              data-tip={t("more")}
               onClick={(e) => {
                 const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
                   {
-                    label: locked ? `解锁编辑（${MOD_KEY}E）` : `锁定阅读（${MOD_KEY}E）`,
+                    label: locked
+                      ? t("unlockEdit", { mod: `${MOD_KEY}E` })
+                      : t("lockReading", { mod: `${MOD_KEY}E` }),
                     icon: locked ? I.unlock : I.lock,
                     onClick: () => {
                       void saveNow();
@@ -411,7 +422,7 @@ export default function Editor({
                   },
                   { separator: true },
                   {
-                    label: "发布 / 导出…",
+                    label: t("publishExportMenu"),
                     onClick: () => {
                       void (async () => {
                         await saveNow();
@@ -421,14 +432,14 @@ export default function Editor({
                   },
                   { separator: true },
                   {
-                    label: "删除笔记…",
+                    label: t("deleteNote"),
                     danger: true,
                     disabled: locked,
                     onClick: () => {
                       // 二级确认菜单（与第一级同位置弹出）
                       showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
                         {
-                          label: "确认移入回收站",
+                          label: t("confirmTrash"),
                           danger: true,
                           onClick: () => {
                             void (async () => {
@@ -437,7 +448,7 @@ export default function Editor({
                             })();
                           },
                         },
-                        { label: "取消" },
+                        { label: t("cancel") },
                       ]);
                     },
                   },
@@ -460,42 +471,42 @@ export default function Editor({
             const selText = empty ? "" : editor.state.doc.textBetween(from, to, " ");
             if (locked) {
               showContextMenu(e.clientX, e.clientY, [
-                { label: "复制", disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
-                { label: "全选", onClick: () => editor.chain().focus().selectAll().run() },
+                { label: t("copy"), disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
+                { label: t("selectAll"), onClick: () => editor.chain().focus().selectAll().run() },
               ]);
               return;
             }
             showContextMenu(e.clientX, e.clientY, [
-              { label: "撤销", disabled: !editor.can().undo(), onClick: () => editor.chain().focus().undo().run() },
-              { label: "重做", disabled: !editor.can().redo(), onClick: () => editor.chain().focus().redo().run() },
+              { label: t("undo"), disabled: !editor.can().undo(), onClick: () => editor.chain().focus().undo().run() },
+              { label: t("redo"), disabled: !editor.can().redo(), onClick: () => editor.chain().focus().redo().run() },
               { separator: true },
               {
-                label: "剪切",
+                label: t("cut"),
                 disabled: !selText,
                 onClick: async () => {
                   await navigator.clipboard.writeText(selText);
                   editor.chain().focus().deleteSelection().run();
                 },
               },
-              { label: "复制", disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
+              { label: t("copy"), disabled: !selText, onClick: () => void navigator.clipboard.writeText(selText) },
               {
-                label: "粘贴",
+                label: t("paste"),
                 onClick: async () => {
                   try {
-                    const t = await navigator.clipboard.readText();
-                    if (t) editor.chain().focus().insertContent(t).run();
+                    const text = await navigator.clipboard.readText();
+                    if (text) editor.chain().focus().insertContent(text).run();
                   } catch {
                     /* 剪贴板无权限时静默（Ctrl+V 仍可用） */
                   }
                 },
               },
               { separator: true },
-              { label: "加粗", checked: editor.isActive("bold"), onClick: () => editor.chain().focus().toggleBold().run() },
-              { label: "斜体", checked: editor.isActive("italic"), onClick: () => editor.chain().focus().toggleItalic().run() },
-              { label: "删除线", checked: editor.isActive("strike"), onClick: () => editor.chain().focus().toggleStrike().run() },
-              { label: "行内代码", checked: editor.isActive("code"), onClick: () => editor.chain().focus().toggleCode().run() },
+              { label: t("bold"), checked: editor.isActive("bold"), onClick: () => editor.chain().focus().toggleBold().run() },
+              { label: t("italic"), checked: editor.isActive("italic"), onClick: () => editor.chain().focus().toggleItalic().run() },
+              { label: t("strike"), checked: editor.isActive("strike"), onClick: () => editor.chain().focus().toggleStrike().run() },
+              { label: t("inlineCode"), checked: editor.isActive("code"), onClick: () => editor.chain().focus().toggleCode().run() },
               { separator: true },
-              { label: "全选", onClick: () => editor.chain().focus().selectAll().run() },
+              { label: t("selectAll"), onClick: () => editor.chain().focus().selectAll().run() },
             ]);
           }}
           onDragOver={(e) => e.preventDefault()}
@@ -509,8 +520,8 @@ export default function Editor({
         >
           <div className={`mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
             <input
-              className="serif w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-stone-300"
-              placeholder="无标题"
+              className="serif w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-faint"
+              placeholder={t("untitled")}
               readOnly={locked}
               value={loaded ? title : ""}
               onChange={(e) => {
@@ -518,11 +529,11 @@ export default function Editor({
                 scheduleSave();
               }}
             />
-            <div className="mt-2 flex items-center gap-2 text-[13px] text-stone-400">
+            <div className="mt-2 flex items-center gap-2 text-[13px] text-faint">
               <span>#</span>
               <input
-                className="flex-1 border-none bg-transparent outline-none placeholder:text-stone-300"
-                placeholder="标签，用逗号分隔"
+                className="flex-1 border-none bg-transparent outline-none placeholder:text-faint"
+                placeholder={t("tagsPlaceholder")}
                 readOnly={locked}
                 value={loaded ? tagsText : ""}
                 onChange={(e) => {
@@ -576,7 +587,7 @@ function IconBtn({
     <button
       title={title}
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-200/70 hover:text-stone-800"
+      className="flex h-7 w-7 items-center justify-center rounded-md text-soft transition-colors hover:bg-hover hover:text-ink"
     >
       {children}
     </button>
@@ -592,7 +603,13 @@ function ExcalidrawPanelLazy(props: {
   onSaved: () => void;
 }) {
   return (
-    <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-stone-400">画板加载中…</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center text-sm text-faint">
+          {translate(document.documentElement.lang === "en" ? "en" : "zh", "sceneLoading")}
+        </div>
+      }
+    >
       <ExcalidrawPanelLazyImpl {...props} />
     </Suspense>
   );

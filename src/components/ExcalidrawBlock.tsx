@@ -5,6 +5,7 @@ import { backend } from "../backend";
 import { isExcalidrawSrc, pngSibling, safeDecode } from "../lib/markdown";
 import { downloadDataUrl, extOfDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
+import { useSettings } from "../i18n";
 import { I } from "./icons";
 
 export const EMPTY_SCENE_JSON = JSON.stringify({
@@ -37,6 +38,7 @@ export function emitViewImage(src: string) {
 /** 图片节点：单击选中（四角拖拽缩放，Delete 删除），双击打开阅览器；
  *  .excalidraw 显示为可编辑画板卡片（锁定时纯展示） */
 function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPos }: any) {
+  const { t } = useSettings();
   const raw: string = node.attrs.src ?? "";
   const src = safeDecode(raw);
   const { rev, locked } = useContext(EditorStateContext);
@@ -137,7 +139,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
           <img
             src={dataUrl}
             alt={node.attrs.alt ?? ""}
-            title={locked ? "双击查看大图" : "单击选中（可拖角缩放，Delete 删除）· 双击查看大图"}
+            title={locked ? t("imgTitleLock") : t("imgTitleEdit")}
             style={displayW ? { width: "100%" } : undefined}
             onClick={selectNode}
             onDoubleClick={() => emitViewImage(dataUrl)}
@@ -145,9 +147,9 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
               e.preventDefault();
               e.stopPropagation();
               showContextMenu(e.clientX, e.clientY, [
-                { label: "查看大图", onClick: () => emitViewImage(dataUrl) },
+                { label: t("viewLarge"), onClick: () => emitViewImage(dataUrl) },
                 {
-                  label: "下载图片",
+                  label: t("downloadImage"),
                   onClick: () =>
                     void downloadDataUrl(
                       safeDecode(raw).split("/").pop() || `image.${extOfDataUrl(dataUrl)}`,
@@ -155,7 +157,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
                     ),
                 },
                 { separator: true },
-                { label: "删除图片", danger: true, onClick: deleteNode },
+                { label: t("deleteImage"), danger: true, onClick: deleteNode },
               ]);
             }}
           />
@@ -185,7 +187,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
             emitEditScene(src);
           }
         }}
-        title={locked ? "点击查看画板" : "点击在右侧编辑画板"}
+        title={locked ? t("clickCanvas") : t("clickToEdit")}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -193,7 +195,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
             if (url) {
               showContextMenu(e.clientX, e.clientY, [
                 {
-                  label: "下载预览图",
+                  label: t("downloadPng"),
                   onClick: () =>
                     void downloadDataUrl(
                       pngSibling(src).split("/").pop() || "drawing.png",
@@ -205,9 +207,9 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
             return;
           }
           showContextMenu(e.clientX, e.clientY, [
-            { label: "编辑画板", onClick: () => emitEditScene(src) },
+            { label: t("editCanvas"), onClick: () => emitEditScene(src) },
             {
-              label: "下载预览图",
+              label: t("downloadPng"),
               disabled: !url,
               onClick: () =>
                 void downloadDataUrl(
@@ -216,7 +218,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
                 ),
             },
             { separator: true },
-            { label: "删除画板块", danger: true, onClick: deleteNode },
+            { label: t("deleteCanvasBlock"), danger: true, onClick: deleteNode },
           ]);
         }}
       >
@@ -227,14 +229,14 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
               title="编辑画板"
               onClick={() => emitEditScene(src)}
             >
-              {I.pen} 编辑
+              {I.pen} {t("editCanvas")}
             </button>
             <button
               className="btn-outline !px-2 !py-1 text-xs hover:!text-red-600"
-              title="删除画板块（文件保留在 attachments）"
+              title={t("deleteCanvasKeep")}
               onClick={deleteNode}
             >
-              删除
+              {t("delete")}
             </button>
           </div>
         )}
@@ -243,17 +245,17 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
             className="fig-empty"
             onClick={() => !locked && emitEditScene(src)}
           >
-            {locked ? "空画板" : "空画板 · 点击开始绘制（会自动保存为 .excalidraw 文件）"}
+            {locked ? t("emptyCanvas") : t("emptyCanvasHint")}
           </div>
         ) : state === "noPng" ? (
           <div
             className="fig-empty"
             onClick={() => !locked && emitEditScene(src)}
           >
-            {locked ? "画板" : "画板已有内容 · 点击编辑生成预览图"}
+            {locked ? "画板" : t("canvasReadyHint")}
           </div>
         ) : url ? (
-          <img src={url} alt="excalidraw 画板" />
+          <img src={url} alt={t("sceneAlt")} />
         ) : (
           <div className="fig-empty">画板加载中…</div>
         )}

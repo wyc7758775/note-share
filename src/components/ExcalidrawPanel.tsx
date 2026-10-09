@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import { backend } from "../backend";
+import { useSettings } from "../i18n";
 
 interface Props {
   src: string;
@@ -15,7 +16,9 @@ interface Props {
 
 type SaveState = "saved" | "saving" | "error";
 
-export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onSaved }: Props) {
+export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Props) {
+  const { t, dark } = useSettings();
+  const backText = backLabel ?? t("close");
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -128,24 +131,24 @@ export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onS
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-stone-200 px-3">
-        <div className="flex items-center gap-2 text-sm text-stone-500">
-          <span className="text-stone-400">✏</span>
-          <span>画板</span>
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
+        <div className="flex items-center gap-2 text-sm text-soft">
+          <span className="text-faint">✏</span>
+          <span>{t("sceneTitle")}</span>
           <span
             className={`text-xs ${
               saveState === "saving"
                 ? "text-amber-700"
                 : saveState === "error"
                   ? "text-red-600"
-                  : "text-stone-400"
+                  : "text-faint"
             }`}
           >
-            {saveState === "saving" ? "自动保存中…" : saveState === "error" ? "保存失败，仍在重试" : "实时保存已开启"}
+            {saveState === "saving" ? t("autosaving") : saveState === "error" ? t("autosaveRetry") : t("autosaveOn")}
           </span>
         </div>
         <button className="btn-ghost !py-1" onClick={() => void handleBack()}>
-          {backLabel}
+          {backText}
         </button>
       </div>
       <div className="min-h-0 flex-1">
@@ -154,11 +157,11 @@ export default function ExcalidrawPanel({ src, onBack, backLabel = "关闭", onS
             excalidrawAPI={(api: any) => (apiRef.current = api)}
             initialData={initialData}
             onChange={handleChange}
-            theme="light"
+            theme={dark ? "dark" : "light"}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-stone-400">
-            画板加载中…
+          <div className="flex h-full items-center justify-center text-sm text-faint">
+            {t("sceneLoading")}
           </div>
         )}
       </div>

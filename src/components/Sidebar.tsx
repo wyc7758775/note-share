@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
+import { useSettings } from "../i18n";
 import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
@@ -37,10 +38,12 @@ interface Props {
   onPickVault: () => void;
   canPickVault: boolean;
   onResize: (width: number) => void;
+  onOpenSettings: () => void;
 }
 
 export default function Sidebar(props: Props) {
   const { vaultName, tree, currentPath, onOpenNote, onTreeChanged, width, onResize } = props;
+  const { t } = useSettings();
   const [tab, setTab] = useState<"files" | "search">("files");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
@@ -85,7 +88,7 @@ export default function Sidebar(props: Props) {
       onOpenNote(p);
     },
     onNewNote: async (folder) => {
-      const path = await backend.createNote(folder, "未命名笔记");
+      const path = await backend.createNote(folder, t("untitledNote"));
       await onTreeChanged();
       onOpenNote(path);
     },
@@ -168,14 +171,14 @@ export default function Sidebar(props: Props) {
       <div className="side-tabs">
         <button
           className={`side-tab ${tab === "files" ? "active" : ""}`}
-          data-tip="文件"
+          data-tip={t("tabFiles")}
           onClick={() => setTab("files")}
         >
           {I.folder}
         </button>
         <button
           className={`side-tab ${tab === "search" ? "active" : ""}`}
-          data-tip="搜索"
+          data-tip={t("tabSearch")}
           onClick={() => setTab("search")}
         >
           {I.search}
@@ -191,11 +194,11 @@ export default function Sidebar(props: Props) {
               e.preventDefault();
               showContextMenu(e.clientX, e.clientY, [
                 {
-                  label: "新建笔记",
+                  label: t("newNote"),
                   onClick: () => void handlers.onNewNote(""),
                 },
                 {
-                  label: "新建文件夹",
+                  label: t("newFolder"),
                   onClick: () => setNewFolderMode(true),
                 },
               ]);
@@ -204,7 +207,7 @@ export default function Sidebar(props: Props) {
             {newFolderMode && (
               <InlineInputRow
                 initial=""
-                placeholder="新文件夹名称，回车创建"
+                placeholder={t("newFolderPlaceholder")}
                 onCommit={async (v) => {
                   setNewFolderMode(false);
                   if (v.trim()) {
@@ -229,44 +232,49 @@ export default function Sidebar(props: Props) {
         <div className="side-scroll">
           <input
             className="side-search"
-            placeholder="搜索标题与全文…"
+            placeholder={t("searchPlaceholder")}
             value={query}
             autoFocus
             onChange={(e) => setQuery(e.target.value)}
           />
           {hits !== null && hits.length === 0 && (
-            <p className="px-1 py-4 text-center text-xs text-stone-400">
-              没有找到「{query}」
+            <p className="px-1 py-4 text-center text-xs text-faint">
+              {t("noResults", { q: query })}
             </p>
           )}
           {hits?.map((h) => (
             <button
               key={h.path}
-              className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-stone-200/60"
+              className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-hover"
               title={h.path}
               onClick={() => handlers.onOpenNote(h.path)}
             >
-              <div className="truncate text-[13px] text-stone-700">{h.title}</div>
-              <div className="truncate text-[11px] text-stone-400">{h.snippet}</div>
+              <div className="truncate text-[13px] text-ink">{h.title}</div>
+              <div className="truncate text-[11px] text-faint">{h.snippet}</div>
             </button>
           ))}
         </div>
       )}
 
-      {/* 底部：笔记仓库，点击切换 */}
-      <button
-        className="vault-bar"
-        title={
-          props.canPickVault
-            ? "点击切换笔记仓库文件夹"
-            : "浏览器模式：启动时用 VAULT_DIR 环境变量指定仓库"
-        }
-        onClick={() => props.canPickVault && props.onPickVault()}
-      >
-        {I.folder}
-        <span className="min-w-0 flex-1 truncate">{vaultName ?? "…"}</span>
-        {props.canPickVault && <span className="shrink-0 text-stone-400">{I.switchVault}</span>}
-      </button>
+      {/* 底部：笔记仓库切换 + 设置 */}
+      <div className="vault-bar">
+        <button
+          className="min-w-0 flex-1 self-stretch text-left"
+          data-tip={props.canPickVault ? t("vaultSwitchTip") : t("vaultWebTip")}
+          onClick={() => props.canPickVault && props.onPickVault()}
+        >
+          {I.folder}
+          <span className="min-w-0 flex-1 truncate">{vaultName ?? "…"}</span>
+          {props.canPickVault && <span className="shrink-0 text-faint">{I.switchVault}</span>}
+        </button>
+        <button
+          className="vault-setting-btn"
+          data-tip={t("settings")}
+          onClick={props.onOpenSettings}
+        >
+          {I.gear}
+        </button>
+      </div>
 
       {/* 右缘拖宽手柄 */}
       <div

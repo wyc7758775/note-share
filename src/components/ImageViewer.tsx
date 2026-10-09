@@ -2,6 +2,7 @@
 // 富文本里点击图片、文件树里点击图片附件都走这个组件。
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSettings } from "../i18n";
 import { downloadDataUrl, extOfDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
 
@@ -19,6 +20,7 @@ export default function ImageViewer({
   index: number;
   onClose: () => void;
 }) {
+  const { t } = useSettings();
   const [i, setI] = useState(Math.min(Math.max(0, index), images.length - 1));
   const n = images.length;
 
@@ -38,16 +40,16 @@ export default function ImageViewer({
     <div className="img-viewer" onClick={(e) => e.target === e.currentTarget && onClose()}>
       {n > 1 && (
         <>
-          <button className="img-viewer-nav" style={{ left: 18 }} onClick={() => setI((v) => (v - 1 + n) % n)} title="上一张（←）">
+          <button className="img-viewer-nav" style={{ left: 18 }} onClick={() => setI((v) => (v - 1 + n) % n)} title={t("prevImage")}>
             ‹
           </button>
-          <button className="img-viewer-nav" style={{ right: 18 }} onClick={() => setI((v) => (v + 1) % n)} title="下一张（→）">
+          <button className="img-viewer-nav" style={{ right: 18 }} onClick={() => setI((v) => (v + 1) % n)} title={t("nextImage")}>
             ›
           </button>
           <div className="img-viewer-count">{i + 1} / {n}</div>
         </>
       )}
-      <button className="img-viewer-close" onClick={onClose} title="关闭（Esc）">
+      <button className="img-viewer-close" onClick={onClose} title={t("closeEsc")}>
         ✕
       </button>
       <div className="img-viewer-stage" onClick={onClose}>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Editor as TipTapEditor } from "@tiptap/react";
 import { backend } from "../backend";
+import { useSettings } from "../i18n";
 import { getPublishConfig, setPublishConfig } from "../lib/config";
 import { tagsOf } from "../lib/frontmatter";
 import { composeArticleHtml, inlineAssets } from "../lib/exportHtml";
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
+  const { t } = useSettings();
   const [exportState, setExportState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [exportMsg, setExportMsg] = useState("");
 
@@ -45,12 +47,12 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
     setExportMsg("");
     try {
       const html = await inlineAssets(editor.getHTML());
-      const t = title.current.trim() || "无标题";
-      const doc = await composeArticleHtml(t, html, {
+      const titleText = title.current.trim() || t("untitled");
+      const doc = await composeArticleHtml(titleText, html, {
         tags: tagsOf(fmRef.current),
         date: date(),
       });
-      const fileName = `${t.replace(/[\\/:*?"<>|]/g, "_")}.html`;
+      const fileName = `${titleText.replace(/[\\/:*?"<>|]/g, "_")}.html`;
       const saved = await backend.saveTextFile(fileName, doc);
       if (saved === null) {
         const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
@@ -59,15 +61,15 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
         a.download = fileName;
         a.click();
         URL.revokeObjectURL(a.href);
-        setExportMsg(`已下载 ${fileName}（单文件，图片已内嵌，双击即可打开）`);
+        setExportMsg(t("exportedDownload", { name: fileName }));
       } else {
-        setExportMsg(`已导出到 ${saved}`);
+        setExportMsg(t("exportedTo", { path: saved }));
       }
       setExportState("done");
     } catch (e) {
       console.error(e);
       setExportState("error");
-      setExportMsg("导出失败，请看控制台");
+      setExportMsg(t("exportFail"));
     }
   };
 
@@ -75,12 +77,12 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
     const base = serverUrl.trim().replace(/\/+$/, "");
     if (!base) {
       setPubState("error");
-      setPubMsg("请先填写服务器地址");
+      setPubMsg(t("pubNeedServer"));
       return;
     }
     if (!slug.trim()) {
       setPubState("error");
-      setPubMsg("请填写路径名 slug");
+      setPubMsg(t("pubNeedSlug"));
       return;
     }
     setPubState("busy");
@@ -88,7 +90,7 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
     setCopied(false);
     try {
       const html = await inlineAssets(editor.getHTML());
-      const t = title.current.trim() || "无标题";
+      const titleText = title.current.trim() || t("untitled");
       const res = await fetch(`${base}/api/publish`, {
         method: "POST",
         headers: {
@@ -97,7 +99,7 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
         },
         body: JSON.stringify({
           slug: slug.trim(),
-          title: t,
+          title: titleText,
           html,
           tags: tagsOf(fmRef.current),
           date: date(),
@@ -109,7 +111,7 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
       const data = (await res.json()) as { url: string };
       const full = base + data.url;
       setPubUrl(full);
-      setPubMsg("发布成功！");
+      setPubMsg(t("pubOk"));
       setPubState("done");
       setPublishConfig({ serverUrl: base, token: token.trim() });
       fmRef.current.slug = slug.trim();
@@ -118,32 +120,32 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
     } catch (e: any) {
       console.error(e);
       setPubState("error");
-      setPubMsg(`发布失败：${e?.message ?? e}`);
+      setPubMsg(t("pubFail", { msg: e?.message ?? String(e) }));
     }
   };
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-stone-200 px-3">
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
         <button className="btn-ghost !py-1" onClick={onBack}>
-          ← 返回笔记
+          {t("backToNote")}
         </button>
-        <span className="text-sm font-medium text-stone-700">发布 / 导出</span>
+        <span className="text-sm font-medium text-ink">{t("publishTitle")}</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-8 py-10">
           {/* 方式一：单文件 HTML */}
-          <section className="rounded-lg border border-stone-200 p-5">
+          <section className="rounded-lg border border-line p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="text-sm font-medium text-stone-800">导出单文件 HTML</div>
-                <div className="mt-1 text-xs leading-relaxed text-stone-500">
-                  图片全部内嵌成一个 .html 文件，微信/网盘发给别人，双击就能看
+                <div className="text-sm font-medium text-ink">{t("exportHtmlTitle")}</div>
+                <div className="mt-1 text-xs leading-relaxed text-soft">
+                  {t("exportHtmlDesc")}
                 </div>
               </div>
               <button className="btn-outline shrink-0" disabled={exportState === "busy"} onClick={doExport}>
-                {exportState === "busy" ? "导出中…" : "立即导出"}
+                {exportState === "busy" ? t("exporting") : t("exportNow")}
               </button>
             </div>
             {exportMsg && (
@@ -154,28 +156,28 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
           </section>
 
           {/* 方式二：发布到服务器 */}
-          <section className="mt-4 rounded-lg border border-stone-200 p-5">
-            <div className="text-sm font-medium text-stone-800">发布到我的服务器</div>
-            <div className="mt-1 text-xs leading-relaxed text-stone-500">
-              文章会传到你部署的发布服务上，任何人通过链接访问（server/publish-server.mjs）
+          <section className="mt-4 rounded-lg border border-line p-5">
+            <div className="text-sm font-medium text-ink">{t("pubServerTitle")}</div>
+            <div className="mt-1 text-xs leading-relaxed text-soft">
+              {t("pubServerDesc")}
             </div>
             <div className="mt-4 grid gap-2">
               <input
                 className="input"
-                placeholder="服务器地址，如 http://123.45.67.89:8787"
+                placeholder={t("serverPlaceholder")}
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
               />
               <input
                 className="input"
-                placeholder="访问令牌 Token（服务器环境变量 TOKEN）"
+                placeholder={t("tokenPlaceholder")}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
               />
               <div className="flex items-center gap-2">
-                <span className="shrink-0 text-xs text-stone-500">链接路径</span>
-                <div className="flex flex-1 items-center rounded-md border border-stone-300 bg-white">
-                  <span className="pl-2 text-xs text-stone-400">/p/</span>
+                <span className="shrink-0 text-xs text-soft">{t("linkPath")}</span>
+                <div className="flex flex-1 items-center rounded-md border border-line-strong bg-surface">
+                  <span className="pl-2 text-xs text-faint">/p/</span>
                   <input
                     className="w-full rounded-r-md px-1 py-1.5 text-sm outline-none"
                     value={slug}
@@ -183,11 +185,11 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
                   />
                 </div>
                 <button
-                  className="shrink-0 text-xs text-stone-400 hover:text-stone-600"
-                  title="随机生成"
+                  className="shrink-0 text-xs text-faint hover:text-soft"
+                  title={t("shuffleTip")}
                   onClick={() => setSlug(randomSlug())}
                 >
-                  换一个
+                  {t("shuffle")}
                 </button>
               </div>
             </div>
@@ -209,18 +211,18 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
                       setCopied(true);
                     }}
                   >
-                    {copied ? `${I.check} 已复制` : "复制链接"}
+                    {copied ? `${I.check} ${t("copied")}` : t("copyLink")}
                   </button>
                 </div>
               ) : (
                 <span
-                  className={`text-xs ${pubState === "error" ? "text-red-600" : "text-stone-500"}`}
+                  className={`text-xs ${pubState === "error" ? "text-red-600" : "text-soft"}`}
                 >
-                  {pubMsg || "同一 slug 重复发布会覆盖更新"}
+                  {pubMsg || t("pubOverwrite")}
                 </span>
               )}
               <button className="btn-primary shrink-0" disabled={pubState === "busy"} onClick={doPublish}>
-                {pubState === "busy" ? "发布中…" : "发布"}
+                {pubState === "busy" ? t("publishing") : t("publish")}
               </button>
             </div>
           </section>

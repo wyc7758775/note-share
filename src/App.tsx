@@ -1,8 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { backend, type TreeNode } from "./backend";
+import { useSettings } from "./i18n";
 import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
+import SettingsModal from "./components/SettingsModal";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
 import { I } from "./components/icons";
 
@@ -10,6 +12,8 @@ import { I } from "./components/icons";
 const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
+  const { t } = useSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   // sessionKey：打开"另一篇"笔记时自增以重建编辑器；重命名当前笔记时不自增
@@ -108,6 +112,7 @@ export default function App() {
           onPickVault={pickVault}
           canPickVault={backend.mode === "tauri"}
           onResize={setSideWidth}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
       </div>
       <main className="min-w-0 flex-1 overflow-hidden">
@@ -115,9 +120,9 @@ export default function App() {
           <div className="view-swap h-full">
             <Suspense
               fallback={
-                <div className="flex h-full items-center justify-center text-sm text-stone-400">
-                  画板加载中…
-                </div>
+              <div className="flex h-full items-center justify-center text-sm text-faint">
+                    {t("sceneLoading")}
+                  </div>
               }
             >
               <ScenePanelStandalone
@@ -129,11 +134,11 @@ export default function App() {
             </Suspense>
           </div>
         ) : vaultName === null ? (
-          <div className="view-swap flex h-full flex-col items-center justify-center gap-4 text-stone-500">
-            <div className="serif text-2xl text-stone-700">NoteShare</div>
-            <p className="text-sm">还没有选择笔记库文件夹</p>
+          <div className="view-swap flex h-full flex-col items-center justify-center gap-4 text-soft">
+            <div className="serif text-2xl text-ink">NoteShare</div>
+            <p className="text-sm">{t("noVaultHint")}</p>
             <button className="btn-primary" onClick={pickVault}>
-              选择文件夹（可用已有的 Obsidian 库）
+              {t("pickVaultBtn")}
             </button>
           </div>
         ) : session ? (
@@ -157,13 +162,15 @@ export default function App() {
             <EmptyState
               vaultName={vaultName}
               onNewNote={async () => {
-                const path = await backend.createNote("", "未命名笔记");
+                const path = await backend.createNote("", t("untitledNote"));
                 openNote(path);
               }}
             />
           </div>
         )}
       </main>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

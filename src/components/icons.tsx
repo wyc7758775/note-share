@@ -112,4 +112,15 @@ export const I = {
       <circle cx="12.6" cy="8" r="1.35" fill="currentColor" />
     </svg>
   ),
+  gear: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="2.1" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M8 1.8v1.6M8 12.6v1.6M2.9 4.4l1.4.8M11.7 10.8l1.4.8M2.9 11.6l1.4-.8M11.7 5.2l1.4-.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
 };
