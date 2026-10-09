@@ -34,7 +34,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             vault_name, set_vault, tree, read_note, write_note, create_note, create_folder,
             rename_path, delete_path, search, read_scene, save_scene, save_asset, read_asset,
-            save_text_file
+            save_text_file, save_binary_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -508,4 +508,13 @@ fn read_asset(state: State<AppState>, path: String) -> Result<Value, String> {
 #[tauri::command]
 fn save_text_file(target: String, content: String) -> Result<(), String> {
     fs::write(&target, content).map_err(|e| e.to_string())
+}
+
+/// 下载图片等二进制：写入用户通过对话框选择的路径
+#[tauri::command]
+fn save_binary_file(target: String, base64: String) -> Result<(), String> {
+    let bytes = ::base64::engine::general_purpose::STANDARD
+        .decode(&base64)
+        .map_err(|e| e.to_string())?;
+    fs::write(&target, bytes).map_err(|e| e.to_string())
 }

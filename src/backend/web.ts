@@ -43,4 +43,5 @@ export const webBackend: Backend = {
   saveAsset: (name, base64) => call<{ path: string }>("asset-save", { name, base64 }),
   readAssetBase64: (path) => call<AssetData>("asset", { path }),
   saveTextFile: async () => null,
+  saveBinaryFile: async () => null,
 };

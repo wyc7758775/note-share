@@ -2,6 +2,8 @@
 // 富文本里点击图片、文件树里点击图片附件都走这个组件。
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { downloadDataUrl, extOfDataUrl } from "../lib/download";
+import { showContextMenu } from "./ContextMenu";
 
 export interface ViewerImage {
   src: string; // dataURL 或外链
@@ -53,6 +55,17 @@ export default function ImageViewer({
           src={cur.src}
           alt={cur.name ?? ""}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e.clientX, e.clientY, [
+              {
+                label: "下载图片",
+                onClick: () =>
+                  void downloadDataUrl(cur.name || `image.${extOfDataUrl(cur.src)}`, cur.src),
+              },
+            ]);
+          }}
         />
       </div>
       {cur.name && <div className="img-viewer-name">{cur.name}</div>}

@@ -3,6 +3,7 @@ import Image from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { backend } from "../backend";
 import { isExcalidrawSrc, pngSibling, safeDecode } from "../lib/markdown";
+import { downloadDataUrl, extOfDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
@@ -92,6 +93,22 @@ function ImageView({ node, selected, deleteNode }: any) {
           alt={node.attrs.alt ?? ""}
           title="点击查看大图"
           onClick={(e) => emitViewImage((e.target as HTMLImageElement).src)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const dataUrl = url ?? src;
+            showContextMenu(e.clientX, e.clientY, [
+              { label: "查看大图", onClick: () => emitViewImage(dataUrl) },
+              {
+                label: "下载图片",
+                onClick: () =>
+                  void downloadDataUrl(
+                    safeDecode(raw).split("/").pop() || `image.${extOfDataUrl(dataUrl)}`,
+                    dataUrl
+                  ),
+              },
+            ]);
+          }}
         />
       </NodeViewWrapper>
     );
@@ -114,9 +131,32 @@ function ImageView({ node, selected, deleteNode }: any) {
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (locked) return;
+          if (locked) {
+            if (url) {
+              showContextMenu(e.clientX, e.clientY, [
+                {
+                  label: "下载预览图",
+                  onClick: () =>
+                    void downloadDataUrl(
+                      pngSibling(src).split("/").pop() || "drawing.png",
+                      url
+                    ),
+                },
+              ]);
+            }
+            return;
+          }
           showContextMenu(e.clientX, e.clientY, [
             { label: "编辑画板", onClick: () => emitEditScene(src) },
+            {
+              label: "下载预览图",
+              disabled: !url,
+              onClick: () =>
+                void downloadDataUrl(
+                  pngSibling(src).split("/").pop() || "drawing.png",
+                  url!
+                ),
+            },
             { separator: true },
             { label: "删除画板块", danger: true, onClick: deleteNode },
           ]);

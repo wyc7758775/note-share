@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
+import { downloadDataUrl } from "../lib/download";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -122,6 +123,14 @@ export default function Sidebar(props: Props) {
       }
       const index = Math.max(0, images.findIndex((x) => x.name === item.name));
       if (images.length) setViewer({ images, index });
+    },
+    onDownloadAsset: async (item) => {
+      try {
+        const { base64, mime } = await backend.readAssetBase64(item.path);
+        await downloadDataUrl(item.name, `data:${mime};base64,${base64}`);
+      } catch (e) {
+        console.error("下载失败", e);
+      }
     },
   };
 

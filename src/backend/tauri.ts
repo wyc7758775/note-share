@@ -38,4 +38,10 @@ export const tauriBackend: Backend = {
     await invoke("save_text_file", { target, content });
     return target;
   },
+  saveBinaryFile: async (defaultName, base64) => {
+    const target = await save({ defaultPath: defaultName });
+    if (typeof target !== "string") return null;
+    await invoke("save_binary_file", { target, base64 });
+    return target;
+  },
 };

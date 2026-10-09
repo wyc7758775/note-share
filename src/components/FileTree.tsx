@@ -51,6 +51,7 @@ export interface TreeHandlers {
   onDelete: (path: string) => void;
   onArmDelete: (path: string | null) => void;
   onViewAsset: (item: TreeNode) => void;
+  onDownloadAsset: (item: TreeNode) => void;
 }
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -184,7 +185,7 @@ function TreeRow({
     );
   }
 
-  // 附件：图片可点击查看（共用阅览器），其他只展示
+  // 附件：图片可点击查看/右键下载（共用阅览器），其他只展示
   const isImg = IMG_RE.test(item.name);
   return (
     <div
@@ -192,6 +193,15 @@ function TreeRow({
       style={pad}
       title={isImg ? "点击查看图片" : item.path}
       onClick={() => isImg && h.onViewAsset(item)}
+      onContextMenu={(e) => {
+        if (!isImg) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showContextMenu(e.clientX, e.clientY, [
+          { label: "查看图片", onClick: () => h.onViewAsset(item) },
+          { label: "下载图片", onClick: () => h.onDownloadAsset(item) },
+        ]);
+      }}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">
         {I.asset}
