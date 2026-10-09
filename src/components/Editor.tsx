@@ -349,30 +349,34 @@ export default function Editor({
   // ---- 视图切换：发布 / 画板（整区推入，返回回到笔记） ----
   if (view === "publish") {
     return (
-      <PublishPanel
-        editor={editor}
-        pathRef={pathRef}
-        fmRef={fmRef}
-        title={titleRef}
-        onBack={() => setView("note")}
-      />
+      <div className="view-swap h-full">
+        <PublishPanel
+          editor={editor}
+          pathRef={pathRef}
+          fmRef={fmRef}
+          title={titleRef}
+          onBack={() => setView("note")}
+        />
+      </div>
     );
   }
   if (view === "scene" && editingScene !== null) {
     return (
-      <ExcalidrawPanelLazy
-        src={editingScene}
-        onBack={() => setView("note")}
-        backLabel="← 返回笔记"
-        onSaved={() => setSceneRev((v) => v + 1)}
-      />
+      <div className="view-swap h-full">
+        <ExcalidrawPanelLazy
+          src={editingScene}
+          onBack={() => setView("note")}
+          backLabel="← 返回笔记"
+          onSaved={() => setSceneRev((v) => v + 1)}
+        />
+      </div>
     );
   }
 
   // ---- 笔记视图 ----
   return (
     <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
-      <div className="flex h-full flex-col">
+      <div className="view-swap flex h-full flex-col">
         {/* 顶栏 */}
         <div
           className="flex h-11 shrink-0 items-center justify-between border-b px-2.5"
@@ -386,20 +390,11 @@ export default function Editor({
             >
               {I.panelLeft}
             </button>
-            <span className="mx-0.5 h-4 w-px bg-stone-300/80" />
-            <SaveBadge state={saveState} />
+            {saveState === "error" && (
+              <span className="px-1 text-xs text-red-600">保存失败（重试 Ctrl+S）</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
-            <button
-              className="top-icon-btn"
-              data-tip={locked ? `解锁编辑（${MOD_KEY}E）` : `锁定阅读（${MOD_KEY}E）`}
-              onClick={() => {
-                void saveNow();
-                setLocked((v) => !v);
-              }}
-            >
-              {locked ? I.lock : I.unlock}
-            </button>
             <button
               className="top-icon-btn"
               data-tip="更多操作"
@@ -408,7 +403,7 @@ export default function Editor({
                 showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
                   {
                     label: locked ? `解锁编辑（${MOD_KEY}E）` : `锁定阅读（${MOD_KEY}E）`,
-                    checked: locked,
+                    icon: locked ? I.unlock : I.lock,
                     onClick: () => {
                       void saveNow();
                       setLocked((v) => !v);
@@ -586,17 +581,6 @@ function IconBtn({
       {children}
     </button>
   );
-}
-
-function SaveBadge({ state }: { state: SaveState }) {
-  const map: Record<SaveState, { text: string; cls: string }> = {
-    saved: { text: "已保存", cls: "text-stone-400" },
-    dirty: { text: "未保存…", cls: "text-amber-700" },
-    saving: { text: "保存中…", cls: "text-stone-400" },
-    error: { text: "保存失败（重试：Ctrl+S）", cls: "text-red-600" },
-  };
-  const { text, cls } = map[state];
-  return <span className={`px-1 text-xs ${cls}`}>{text}</span>;
 }
 
 // 画板面板按需加载（体积大）

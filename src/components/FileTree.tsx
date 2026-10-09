@@ -25,7 +25,7 @@ export function InlineInputRow({
     ref.current?.select();
   }, []);
   return (
-    <div className="px-1 py-0.5" style={{ paddingLeft: 10 + depth * 14 }}>
+    <div className="row-in px-1 py-0.5" style={{ paddingLeft: 10 + depth * 14 }}>
       <input
         ref={ref}
         className="w-full rounded-md border border-amber-600/40 bg-white px-2 py-1 text-[13px] outline-none focus:border-amber-700/70 focus:ring-2 focus:ring-amber-700/10"

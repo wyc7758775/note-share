@@ -163,6 +163,75 @@ body.resizing {
   color: #44403c;
 }
 
+/* ---------- 交互动画（统一曲线：快起缓停） ---------- */
+
+/* 侧栏收起/展开：外层容器做宽度过渡（展开时立即可见，收起时收完再隐藏内容） */
+.side-anim {
+  flex: none;
+  overflow: hidden;
+  transition: width 0.24s cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 0s;
+}
+.side-anim[aria-hidden="true"] {
+  transition: width 0.24s cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 0.24s;
+}
+/* 拖拽调宽时要跟手，不做过渡 */
+body.resizing .side-anim {
+  transition: none;
+}
+
+/* 视图切换（笔记 ↔ 发布 ↔ 画板推入、打开笔记、空状态）：淡入 + 轻微右移 */
+.view-swap {
+  animation: view-in 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 行内输入（重命名/新建）出现 */
+.row-in {
+  animation: row-in 0.15s ease-out;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 图片选中手柄弹出 */
+.img-handle {
+  animation: pop-in 0.12s cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes pop-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 按钮按下反馈（Excalidraw 画布内的按钮除外，避免干扰绘制） */
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+.excalidraw button:active {
+  transform: none;
+}
+
 /* 即时提示气泡（Obsidian 式黑底小气泡；原生 title 在 WebKit 上延迟近 1 秒，故自绘） */
 [data-tip] {
   position: relative;

@@ -88,7 +88,15 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      {!sideCollapsed && (
+      {/* 侧栏外层做收起/展开的宽度动画；收起后隐藏内容防焦点进入 */}
+      <div
+        className="side-anim"
+        style={{
+          width: sideCollapsed ? 0 : sideWidth,
+          visibility: sideCollapsed ? "hidden" : "visible",
+        }}
+        aria-hidden={sideCollapsed}
+      >
         <Sidebar
           vaultName={vaultName}
           tree={tree}
@@ -101,25 +109,27 @@ export default function App() {
           canPickVault={backend.mode === "tauri"}
           onResize={setSideWidth}
         />
-      )}
+      </div>
       <main className="min-w-0 flex-1 overflow-hidden">
         {sceneView !== null ? (
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-stone-400">
-                画板加载中…
-              </div>
-            }
-          >
-            <ScenePanelStandalone
-              src={sceneView}
-              onBack={() => setSceneView(null)}
-              backLabel="关闭"
-              onSaved={() => {}}
-            />
-          </Suspense>
+          <div className="view-swap h-full">
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-stone-400">
+                  画板加载中…
+                </div>
+              }
+            >
+              <ScenePanelStandalone
+                src={sceneView}
+                onBack={() => setSceneView(null)}
+                backLabel="关闭"
+                onSaved={() => {}}
+              />
+            </Suspense>
+          </div>
         ) : vaultName === null ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-stone-500">
+          <div className="view-swap flex h-full flex-col items-center justify-center gap-4 text-stone-500">
             <div className="serif text-2xl text-stone-700">NoteShare</div>
             <p className="text-sm">还没有选择笔记库文件夹</p>
             <button className="btn-primary" onClick={pickVault}>
@@ -136,7 +146,7 @@ export default function App() {
             sideCollapsed={sideCollapsed}
           />
         ) : (
-          <div className="relative h-full">
+          <div className="view-swap relative h-full">
             <button
               className="side-toggle-float"
               data-tip={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}

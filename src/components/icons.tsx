@@ -76,14 +76,16 @@ export const I = {
   ),
   lock: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="3.25" y="6.75" width="9.5" height="7" rx="1.4" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 6.75V5a2.5 2.5 0 0 1 5 0v1.75" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="8" cy="10.2" r="1.1" fill="currentColor" />
     </svg>
   ),
   unlock: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M5.5 7V5.2a2.5 2.5 0 1 1 5 0V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="3.25" y="6.75" width="9.5" height="7" rx="1.4" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 6.75V5a2.5 2.5 0 0 1 4.77-1.02" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="8" cy="10.2" r="1.1" fill="currentColor" />
     </svg>
   ),
   back: (

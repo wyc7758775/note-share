@@ -1,6 +1,6 @@
 // 自定义右键菜单：命令式的单例菜单（showContextMenu 在光标处弹出）
 // 全应用已屏蔽原生 contextmenu，由各区域自行调用本模块构造菜单项。
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
 export interface CtxMenuItem {
@@ -10,6 +10,8 @@ export interface CtxMenuItem {
   disabled?: boolean;
   /** 前置勾选位（用于加粗/斜体等开关态） */
   checked?: boolean;
+  /** 前置图标（与勾选位互斥使用） */
+  icon?: ReactNode;
   onClick?: () => void;
 }
 
@@ -93,7 +95,9 @@ function Menu({
               it.onClick?.();
             }}
           >
-            <span className="ctx-check">{it.checked ? "✓" : ""}</span>
+            <span className="ctx-check">
+              {it.checked ? "✓" : it.icon ?? ""}
+            </span>
             {it.label}
           </button>
         )
