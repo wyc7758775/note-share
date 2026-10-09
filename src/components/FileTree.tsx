@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../backend";
 import { showContextMenu } from "./ContextMenu";
+import { EDIT_SCENE_EVENT } from "./ExcalidrawBlock";
 import { I } from "./icons";
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
@@ -185,14 +186,20 @@ function TreeRow({
     );
   }
 
-  // 附件：图片可点击查看/右键下载（共用阅览器），其他只展示
+  // 附件：图片可点击查看/右键下载；.excalidraw 手绘文件可点击编辑；其他只展示
   const isImg = IMG_RE.test(item.name);
+  const isScene = /\.excalidraw$/i.test(item.name);
+  const active = isImg || isScene;
   return (
     <div
-      className={`${rowCls} ${isImg ? "cursor-pointer text-stone-500 hover:bg-stone-200/60" : "text-stone-400"}`}
+      className={`${rowCls} ${active ? "cursor-pointer text-stone-500 hover:bg-stone-200/60" : "text-stone-400"}`}
       style={pad}
-      title={isImg ? "点击查看图片" : item.path}
-      onClick={() => isImg && h.onViewAsset(item)}
+      title={isScene ? "点击在右侧编辑画板" : isImg ? "点击查看图片" : item.path}
+      onClick={() => {
+        if (isImg) h.onViewAsset(item);
+        else if (isScene)
+          window.dispatchEvent(new CustomEvent(EDIT_SCENE_EVENT, { detail: item.path }));
+      }}
       onContextMenu={(e) => {
         if (!isImg) return;
         e.preventDefault();
@@ -204,7 +211,7 @@ function TreeRow({
       }}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">
-        {I.asset}
+        {isScene ? I.pen : I.asset}
         <span className="truncate text-[12px]">{item.name}</span>
       </span>
     </div>

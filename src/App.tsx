@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { backend, type TreeNode } from "./backend";
 import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
+import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
+
+// 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
+const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   // sessionKey：打开"另一篇"笔记时自增以重建编辑器；重命名当前笔记时不自增
   const [session, setSession] = useState<{ path: string; key: number } | null>(null);
+  const [sceneView, setSceneView] = useState<string | null>(null);
 
   const refreshTree = useCallback(async () => {
     setTree(await backend.tree());
@@ -31,6 +36,16 @@ export default function App() {
     document.addEventListener("contextmenu", onCtx);
     return () => document.removeEventListener("contextmenu", onCtx);
   }, []);
+
+  // 没打开笔记时点击手绘文件 → 主区显示独立画板面板（有笔记打开时由 Editor 接管右侧面板）
+  useEffect(() => {
+    const onEdit = (e: Event) => {
+      if (session) return;
+      setSceneView((e as CustomEvent<string>).detail);
+    };
+    window.addEventListener(EDIT_SCENE_EVENT, onEdit);
+    return () => window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
+  }, [session]);
 
   const openNote = (path: string) => {
     setSession((s) => (s && s.path === path ? s : { path, key: (s?.key ?? 0) + 1 }));
@@ -68,7 +83,17 @@ export default function App() {
         canPickVault={backend.mode === "tauri"}
       />
       <main className="flex-1 overflow-hidden">
-        {vaultName === null ? (
+        {sceneView !== null ? (
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-stone-400">
+                画板加载中…
+              </div>
+            }
+          >
+            <ScenePanelStandalone src={sceneView} onClose={() => setSceneView(null)} onSaved={() => {}} />
+          </Suspense>
+        ) : vaultName === null ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-stone-500">
             <div className="serif text-2xl text-stone-700">NoteShare</div>
             <p className="text-sm">还没有选择笔记库文件夹</p>
