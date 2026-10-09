@@ -20,6 +20,8 @@
   --btn-fg: #fafaf9;
   --code-bg: #eee9e2;
   --code-fg: #7c2d12;
+  --code-block-bg: #1c1917;
+  --code-block-border: transparent;
   --danger-bg: #fef2f2;
   --tip-bg: #1c1917;
   --tip-fg: #fafaf9;
@@ -43,6 +45,8 @@ html[data-theme="dark"] {
   --btn-fg: #1c1917;
   --code-bg: rgb(255 255 255 / 0.08);
   --code-fg: #e0af68;
+  --code-block-bg: #232020;
+  --code-block-border: var(--line);
   --danger-bg: rgb(220 38 38 / 0.15);
   --tip-bg: #3f3a37;
   --tip-fg: #fafaf9;
@@ -275,12 +279,16 @@ body.resizing .side-anim {
   }
 }
 
-/* 按钮按下反馈（Excalidraw 画布内的按钮除外，避免干扰绘制） */
-button:not(:disabled):active {
+/* 按钮按下反馈：仅限工具类按钮（树行、菜单项等大面积可点区域不缩放，避免滑动时的晃动感） */
+.btn:active,
+.btn-primary:active,
+.btn-outline:active,
+.btn-ghost:active,
+.top-icon-btn:active,
+.side-tab:active,
+.seg-item:active,
+.vault-bar > button:active {
   transform: scale(0.97);
-}
-.excalidraw button:active {
-  transform: none;
 }
 
 /* 即时提示气泡（Obsidian 式黑底小气泡；原生 title 在 WebKit 上延迟近 1 秒，故自绘） */
@@ -425,8 +433,9 @@ body {
   margin: 1.1em 0;
 }
 .ProseMirror pre {
-  background: var(--ink);
-  color: var(--line);
+  background: var(--code-block-bg);
+  color: #e7e5e4;
+  border: 1px solid var(--code-block-border);
   padding: 14px 18px;
   border-radius: 10px;
   font-size: 0.86em;

@@ -121,6 +121,28 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
     onBack();
   };
 
+  // Esc 返回：捕获阶段先于 Excalidraw 自己的 Esc 处理读状态——
+  // 有选中元素或正在编辑文本时，这一次 Esc 留给画板（取消选中/结束编辑），
+  // 只有"空闲"状态下的 Esc 才退出画板返回笔记。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const appState = apiRef.current?.getAppState?.();
+      const busy =
+        !!appState &&
+        (Object.keys(appState.selectedElementIds ?? {}).length > 0 ||
+          appState.editingId != null ||
+          appState.editingGroupId != null);
+      if (busy) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void handleBack();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(
     () => () => {
       window.clearTimeout(sceneTimer.current);
