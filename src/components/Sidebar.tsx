@@ -23,31 +23,35 @@ function collectImageAssets(items: TreeNode[], folder: string): TreeNode[] {
   return out.sort((a, b) => a.name.localeCompare(b.name, "zh"));
 }
 
+const HIDDEN = new Set([".obsidian", ".trash"]);
+
 interface Props {
   vaultName: string | null;
   tree: TreeNode[];
   currentPath: string | null;
+  width: number;
   onOpenNote: (path: string) => void;
   onTreeChanged: () => Promise<void>;
   onDeletedCurrent: () => Promise<void>;
   onPickVault: () => void;
   canPickVault: boolean;
+  onResize: (width: number) => void;
 }
 
-const HIDDEN = new Set([".obsidian", ".trash"]);
-
 export default function Sidebar(props: Props) {
-  const { vaultName, tree, currentPath, onOpenNote, onTreeChanged } = props;
+  const { vaultName, tree, currentPath, onOpenNote, onTreeChanged, width, onResize } = props;
+  const [tab, setTab] = useState<"files" | "search">("files");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
-  // 行内重命名 / 新建文件夹 / 两步删除 的状态
+  // 行内重命名 / 新建文件夹 / 两步删除 / 图片阅览器 的状态
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [newFolderMode, setNewFolderMode] = useState(false);
   const [confirmPath, setConfirmPath] = useState<string | null>(null);
   const armTimer = useRef<number | undefined>(undefined);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -76,6 +80,7 @@ export default function Sidebar(props: Props) {
   const handlers: TreeHandlers = {
     onOpenNote: (p) => {
       setQuery("");
+      setTab("files");
       onOpenNote(p);
     },
     onNewNote: async (folder) => {
@@ -134,65 +139,50 @@ export default function Sidebar(props: Props) {
     },
   };
 
+  /** 拖拽右缘调整侧栏宽度 */
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const startX = e.clientX;
+    const startW = width;
+    document.body.classList.add("resizing");
+    const move = (ev: PointerEvent) =>
+      onResize(Math.max(190, Math.min(480, Math.round(startW + ev.clientX - startX))));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing");
+      setDragging(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   return (
-    <aside
-      className="flex h-full w-64 shrink-0 flex-col border-r"
-      style={{ background: "var(--paper-side)", borderColor: "var(--line)" }}
-    >
-      {/* 库标题 */}
-      <div className="flex items-center justify-between px-3.5 pb-1 pt-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-stone-400">{I.folder}</span>
-          <span className="truncate text-[13px] font-medium text-stone-700" title={vaultName ?? ""}>
-            {vaultName ?? "…"}
-          </span>
-        </div>
-        {props.canPickVault && (
-          <button
-            className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-200/70 hover:text-stone-600"
-            title="切换笔记库文件夹"
-            onClick={props.onPickVault}
-          >
-            {I.folderPlus}
-          </button>
-        )}
+    <aside className="sidebar" style={{ width }}>
+      {/* 顶部：文件 / 搜索 双 Tab（Obsidian 式） */}
+      <div className="side-tabs">
+        <button
+          className={`side-tab ${tab === "files" ? "active" : ""}`}
+          title="文件"
+          onClick={() => setTab("files")}
+        >
+          {I.folder}
+          <span className="tab-label">文件</span>
+        </button>
+        <button
+          className={`side-tab ${tab === "search" ? "active" : ""}`}
+          title="搜索"
+          onClick={() => setTab("search")}
+        >
+          {I.search}
+          <span className="tab-label">搜索</span>
+        </button>
       </div>
 
-      {/* 搜索 */}
-      <div className="px-3 pb-2 pt-1">
-        <div className="relative">
-          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400">
-            {I.search}
-          </span>
-          <input
-            className="w-full rounded-md border border-stone-300/80 bg-white/70 py-1.5 pl-8 pr-2 text-[13px] outline-none transition-colors placeholder:text-stone-400 focus:border-amber-700/50 focus:bg-white"
-            placeholder="搜索笔记…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* 主体：搜索结果 或 文件树 */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3">
-        {hits !== null ? (
-          <div className="px-1.5">
-            {hits.length === 0 && (
-              <p className="px-1 py-4 text-center text-xs text-stone-400">没有找到「{query}」</p>
-            )}
-            {hits.map((h) => (
-              <button
-                key={h.path}
-                className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-stone-200/60"
-                onClick={() => handlers.onOpenNote(h.path)}
-              >
-                <div className="truncate text-[13px] text-stone-700">{h.title}</div>
-                <div className="truncate text-[11px] text-stone-400">{h.snippet}</div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <>
+      {tab === "files" ? (
+        <>
+          <div className="side-scroll">
             {newFolderMode && (
               <InlineInputRow
                 initial=""
@@ -215,26 +205,71 @@ export default function Sidebar(props: Props) {
               confirmPath={confirmPath}
               {...handlers}
             />
-          </>
-        )}
-      </div>
+          </div>
+          <div className="flex gap-1.5 border-t border-stone-200 p-2.5">
+            <button
+              className="btn-outline flex-1 justify-center !py-1"
+              onClick={() => void handlers.onNewNote("")}
+            >
+              {I.plus} 新笔记
+            </button>
+            <button
+              className="btn-outline justify-center !py-1"
+              title="新建文件夹"
+              onClick={() => setNewFolderMode((v) => !v)}
+            >
+              {I.folderPlus}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="side-scroll">
+          <input
+            className="side-search"
+            placeholder="搜索标题与全文…"
+            value={query}
+            autoFocus
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {hits !== null && hits.length === 0 && (
+            <p className="px-1 py-4 text-center text-xs text-stone-400">
+              没有找到「{query}」
+            </p>
+          )}
+          {hits?.map((h) => (
+            <button
+              key={h.path}
+              className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-stone-200/60"
+              title={h.path}
+              onClick={() => handlers.onOpenNote(h.path)}
+            >
+              <div className="truncate text-[13px] text-stone-700">{h.title}</div>
+              <div className="truncate text-[11px] text-stone-400">{h.snippet}</div>
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* 底部新建 */}
-      <div className="flex gap-1.5 border-t border-stone-200 p-2.5">
-        <button
-          className="btn-outline flex-1 justify-center !py-1"
-          onClick={() => void handlers.onNewNote("")}
-        >
-          {I.plus} 新笔记
-        </button>
-        <button
-          className="btn-outline justify-center !py-1"
-          title="新建文件夹"
-          onClick={() => setNewFolderMode((v) => !v)}
-        >
-          {I.folderPlus}
-        </button>
-      </div>
+      {/* 底部：笔记仓库，点击切换 */}
+      <button
+        className="vault-bar"
+        title={
+          props.canPickVault
+            ? "点击切换笔记仓库文件夹"
+            : "浏览器模式：启动时用 VAULT_DIR 环境变量指定仓库"
+        }
+        onClick={() => props.canPickVault && props.onPickVault()}
+      >
+        {I.folder}
+        <span className="min-w-0 flex-1 truncate">{vaultName ?? "…"}</span>
+        {props.canPickVault && <span className="shrink-0 text-stone-400">{I.switchVault}</span>}
+      </button>
+
+      {/* 右缘拖宽手柄 */}
+      <div
+        className={`side-resizer ${dragging ? "dragging" : ""}`}
+        onPointerDown={startResize}
+      />
 
       {/* 共用图片阅览器（附件图片廊） */}
       {viewer && (

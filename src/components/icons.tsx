@@ -91,4 +91,16 @@ export const I = {
       <path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  panelLeft: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 2.75v10.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M3.4 8h1.1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  switchVault: (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M2.5 5.5h9l-2.5-2.5M13.5 10.5h-9l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
 };

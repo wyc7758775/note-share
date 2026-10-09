@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
+import { I } from "./components/icons";
 
 // 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
 const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
@@ -14,6 +15,21 @@ export default function App() {
   // sessionKey：打开"另一篇"笔记时自增以重建编辑器；重命名当前笔记时不自增
   const [session, setSession] = useState<{ path: string; key: number } | null>(null);
   const [sceneView, setSceneView] = useState<string | null>(null);
+
+  // 侧栏宽度与收起（记忆到本地）
+  const [sideWidth, setSideWidth] = useState(() => {
+    const v = Number(localStorage.getItem("noteshare.sideWidth"));
+    return Number.isFinite(v) && v >= 190 && v <= 480 ? v : 256;
+  });
+  const [sideCollapsed, setSideCollapsed] = useState(
+    () => localStorage.getItem("noteshare.sideCollapsed") === "1"
+  );
+  useEffect(() => {
+    localStorage.setItem("noteshare.sideWidth", String(sideWidth));
+  }, [sideWidth]);
+  useEffect(() => {
+    localStorage.setItem("noteshare.sideCollapsed", sideCollapsed ? "1" : "0");
+  }, [sideCollapsed]);
 
   const refreshTree = useCallback(async () => {
     setTree(await backend.tree());
@@ -72,17 +88,21 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar
-        vaultName={vaultName}
-        tree={tree}
-        currentPath={session?.path ?? null}
-        onOpenNote={openNote}
-        onTreeChanged={refreshTree}
-        onDeletedCurrent={handleDeleted}
-        onPickVault={pickVault}
-        canPickVault={backend.mode === "tauri"}
-      />
-      <main className="flex-1 overflow-hidden">
+      {!sideCollapsed && (
+        <Sidebar
+          vaultName={vaultName}
+          tree={tree}
+          currentPath={session?.path ?? null}
+          width={sideWidth}
+          onOpenNote={openNote}
+          onTreeChanged={refreshTree}
+          onDeletedCurrent={handleDeleted}
+          onPickVault={pickVault}
+          canPickVault={backend.mode === "tauri"}
+          onResize={setSideWidth}
+        />
+      )}
+      <main className="min-w-0 flex-1 overflow-hidden">
         {sceneView !== null ? (
           <Suspense
             fallback={
@@ -112,15 +132,25 @@ export default function App() {
             initialPath={session.path}
             onRenamed={handleRenamed}
             onDeleted={handleDeleted}
+            onToggleSidebar={() => setSideCollapsed((v) => !v)}
           />
         ) : (
-          <EmptyState
-            vaultName={vaultName}
-            onNewNote={async () => {
-              const path = await backend.createNote("", "未命名笔记");
-              openNote(path);
-            }}
-          />
+          <div className="relative h-full">
+            <button
+              className="side-toggle-float"
+              title={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
+              onClick={() => setSideCollapsed((v) => !v)}
+            >
+              {I.panelLeft}
+            </button>
+            <EmptyState
+              vaultName={vaultName}
+              onNewNote={async () => {
+                const path = await backend.createNote("", "未命名笔记");
+                openNote(path);
+              }}
+            />
+          </div>
         )}
       </main>
     </div>

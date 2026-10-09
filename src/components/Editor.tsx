@@ -32,9 +32,10 @@ interface Props {
   initialPath: string;
   onRenamed: (newPath: string) => Promise<void>;
   onDeleted: () => Promise<void>;
+  onToggleSidebar: () => void;
 }
 
-export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
+export default function Editor({ initialPath, onRenamed, onDeleted, onToggleSidebar }: Props) {
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
@@ -401,6 +402,13 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
                 {delArmed ? "确认删除？" : "删除"}
               </button>
             )}
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-200/70 hover:text-stone-700"
+              title="收起左侧栏"
+              onClick={onToggleSidebar}
+            >
+              {I.panelLeft}
+            </button>
           </div>
         </div>
 

@@ -103,6 +103,7 @@ function TreeRow({
         <div
           className={`${rowCls} ${open ? "text-stone-700" : "text-stone-600"}`}
           style={pad}
+          title={item.name}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -158,6 +159,7 @@ function TreeRow({
       <div
         className={`${rowCls} ${active ? "tree-row-active" : ""}`}
         style={pad}
+        title={item.name.replace(/\.md$/i, "")}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
