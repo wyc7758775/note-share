@@ -27,6 +27,12 @@ export function emitEditScene(src: string) {
   window.dispatchEvent(new CustomEvent(EDIT_SCENE_EVENT, { detail: src }));
 }
 
+/** 请求用共用阅览器查看图片的事件（detail = 图片 src） */
+export const VIEW_IMAGE_EVENT = "noteshare:view-image";
+export function emitViewImage(src: string) {
+  window.dispatchEvent(new CustomEvent(VIEW_IMAGE_EVENT, { detail: src }));
+}
+
 /** 图片节点：普通图片直接显示；.excalidraw 显示为可编辑画板卡片（锁定时纯展示） */
 function ImageView({ node, selected, deleteNode }: any) {
   const raw: string = node.attrs.src ?? "";
@@ -81,7 +87,12 @@ function ImageView({ node, selected, deleteNode }: any) {
   if (!isFig) {
     return (
       <NodeViewWrapper>
-        <img src={url ?? src} alt={node.attrs.alt ?? ""} />
+        <img
+          src={url ?? src}
+          alt={node.attrs.alt ?? ""}
+          title="点击查看大图"
+          onClick={(e) => emitViewImage((e.target as HTMLImageElement).src)}
+        />
       </NodeViewWrapper>
     );
   }
@@ -91,6 +102,15 @@ function ImageView({ node, selected, deleteNode }: any) {
       <div
         className={`excalidraw-fig ${selected ? "ring-2 ring-amber-500/60" : ""}`}
         onDoubleClick={() => !locked && emitEditScene(src)}
+        onClick={() => {
+          // 可编辑：右侧面板编辑；锁定：用阅览器看预览图
+          if (locked) {
+            if (url) emitViewImage(url);
+          } else {
+            emitEditScene(src);
+          }
+        }}
+        title={locked ? "点击查看画板" : "点击在右侧编辑画板"}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();

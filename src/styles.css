@@ -355,6 +355,137 @@ body {
   font-size: 11px;
 }
 
+/* ---------- 图片阅览器 ---------- */
+.img-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgb(28 25 23 / 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: iv-fade 0.18s ease;
+}
+@keyframes iv-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.img-viewer-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 92vw;
+  max-height: 86vh;
+}
+.img-viewer-stage img {
+  max-width: 92vw;
+  max-height: 86vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
+  animation: iv-zoom 0.18s ease;
+}
+@keyframes iv-zoom {
+  from {
+    transform: scale(0.96);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.img-viewer-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.1);
+  color: #d6d3d1;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.img-viewer-close:hover {
+  background: rgb(255 255 255 / 0.2);
+  color: #fff;
+}
+.img-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+  border: none;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.08);
+  color: #d6d3d1;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.img-viewer-nav:hover {
+  background: rgb(255 255 255 / 0.18);
+  color: #fff;
+}
+.img-viewer-count {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #a8a29e;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+.img-viewer-name {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70vw;
+  color: #d6d3d1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 富文本图片点击可查看的提示 */
+.ProseMirror img {
+  cursor: zoom-in;
+}
+.excalidraw-fig img {
+  cursor: pointer;
+}
+
+/* ---------- 画板右侧面板 ---------- */
+.scene-side-panel {
+  width: 46%;
+  min-width: 420px;
+  flex: none;
+  border-left: 1px solid var(--line);
+  background: #fff;
+  animation: scene-slide 0.2s ease;
+}
+@keyframes scene-slide {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* ---------- 锁定（阅读）模式 ---------- */
 .read-mode .ProseMirror {
   cursor: default;

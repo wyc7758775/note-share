@@ -50,7 +50,10 @@ export interface TreeHandlers {
   onCancelRename: () => void;
   onDelete: (path: string) => void;
   onArmDelete: (path: string | null) => void;
+  onViewAsset: (item: TreeNode) => void;
 }
+
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
 interface Props extends TreeHandlers {
   items: TreeNode[];
@@ -181,9 +184,15 @@ function TreeRow({
     );
   }
 
-  // 附件只展示
+  // 附件：图片可点击查看（共用阅览器），其他只展示
+  const isImg = IMG_RE.test(item.name);
   return (
-    <div className={`${rowCls} text-stone-400`} style={pad} title={item.path}>
+    <div
+      className={`${rowCls} ${isImg ? "cursor-pointer text-stone-500 hover:bg-stone-200/60" : "text-stone-400"}`}
+      style={pad}
+      title={isImg ? "点击查看图片" : item.path}
+      onClick={() => isImg && h.onViewAsset(item)}
+    >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">
         {I.asset}
         <span className="truncate text-[12px]">{item.name}</span>

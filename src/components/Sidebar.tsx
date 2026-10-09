@@ -2,6 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
+import ImageViewer, { type ViewerImage } from "./ImageViewer";
+
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+/** 收集某个文件夹下的所有图片附件（同文件夹组成一册图片廊） */
+function collectImageAssets(items: TreeNode[], folder: string): TreeNode[] {
+  const out: TreeNode[] = [];
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      if (n.kind === "folder") walk(n.children ?? []);
+      else if (n.kind === "asset" && IMG_RE.test(n.name)) {
+        const parent = n.path.split("/").slice(0, -1).join("/");
+        if (parent === folder) out.push(n);
+      }
+    }
+  };
+  walk(items);
+  return out.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+}
 
 interface Props {
   vaultName: string | null;
@@ -27,6 +46,7 @@ export default function Sidebar(props: Props) {
   const [newFolderMode, setNewFolderMode] = useState(false);
   const [confirmPath, setConfirmPath] = useState<string | null>(null);
   const armTimer = useRef<number | undefined>(undefined);
+  const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -88,6 +108,21 @@ export default function Sidebar(props: Props) {
       if (wasCurrent) await props.onDeletedCurrent();
     },
     onArmDelete: armDelete,
+    onViewAsset: async (item) => {
+      const parent = item.path.split("/").slice(0, -1).join("/");
+      const siblings = collectImageAssets(tree, parent);
+      const images: ViewerImage[] = [];
+      for (const s of siblings) {
+        try {
+          const { base64, mime } = await backend.readAssetBase64(s.path);
+          images.push({ src: `data:${mime};base64,${base64}`, name: s.name });
+        } catch {
+          /* 读不到就跳过 */
+        }
+      }
+      const index = Math.max(0, images.findIndex((x) => x.name === item.name));
+      if (images.length) setViewer({ images, index });
+    },
   };
 
   return (
@@ -191,6 +226,15 @@ export default function Sidebar(props: Props) {
           {I.folderPlus}
         </button>
       </div>
+
+      {/* 共用图片阅览器（附件图片廊） */}
+      {viewer && (
+        <ImageViewer
+          images={viewer.images}
+          index={viewer.index}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </aside>
   );
 }

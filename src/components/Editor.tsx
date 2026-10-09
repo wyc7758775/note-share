@@ -16,14 +16,16 @@ import {
   EditorStateContext,
   EMPTY_SCENE_JSON,
   EDIT_SCENE_EVENT,
+  VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
 import PublishPanel from "./PublishPanel";
+import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
-type View = "note" | "publish" | "scene";
+type View = "note" | "publish";
 
 interface Props {
   initialPath: string;
@@ -48,8 +50,10 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
   const [locked, setLocked] = useState(false); // 默认可编辑
   const [view, setView] = useState<View>("note");
   const [editingScene, setEditingScene] = useState<string | null>(null);
+  const [sceneOpen, setSceneOpen] = useState(false); // 画板右侧面板
   const [sceneRev, setSceneRev] = useState(0);
   const [delArmed, setDelArmed] = useState(false);
+  const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
   titleRef.current = title;
   tagsRef.current = tagsText;
@@ -162,21 +166,35 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [saveNow]);
 
-  // 画板块请求编辑 / 发布面板请求保存（锁定时不响应画板编辑）
+  // 画板块请求编辑 / 图片请求查看 / 发布面板请求保存
   useEffect(() => {
     const onEdit = (e: Event) => {
-      if (locked) return;
       setEditingScene((e as CustomEvent<string>).detail);
-      setView("scene");
+      setSceneOpen(true);
+    };
+    const onViewImg = (e: Event) => {
+      const clicked = (e as CustomEvent<string>).detail;
+      // 收集当前笔记里的所有普通图片（不含画板预览）组成图片廊
+      const imgs = [...document.querySelectorAll(".ProseMirror img")].filter(
+        (im) => !(im.parentElement && (im.parentElement as HTMLElement).closest(".excalidraw-fig"))
+      );
+      const images: ViewerImage[] = imgs.map((im) => ({
+        src: (im as HTMLImageElement).src,
+        name: (im as HTMLImageElement).alt || undefined,
+      }));
+      const index = Math.max(0, images.findIndex((x) => x.src === clicked));
+      if (images.length) setViewer({ images, index });
     };
     const onSave = () => void saveNow();
     window.addEventListener(EDIT_SCENE_EVENT, onEdit);
+    window.addEventListener(VIEW_IMAGE_EVENT, onViewImg);
     window.addEventListener("noteshare:save-now", onSave);
     return () => {
       window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
+      window.removeEventListener(VIEW_IMAGE_EVENT, onViewImg);
       window.removeEventListener("noteshare:save-now", onSave);
     };
-  }, [saveNow, locked]);
+  }, [saveNow]);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
@@ -185,7 +203,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
     const saved = await backend.saveScene(null, EMPTY_SCENE_JSON, null);
     editor.chain().focus().setImage({ src: saved.scenePath }).run();
     setEditingScene(saved.scenePath);
-    setView("scene");
+    setSceneOpen(true);
   }, [editor, locked]);
 
   const insertImageFile = useCallback(
@@ -200,7 +218,7 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
 
   if (!editor) return null;
 
-  // ---- 视图切换：发布 / 画板（占满主区，不用全局遮罩） ----
+  // ---- 视图切换：发布（占满主区） ----
   if (view === "publish") {
     return (
       <PublishPanel
@@ -209,15 +227,6 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
         fmRef={fmRef}
         title={titleRef}
         onBack={() => setView("note")}
-      />
-    );
-  }
-  if (view === "scene" && editingScene !== null) {
-    return (
-      <ExcalidrawPanelLazy
-        src={editingScene}
-        onBack={() => setView("note")}
-        onSaved={() => setSceneRev((v) => v + 1)}
       />
     );
   }
@@ -289,9 +298,10 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           </div>
         </div>
 
+        <div className="flex min-h-0 flex-1">
         {/* 正文滚动区 */}
         <div
-          className="min-h-0 flex-1 overflow-y-auto"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto"
           onContextMenu={(e) => {
             // 画板块有自己的菜单
             if ((e.target as HTMLElement).closest(".excalidraw-fig")) return;
@@ -378,6 +388,18 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           </div>
         </div>
 
+          {/* 画板右侧编辑面板 */}
+          {sceneOpen && editingScene !== null && (
+            <aside className="scene-side-panel">
+              <ExcalidrawPanelLazy
+                src={editingScene}
+                onClose={() => setSceneOpen(false)}
+                onSaved={() => setSceneRev((v) => v + 1)}
+              />
+            </aside>
+          )}
+        </div>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -390,6 +412,15 @@ export default function Editor({ initialPath, onRenamed, onDeleted }: Props) {
           }}
         />
       </div>
+
+      {/* 共用图片阅览器（图片廊） */}
+      {viewer && (
+        <ImageViewer
+          images={viewer.images}
+          index={viewer.index}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </EditorStateContext.Provider>
   );
 }
@@ -425,11 +456,11 @@ function SaveBadge({ state }: { state: SaveState }) {
   return <span className={`px-1 text-xs ${cls}`}>{text}</span>;
 }
 
-// 画板视图按需加载（体积大）
+// 画板面板按需加载（体积大）
 const ExcalidrawPanelLazyImpl = lazy(() => import("./ExcalidrawPanel"));
 function ExcalidrawPanelLazy(props: {
   src: string;
-  onBack: () => void;
+  onClose: () => void;
   onSaved: () => void;
 }) {
   return (
