@@ -218,6 +218,8 @@ body.resizing {
 .side-anim {
   flex: none;
   overflow: hidden;
+  /* 横向 flex：让内部的 .sidebar 拉伸到容器满高（否则树只按内容高度显示） */
+  display: flex;
   transition: width 0.24s cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 0s;
 }
 .side-anim[aria-hidden="true"] {
