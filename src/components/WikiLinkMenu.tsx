@@ -6,7 +6,7 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { createRoot } from "react-dom/client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface NoteEntry {
   name: string; // 不含 .md
@@ -175,6 +175,12 @@ function WikiLinkList({
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(0);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 键盘导航到可视区外的项时，菜单内部自动滚动跟随
+  useEffect(() => {
+    menuRef.current?.querySelector(".slash-item-active")?.scrollIntoView({ block: "nearest" });
+  }, [index]);
 
   registerKeyHandler((e) => {
     if (e.key === "ArrowDown") {
@@ -207,7 +213,7 @@ function WikiLinkList({
   if (!items.length) return null;
 
   return (
-    <div className="slash-menu wiki-menu" style={style}>
+    <div ref={menuRef} className="slash-menu wiki-menu" style={style}>
       {items.map((it, i) => (
         <button
           key={it.kind + it.name}

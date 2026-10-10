@@ -4,7 +4,31 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 
 export type Lang = "zh" | "en";
 export type Theme = "light" | "dark" | "system";
+/** 主题色配置：亮色/暗色主题各自的强调色 */
+export interface AccentColors {
+  light: string;
+  dark: string;
+}
+export const DEFAULT_ACCENT: AccentColors = { light: "#b45309", dark: "#d97706" };
 type Vars = Record<string, string | number>;
+
+function hexToRgbTriple(hex: string): string {
+  const m = hex.replace("#", "");
+  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return "180 83 9";
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}
+
+function readAccent(): AccentColors {
+  try {
+    const raw = JSON.parse(localStorage.getItem("noteshare.accent") ?? "null");
+    if (raw && typeof raw.light === "string" && typeof raw.dark === "string") return raw;
+  } catch {
+    /* 用默认 */
+  }
+  return { ...DEFAULT_ACCENT };
+}
 
 const zh: Record<string, string> = {
   // ---- 通用 ----
@@ -151,6 +175,10 @@ const zh: Record<string, string> = {
   themeLight: "明亮",
   themeDark: "黑色",
   themeSystem: "跟随系统",
+  settingsAccent: "主题色",
+  accentLight: "亮色主题",
+  accentDark: "暗色主题",
+  accentReset: "恢复默认",
 };
 
 const en: Record<string, string> = {
@@ -288,6 +316,10 @@ const en: Record<string, string> = {
   themeLight: "Light",
   themeDark: "Dark",
   themeSystem: "System",
+  settingsAccent: "Accent color",
+  accentLight: "Light theme",
+  accentDark: "Dark theme",
+  accentReset: "Reset",
 };
 
 const dicts: Record<Lang, Record<string, string>> = { zh, en };
@@ -297,6 +329,9 @@ interface Settings {
   setLang: (l: Lang) => void;
   theme: Theme;
   setTheme: (t: Theme) => void;
+  /** 主题色（亮/暗各自定义），即时生效并持久化 */
+  accent: AccentColors;
+  setAccent: (a: AccentColors) => void;
   /** 主题已解析：当前是否暗色（system 跟随时实时变化） */
   dark: boolean;
   t: (key: string, vars?: Vars) => string;
@@ -332,6 +367,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const v = localStorage.getItem("noteshare.theme") as Theme | null;
     return v && THEMES.includes(v) ? v : "system";
   });
+  const [accent, setAccentState] = useState<AccentColors>(readAccent);
   const [dark, setDark] = useState(() =>
     typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)").matches : false
   );
@@ -347,16 +383,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const d = theme === "system" ? window.matchMedia("(prefers-color-scheme: dark)").matches : theme === "dark";
       setDark(d);
       document.documentElement.dataset.theme = d ? "dark" : "light";
+      // 主题色按当前亮/暗取对应配置注入（CSS 内所有 accent 派生色随变量联动）
+      const hex = d ? accent.dark : accent.light;
+      document.documentElement.style.setProperty("--accent", hex);
+      document.documentElement.style.setProperty("--accent-rgb", hexToRgbTriple(hex));
     };
     apply();
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
-  }, [theme]);
+  }, [theme, accent]);
+
+  const setAccent = useCallback((a: AccentColors) => {
+    localStorage.setItem("noteshare.accent", JSON.stringify(a));
+    setAccentState(a);
+  }, []);
 
   const t = useCallback((key: string, vars?: Vars) => translate(lang, key, vars), [lang]);
 
   return (
-    <Ctx.Provider value={{ lang, setLang, theme, setTheme, dark, t }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ lang, setLang, theme, setTheme, accent, setAccent, dark, t }}>
+      {children}
+    </Ctx.Provider>
   );
 }

@@ -3,7 +3,7 @@ import { Extension } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import Suggestion from "@tiptap/suggestion";
 import { createRoot } from "react-dom/client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface SlashItem {
   title: string;
@@ -97,6 +97,12 @@ function SlashMenuList({
   registerKeyHandler: (h: ((e: KeyboardEvent) => boolean) | null) => void;
 }) {
   const [index, setIndex] = useState(0);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 键盘导航到可视区外的项时，菜单内部自动滚动跟随
+  useEffect(() => {
+    menuRef.current?.querySelector(".slash-item-active")?.scrollIntoView({ block: "nearest" });
+  }, [index]);
 
   registerKeyHandler((e) => {
     if (e.key === "ArrowDown") {
@@ -125,7 +131,7 @@ function SlashMenuList({
   if (!items.length) return null;
 
   return (
-    <div className="slash-menu" style={style}>
+    <div ref={menuRef} className="slash-menu" style={style}>
       {items.map((it, i) => (
         <button
           key={it.title}

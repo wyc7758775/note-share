@@ -13,8 +13,9 @@
   --line: #e7e5e4;
   --line-strong: #d6d3d1;
   --accent: #b45309;
-  --active-bg: rgb(254 243 199 / 0.6);
-  --active-bg-hover: rgb(254 243 199 / 0.75);
+  --accent-rgb: 180 83 9;
+  --active-bg: rgb(var(--accent-rgb) / 0.12);
+  --active-bg-hover: rgb(var(--accent-rgb) / 0.18);
   --btn-bg: #292524;
   --btn-bg-hover: #44403c;
   --btn-fg: #fafaf9;
@@ -38,8 +39,9 @@ html[data-theme="dark"] {
   --line: #37312f;
   --line-strong: #44403c;
   --accent: #d97706;
-  --active-bg: rgb(180 83 9 / 0.2);
-  --active-bg-hover: rgb(180 83 9 / 0.3);
+  --accent-rgb: 217 119 6;
+  --active-bg: rgb(var(--accent-rgb) / 0.25);
+  --active-bg-hover: rgb(var(--accent-rgb) / 0.35);
   --btn-bg: #e7e5e4;
   --btn-bg-hover: #d6d3d1;
   --btn-fg: #1c1917;
@@ -120,8 +122,8 @@ button:disabled {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .side-search:focus {
-  border-color: rgb(180 83 9 / 0.55);
-  box-shadow: 0 0 0 3px rgb(180 83 9 / 0.08);
+  border-color: rgb(var(--accent-rgb) / 0.55);
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.08);
 }
 /* 底部工具条：仓库切换 + 设置齿轮 */
 .vault-bar {
@@ -168,7 +170,7 @@ button:disabled {
 }
 .side-resizer:hover,
 .side-resizer.dragging {
-  background: rgb(180 83 9 / 0.35);
+  background: rgb(var(--accent-rgb) / 0.35);
 }
 body.resizing {
   cursor: col-resize !important;
@@ -391,8 +393,8 @@ body {
   outline: none;
 }
 .input:focus {
-  border-color: rgb(180 83 9 / 0.55);
-  box-shadow: 0 0 0 3px rgb(180 83 9 / 0.08);
+  border-color: rgb(var(--accent-rgb) / 0.55);
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.08);
 }
 
 /* ---------- tiptap 编辑区 ---------- */
@@ -536,6 +538,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 0.55em;
+  padding: 0.5px 0;
 }
 .ProseMirror ul[data-type="taskList"] > li > label {
   flex: none;
@@ -546,8 +549,14 @@ body {
   width: 1.05em;
   height: 1.05em;
   margin: 0.35em 0 0;
-  accent-color: #b45309;
+  accent-color: var(--accent);
   cursor: pointer;
+}
+/* 任务行上下间距收紧（只作用待办，不影响普通列表/段落） */
+.ProseMirror ul[data-type="taskList"] > li > div > p,
+.ProseMirror ul[data-type="taskList"] > li > p {
+  margin: 0.02em 0;
+  line-height: 1.65;
 }
 .ProseMirror ul[data-type="taskList"] > li[data-checked="true"] > div,
 .ProseMirror ul[data-type="taskList"] > li[data-checked="true"] > p {
@@ -825,7 +834,7 @@ body {
   outline-offset: 3px;
 }
 .img-resize-wrap.img-selected {
-  outline-color: rgb(180 83 9 / 0.55);
+  outline-color: rgb(var(--accent-rgb) / 0.55);
 }
 .img-resize-wrap img {
   border-radius: 8px;
@@ -836,7 +845,7 @@ body {
   width: 13px;
   height: 13px;
   background: var(--surface);
-  border: 2px solid #b45309;
+  border: 2px solid var(--accent);
   border-radius: 50%;
   box-shadow: 0 1px 5px rgb(0 0 0 / 0.3);
   z-index: 5;
@@ -960,14 +969,14 @@ body {
 /* 双链（[[笔记名]] 渲染为可点击链接） */
 .wikilink {
   color: var(--accent);
-  border-bottom: 1px dashed rgb(180 83 9 / 0.45);
+  border-bottom: 1px dashed rgb(var(--accent-rgb) / 0.45);
   cursor: pointer;
   border-radius: 3px;
   padding: 0 1px;
   transition: background-color 0.12s ease;
 }
 .wikilink:hover {
-  background: rgb(180 83 9 / 0.1);
+  background: rgb(var(--accent-rgb) / 0.1);
 }
 /* 缺失目标的链接（笔记被删）：提示可点击重建 */
 .wikilink-missing {

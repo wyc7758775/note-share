@@ -1,6 +1,6 @@
-// 设置弹窗：语言 / 主题。遮罩 + 居中卡片 + 缩放淡入；Esc 或点遮罩关闭。
+// 设置弹窗：语言 / 主题 / 主题色。遮罩 + 居中卡片 + 缩放淡入；Esc 或点遮罩关闭。
 import { useEffect } from "react";
-import { useSettings, type Lang, type Theme } from "../i18n";
+import { useSettings, DEFAULT_ACCENT, type AccentColors, type Lang, type Theme } from "../i18n";
 
 function Segment<T extends string>({
   value,
@@ -27,7 +27,11 @@ function Segment<T extends string>({
 }
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { t, lang, setLang, theme, setTheme } = useSettings();
+  const { t, lang, setLang, theme, setTheme, accent, setAccent } = useSettings();
+
+  const changeAccent = (key: keyof AccentColors, value: string) => {
+    setAccent({ ...accent, [key]: value });
+  };
 
   // 语言与主题均为局部更新：Context 驱动组件重渲染；编辑器内的词条/占位符
   // 通过 currentLang()（读 <html lang>）惰性读取，无需刷新页面、不丢编辑状态
@@ -74,6 +78,37 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 { value: "system", label: t("themeSystem") },
               ]}
             />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>{t("settingsAccent")}</span>
+              <button
+                className="text-[11px] text-faint hover:text-soft"
+                onClick={() => setAccent({ ...DEFAULT_ACCENT })}
+              >
+                {t("accentReset")}
+              </button>
+            </div>
+            <div className="seg" style={{ padding: "6px 10px", gap: 14 }}>
+              <label className="flex flex-1 items-center justify-between gap-2 text-[12.5px] text-soft">
+                {t("accentLight")}
+                <input
+                  type="color"
+                  value={accent.light}
+                  onChange={(e) => changeAccent("light", e.target.value)}
+                  className="h-6 w-9 cursor-pointer rounded border-none bg-transparent p-0"
+                />
+              </label>
+              <label className="flex flex-1 items-center justify-between gap-2 text-[12.5px] text-soft">
+                {t("accentDark")}
+                <input
+                  type="color"
+                  value={accent.dark}
+                  onChange={(e) => changeAccent("dark", e.target.value)}
+                  className="h-6 w-9 cursor-pointer rounded border-none bg-transparent p-0"
+                />
+              </label>
+            </div>
           </div>
         </div>
       </div>
