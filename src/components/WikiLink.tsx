@@ -7,6 +7,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { backend } from "../backend";
 import { useSettings } from "../i18n";
 import { parseNote } from "../lib/frontmatter";
+import { previewLine } from "../domain/note";
 import { safeDecode } from "../lib/markdown";
 import { useDomain, useDirectoryVersion } from "../domain/provider";
 
@@ -19,20 +20,9 @@ export function emitOpenNote(path: string, newPane = false) {
   window.dispatchEvent(new CustomEvent(OPEN_NOTE_EVENT, { detail: { path, newPane } }));
 }
 
-// ---- 悬停预览卡（前 4 行，带内存缓存） ----
+// ---- 悬停预览卡（前 4 行，带内存缓存；行清理复用领域层 previewLine） ----
 
 const previewCache = new Map<string, string[]>();
-
-function previewLine(l: string): string {
-  return l
-    .replace(/^#{1,6}\s+/, "")
-    .replace(/^>\s?/, "")
-    .replace(/^[-*]\s*(\[[ xX]\]\s*)?/, "")
-    .replace(/^\d+\.\s+/, "")
-    .replace(/^!\[\[|\[\[/, "")
-    .trim()
-    .slice(0, 80);
-}
 
 export function WikiPreviewCard({
   name,

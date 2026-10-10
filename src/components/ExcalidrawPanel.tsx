@@ -1,10 +1,18 @@
 // 画板编辑面板：渲染在编辑器右侧（与笔记并排，不是全局遮罩）
 // 实时保存：改动后 ~1 秒自动存场景，~2.6 秒自动导出 PNG 预览；关闭时兜底保存
+// 支持插入"笔记卡片"：标题 + 前 10 行预览的文本元素，带 noteshare:// 链接可点击跳转
 import { useEffect, useRef, useState } from "react";
-import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
+import { Excalidraw, exportToBlob, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import { backend } from "../backend";
 import { useSettings } from "../i18n";
+import { useDomain } from "../domain/provider";
+import { previewLines } from "../domain/note";
+import { parseNote } from "../lib/frontmatter";
+import { emitOpenNote } from "./WikiLink";
+
+/** 卡片链接协议：noteshare://<vault 相对路径> */
+const NOTE_LINK = "noteshare://";
 
 interface Props {
   src: string;
@@ -151,10 +159,64 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
     []
   );
 
+  // ---- 插入笔记卡片：选择笔记 → 标题 + 前 10 行预览的文本元素（带跳转链接） ----
+  const { directory } = useDomain();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickQuery, setPickQuery] = useState("");
+
+  const insertNoteCard = async (notePath: string) => {
+    setPickerOpen(false);
+    setPickQuery("");
+    const api = apiRef.current;
+    if (!api) return;
+    const name = notePath.split("/").pop()?.replace(/\.md$/i, "") ?? "";
+    let bodyLines: string[] = [];
+    try {
+      const { raw } = await backend.readNote(notePath);
+      const { body } = parseNote(raw);
+      bodyLines = previewLines(body, 10);
+    } catch {
+      /* 读不到就只放标题 */
+    }
+    const appState = api.getAppState();
+    // 画布可视中心（考虑滚动）
+    const cx = appState.scrollX + appState.width / 2 - 140;
+    const cy = appState.scrollY + appState.height / 2 - 80;
+    const link = NOTE_LINK + notePath;
+    // 官方工厂补全元素 schema（含尺寸测量），link 在转换后附加
+    const els = convertToExcalidrawElements([
+      {
+        type: "text",
+        x: cx,
+        y: cy,
+        text: name,
+        fontSize: 28,
+        strokeColor: dark ? "#e7e5e4" : "#1c1917",
+      },
+      {
+        type: "text",
+        x: cx,
+        y: cy + 44,
+        text: bodyLines.join("\n") || "…",
+        fontSize: 16,
+        strokeColor: dark ? "#a8a29e" : "#78716c",
+      },
+    ]).map((e: any) => ({ ...e, link }));
+    api.updateScene({ elements: [...api.getSceneElements(), ...els] });
+  };
+
+  const candidates = (() => {
+    const q = pickQuery.trim().toLowerCase();
+    return directory
+      .all()
+      .filter((n) => !q || n.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  })();
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
-        <div className="flex items-center gap-2 text-sm text-soft">
+        <div className="flex min-w-0 items-center gap-2 text-sm text-soft">
           <span className="text-faint">✏</span>
           <span>{t("sceneTitle")}</span>
           <span
@@ -168,6 +230,52 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
           >
             {saveState === "saving" ? t("autosaving") : saveState === "error" ? t("autosaveRetry") : t("autosaveOn")}
           </span>
+          <button
+            className="btn-outline ml-2 shrink-0 !px-2.5 !py-0.5 text-xs"
+            onClick={() => setPickerOpen((v) => !v)}
+          >
+            📄 {t("insertNoteToScene")}
+          </button>
+          {pickerOpen && (
+            <span className="relative inline-flex">
+              <input
+                autoFocus
+                className="scene-note-picker"
+                placeholder={t("pickNotePh")}
+                value={pickQuery}
+                onChange={(e) => setPickQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && candidates[0]) void insertNoteCard(candidates[0].path);
+                  if (e.key === "Escape") {
+                    setPickerOpen(false);
+                    setPickQuery("");
+                  }
+                  e.stopPropagation();
+                }}
+                onBlur={() => window.setTimeout(() => setPickerOpen(false), 180)}
+              />
+              {candidates.length > 0 && (
+                <div className="scene-note-list">
+                  {candidates.map((n) => (
+                    <button
+                      key={n.path}
+                      className="slash-item"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        void insertNoteCard(n.path);
+                      }}
+                    >
+                      <span className="slash-icon">📄</span>
+                      <span className="slash-text">
+                        <span className="slash-title">{n.name}</span>
+                        <span className="slash-desc">{n.path}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </span>
+          )}
         </div>
         <button className="btn-ghost !py-1" onClick={() => void handleBack()}>
           {backText}
@@ -180,6 +288,14 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
             initialData={initialData}
             onChange={handleChange}
             theme={dark ? "dark" : "light"}
+            // 点击笔记卡片（noteshare:// 链接）跳转到那篇笔记
+            onLinkOpen={(element: any, event: any) => {
+              const link = String(element?.link ?? "");
+              if (link.startsWith(NOTE_LINK)) {
+                event?.preventDefault?.();
+                emitOpenNote(link.slice(NOTE_LINK.length), event?.ctrlKey || event?.metaKey);
+              }
+            }}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-faint">

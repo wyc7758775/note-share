@@ -951,6 +951,31 @@ body {
   cursor: pointer;
 }
 
+/* ---------- 画板内插入笔记的选择器 ---------- */
+.scene-note-picker {
+  width: 180px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 4px 8px;
+  font-size: 12.5px;
+  outline: none;
+}
+.scene-note-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--shadow-card);
+}
+
 /* ---------- 多栏（Workspace 分栏） ---------- */
 .pane-col {
   flex: 1 1 0;

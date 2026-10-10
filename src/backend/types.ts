@@ -56,7 +56,8 @@ export interface Backend {
   saveScene(
     name: string | null,
     sceneJson: string,
-    pngBase64: string | null
+    pngBase64: string | null,
+    folder?: string
   ): Promise<SavedScene>;
   saveAsset(name: string, base64: string): Promise<{ path: string }>;
   readAssetBase64(path: string): Promise<AssetData>;

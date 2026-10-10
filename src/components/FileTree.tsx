@@ -142,6 +142,9 @@ function TreeRow({
             e.stopPropagation();
             showContextMenu(e.clientX, e.clientY, [
               { label: t("newNoteHere"), onClick: () => h.onNewNote(item.path) },
+              { label: t("newScene"), onClick: () => void noteService.createScene(item.path).then((p) => {
+                if (p) window.dispatchEvent(new CustomEvent("noteshare:edit-scene", { detail: p }));
+              }) },
               { separator: true },
               { label: t("rename"), onClick: () => h.onRequestRename(item) },
               { label: t("trashLabel"), danger: true, onClick: () => h.onDelete(item.path) },

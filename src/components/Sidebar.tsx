@@ -221,6 +221,12 @@ export default function Sidebar(props: Props) {
                   label: t("newFolder"),
                   onClick: () => setNewFolderMode(true),
                 },
+                {
+                  label: t("newScene"),
+                  onClick: () => void noteService.createScene("").then((p) => {
+                    if (p) window.dispatchEvent(new CustomEvent("noteshare:edit-scene", { detail: p }));
+                  }),
+                },
               ]);
             }}
           >

@@ -188,8 +188,8 @@ const handlers = {
       return JSON.stringify({ type: "excalidraw", version: 2, source: "noteshare", elements: [] });
     }
   },
-  "scene-save": async ({ name, sceneJson, pngBase64 }) => {
-    const dir = path.join(VAULT, "attachments");
+  "scene-save": async ({ name, sceneJson, pngBase64, folder }) => {
+    const dir = folder ? resolveInside(folder) : path.join(VAULT, "attachments");
     fs.mkdirSync(dir, { recursive: true });
     let sceneAbs;
     if (name) {

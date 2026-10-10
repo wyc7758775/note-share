@@ -39,7 +39,7 @@ export const webBackend: Backend = {
   deletePath: (path) => call<void>("delete", { path }),
   search: (q) => call<SearchHit[]>("search", { q }),
   readScene: (path) => call<string>("scene", { path }),
-  saveScene: (name, sceneJson, pngBase64) =>
+  saveScene: (name, sceneJson, pngBase64, folder?) =>
     call<SavedScene>("scene-save", { name, sceneJson, pngBase64 }),
   saveAsset: (name, base64) => call<{ path: string }>("asset-save", { name, base64 }),
   readAssetBase64: (path) => call<AssetData>("asset", { path }),

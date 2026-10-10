@@ -75,7 +75,7 @@ export default function App() {
   }, [directory]);
   useEffect(() => {
     const off = bus.on(
-      ["noteCreated", "noteRenamed", "noteMoved", "assetMoved", "noteTrashed"],
+      ["noteCreated", "noteRenamed", "noteMoved", "assetMoved", "assetCreated", "noteTrashed"],
       (e) => {
         void refreshTree();
         if (e.type === "noteRenamed" || e.type === "noteMoved") {

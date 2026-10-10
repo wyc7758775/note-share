@@ -38,6 +38,21 @@ export class NoteService {
     this.bus.emit({ type: "noteTrashed", path });
   }
 
+  /** 新建手绘场景文件（空白画板），落在指定文件夹，发 assetCreated */
+  async createScene(folder: string): Promise<string | null> {
+    const empty = JSON.stringify({
+      type: "excalidraw",
+      version: 2,
+      source: "noteshare",
+      elements: [],
+      appState: { viewBackgroundColor: "#ffffff" },
+      files: {},
+    });
+    const saved = await backend.saveScene(null, empty, null, folder || undefined);
+    this.bus.emit({ type: "assetCreated", path: saved.scenePath });
+    return saved.scenePath;
+  }
+
   /** 移动笔记到指定文件夹（目录树拖拽）；标题不变，发 noteMoved（名录/阅读位置自动迁移） */
   async moveNote(path: string, toFolder: string): Promise<string | null> {
     const name = path.split("/").pop()?.replace(/\.md$/i, "") ?? "";

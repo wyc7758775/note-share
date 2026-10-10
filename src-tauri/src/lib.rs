@@ -448,9 +448,13 @@ fn save_scene(
     name: Option<String>,
     scene_json: String,
     png_base64: Option<String>,
+    folder: Option<String>,
 ) -> Result<Value, String> {
     let v = vault_of(&state)?;
-    let dir = v.join("attachments");
+    let dir = match &folder {
+        Some(f) if !f.is_empty() => resolve_inside(&v, f)?,
+        _ => v.join("attachments"),
+    };
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let scene_abs = match name {
         Some(n) => {

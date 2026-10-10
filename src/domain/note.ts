@@ -43,3 +43,26 @@ export const Note = {
     return !!state.publishedAt;
   },
 };
+
+/** 单行 markdown 清理（去标题/引用/列表/链接前缀），供预览展示 */
+export function previewLine(l: string): string {
+  return l
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^>\s?/, "")
+    .replace(/^[-*]\s*(\[[ xX]\]\s*)?/, "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/^!\[\[|\[\[/, "")
+    .trim();
+}
+
+/** 从笔记正文生成预览：前 N 行非空内容（markdown 前缀已清理） */
+export function previewLines(body: string, count: number, maxChars = 80): string[] {
+  const out: string[] = [];
+  for (const l0 of body.split("\n")) {
+    const l = previewLine(l0);
+    if (!l || l === "---" || l.startsWith("```")) continue;
+    out.push(l.slice(0, maxChars));
+    if (out.length >= count) break;
+  }
+  return out;
+}

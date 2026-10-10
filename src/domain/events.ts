@@ -23,6 +23,10 @@ export interface AssetMoved {
   from: string;
   to: string; // 附件（图片/画板）移动，引用它的笔记已同步改写
 }
+export interface AssetCreated {
+  type: "assetCreated";
+  path: string; // 新建的附件（如手绘场景文件）
+}
 export interface NoteTrashed {
   type: "noteTrashed";
   path: string;
@@ -51,6 +55,7 @@ export type DomainEvent =
   | NoteRenamed
   | NoteMoved
   | AssetMoved
+  | AssetCreated
   | NoteTrashed
   | NotePublished
   | SaveRequested
