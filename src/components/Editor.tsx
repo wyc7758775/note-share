@@ -316,6 +316,7 @@ export default function Editor({
         }
       }
       const md = forSave((editor.storage as any).markdown.getMarkdown() as string);
+      pendingMdRef.current = null; // 已落盘，清掉快照
       const fm = fmRef.current;
       setTags(fm, splitTags(tagsRef.current));
       const now = new Date().toISOString();
@@ -331,9 +332,20 @@ export default function Editor({
     }
   }, [editor, onRenamed, locked]);
 
+  // 待保存内容快照：编辑事件发生时（编辑器必然存活）立即留存 markdown 文本，
+  // 卸载兜底直接写快照——销毁中的编辑器再取内容会拿到旧文档。
+  const pendingMdRef = useRef<string | null>(null);
+  const editorRefLive = useRef<any>(null);
+  editorRefLive.current = editor;
+
   const scheduleSave = useCallback(() => {
     if (loadingRef.current || locked) return;
     setSaveState("dirty");
+    try {
+      pendingMdRef.current = editorRefLive.current?.storage?.markdown?.getMarkdown();
+    } catch {
+      /* 快照失败则留给防抖保存 */
+    }
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => void saveNow(), 1200);
   }, [saveNow, locked]);
@@ -400,6 +412,21 @@ export default function Editor({
       editor.off("update", cb);
     };
   }, [editor, scheduleSave]);
+
+  // 卸载兜底：防抖窗口内切走笔记时，把编辑时刻的快照直接落盘（不碰已销毁的编辑器）
+  useEffect(() => {
+    return () => {
+      const md = pendingMdRef.current;
+      if (md === null) return;
+      pendingMdRef.current = null;
+      const fm = fmRef.current;
+      setTags(fm, splitTags(tagsRef.current));
+      const now = new Date().toISOString();
+      if (!fm.created) fm.created = now;
+      fm.updated = now;
+      void backend.writeNote(pathRef.current, buildRaw(fm, forSave(md)));
+    };
+  }, []);
 
   // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）
   useEffect(() => {
