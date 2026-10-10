@@ -21,6 +21,7 @@ import {
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
+import { Wikilink, emitOpenNote } from "./WikiLink";
 import { createWikiLinkMenu, type NoteEntry } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -45,6 +46,10 @@ interface Props {
   onDeleted: () => Promise<void>;
   onToggleSidebar: () => void;
   sideCollapsed: boolean;
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
 }
 
 export default function Editor({
@@ -53,6 +58,10 @@ export default function Editor({
   onDeleted,
   onToggleSidebar,
   sideCollapsed,
+  canBack,
+  canForward,
+  onBack,
+  onForward,
 }: Props) {
   const { t } = useSettings();
   const pathRef = useRef(initialPath);
@@ -99,7 +108,11 @@ export default function Editor({
         () => notesRef.current,
         (ed, item) => {
           if (item.kind === "note") {
-            ed.chain().focus().insertContent(`[[${item.name}]]`).run();
+            ed
+              .chain()
+              .focus()
+              .insertContent({ type: "wikilink", attrs: { name: item.name } })
+              .run();
             return;
           }
           // 创建新笔记：放在当前笔记的同级文件夹
@@ -109,7 +122,11 @@ export default function Editor({
             const dir = pathRef.current.split("/").slice(0, -1).join("/");
             const path = await backend.createNote(dir, safe);
             notesRef.current.push({ name: safe, path });
-            ed.chain().focus().insertContent(`[[${safe}]]`).run();
+            ed
+              .chain()
+              .focus()
+              .insertContent({ type: "wikilink", attrs: { name: safe } })
+              .run();
           })();
         }
       ),
@@ -206,6 +223,7 @@ export default function Editor({
       SmartTaskInput,
       slashExtension,
       wikiLinkExtension,
+      Wikilink,
       StarterKit.configure({ codeBlock: false }),
       CodeBlockLowlight.configure({
         lowlight: createLowlight(common),
@@ -223,6 +241,20 @@ export default function Editor({
     content: "",
     editorProps: {
       attributes: { class: "prose-note focus:outline-none", spellcheck: "false" },
+      handleDOMEvents: {
+        // 点击双链跳转目标笔记（可编辑/锁定态都生效；走原生 DOM 事件最稳）
+        click: (_view, event) => {
+          const el = (event.target as HTMLElement).closest?.(".wikilink");
+          const name = el?.getAttribute("data-name");
+          if (!name) return false;
+          const hit = notesRef.current.find((n) => n.name === name);
+          if (hit) {
+            emitOpenNote(hit.path);
+            return true;
+          }
+          return false;
+        },
+      },
     },
   });
 
@@ -443,6 +475,22 @@ export default function Editor({
               onClick={onToggleSidebar}
             >
               {I.panelLeft}
+            </button>
+            <button
+              className="top-icon-btn"
+              data-tip={t("navBack")}
+              disabled={!canBack}
+              onClick={onBack}
+            >
+              {I.back}
+            </button>
+            <button
+              className="top-icon-btn"
+              data-tip={t("navForward")}
+              disabled={!canForward}
+              onClick={onForward}
+            >
+              {I.forward}
             </button>
             {saveState === "error" && (
               <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>

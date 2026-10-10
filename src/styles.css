@@ -954,6 +954,19 @@ body {
   font-size: 11px;
 }
 
+/* 双链（[[笔记名]] 渲染为可点击链接） */
+.wikilink {
+  color: var(--accent);
+  border-bottom: 1px dashed rgb(180 83 9 / 0.45);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 1px;
+  transition: background-color 0.12s ease;
+}
+.wikilink:hover {
+  background: rgb(180 83 9 / 0.1);
+}
+
 /* ---------- 设置弹窗 ---------- */
 .settings-mask {
   position: fixed;

@@ -6,6 +6,7 @@ import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
 import SettingsModal from "./components/SettingsModal";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
+import { OPEN_NOTE_EVENT } from "./components/WikiLink";
 import { I } from "./components/icons";
 
 // 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
@@ -67,9 +68,32 @@ export default function App() {
     return () => window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
   }, [session]);
 
+  // 打开过的笔记历史（浏览器式返回/前进）
+  const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
+
   const openNote = (path: string) => {
     setSession((s) => (s && s.path === path ? s : { path, key: (s?.key ?? 0) + 1 }));
+    setHistory((h) => {
+      if (h.stack[h.index] === path) return h; // 连续重复不进栈
+      return { stack: [...h.stack.slice(0, h.index + 1), path], index: h.index + 1 };
+    });
   };
+
+  const jumpHistory = (delta: 1 | -1) => {
+    setHistory((h) => {
+      const i = h.index + delta;
+      if (i < 0 || i >= h.stack.length) return h;
+      setSession({ path: h.stack[i], key: Date.now() });
+      return { ...h, index: i };
+    });
+  };
+
+  // 双链点击跳转（Editor 里 wikilink 节点发出）
+  useEffect(() => {
+    const onOpen = (e: Event) => openNote((e as CustomEvent<string>).detail);
+    window.addEventListener(OPEN_NOTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
+  }, []);
 
   const pickVault = async () => {
     const dir = await backend.pickVault();
@@ -149,6 +173,10 @@ export default function App() {
             onDeleted={handleDeleted}
             onToggleSidebar={() => setSideCollapsed((v) => !v)}
             sideCollapsed={sideCollapsed}
+            canBack={history.index > 0}
+            canForward={history.index < history.stack.length - 1}
+            onBack={() => jumpHistory(-1)}
+            onForward={() => jumpHistory(1)}
           />
         ) : (
           <div className="view-swap relative h-full">

@@ -93,6 +93,11 @@ export const I = {
       <path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  forward: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
   panelLeft: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
       <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />

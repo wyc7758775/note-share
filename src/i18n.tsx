@@ -36,6 +36,8 @@ const zh: Record<string, string> = {
   // ---- 编辑器顶栏 / 菜单 ----
   collapseSidebar: "收起左侧栏",
   expandSidebar: "展开左侧栏",
+  navBack: "上一页",
+  navForward: "下一页",
   more: "更多操作",
   lockReading: "锁定阅读（{mod}）",
   unlockEdit: "解锁编辑（{mod}）",
@@ -177,6 +179,8 @@ const en: Record<string, string> = {
 
   collapseSidebar: "Collapse sidebar",
   expandSidebar: "Expand sidebar",
+  navBack: "Back",
+  navForward: "Forward",
   more: "More actions",
   lockReading: "Lock for reading ({mod})",
   unlockEdit: "Unlock editing ({mod})",

@@ -5,6 +5,8 @@
 
 const EMBED_RE = /!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]/g;
 const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const WIKILINK_RE = /\[\[([^\][\n]+?)\]\]/g;
+export const WIKILINK_PREFIX = "noteshare-wikilink:";
 
 /** markdown-it 会把中文等非 ASCII 路径百分号编码，读文件前先还原 */
 export function safeDecode(s: string): string {
@@ -23,6 +25,9 @@ export function forEditor(markdown: string): string {
       const src = safeDecode(p);
       return `![${src}](${src})`;
     })
+    // [[笔记名]] 双链伪装成 markdown 链接（Wikilink 节点认这个 href 前缀），
+    // 在 EMBED_RE 之后执行，![[x]] 已先转成图片，不会被误吃
+    .replace(WIKILINK_RE, (_m, name: string) => `[${name}](${WIKILINK_PREFIX}${encodeURIComponent(name)})`)
     // 任务行改用 * 标记：CommonMark 规定"标记字符变化即开始新列表"，
     // 这样普通 "- 列表" 与 "- [ ] 任务列表" 相邻时不会被 markdown-it
     // 合并成混合列表（混合列表会让 tiptap 解析出错乱结构）。
