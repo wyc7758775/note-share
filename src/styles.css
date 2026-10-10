@@ -980,14 +980,22 @@ body {
 .pane-col {
   flex: 1 1 0;
   min-width: 0;
-  border-left: 1px solid var(--line);
   overflow: hidden;
-}
-.pane-col:first-child {
-  border-left: none;
 }
 .pane-col-active {
   background: var(--paper);
+}
+/* 栏间拖宽分隔线 */
+.pane-resizer {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 15;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+.pane-resizer:hover {
+  background: rgb(var(--accent-rgb) / 0.35);
 }
 
 /* 滚动条 */

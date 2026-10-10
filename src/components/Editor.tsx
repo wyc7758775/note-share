@@ -49,12 +49,6 @@ interface Props {
   /** 多栏时显示关闭按钮 */
   closable?: boolean;
   onClose?: () => void;
-  onToggleSidebar: () => void;
-  sideCollapsed: boolean;
-  canBack: boolean;
-  canForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
 }
 
 export default function Editor({
@@ -62,12 +56,6 @@ export default function Editor({
   active,
   closable,
   onClose,
-  onToggleSidebar,
-  sideCollapsed,
-  canBack,
-  canForward,
-  onBack,
-  onForward,
 }: Props) {
   const { t } = useSettings();
   const { directory, notes: noteService, positions, bus } = useDomain();
@@ -563,37 +551,12 @@ export default function Editor({
           style={{ borderColor: "var(--line)" }}
         >
           <div className="flex items-center gap-1">
-            {active ? (
-              <>
-                <button
-                  className="top-icon-btn"
-                  data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-                  onClick={onToggleSidebar}
-                >
-                  {I.panelLeft}
-                </button>
-                <button
-                  className="top-icon-btn"
-                  data-tip={t("navBack")}
-                  disabled={!canBack}
-                  onClick={onBack}
-                >
-                  {I.back}
-                </button>
-                <button
-                  className="top-icon-btn"
-                  data-tip={t("navForward")}
-                  disabled={!canForward}
-                  onClick={onForward}
-                >
-                  {I.forward}
-                </button>
-              </>
-            ) : (
-              <span className="max-w-[160px] truncate px-1 text-xs text-faint" title={initialPath}>
-                {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
-              </span>
-            )}
+            <span
+              className={`max-w-[200px] truncate px-1 text-xs ${active ? "text-soft" : "text-faint"}`}
+              title={initialPath}
+            >
+              {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
+            </span>
             {saveState === "error" && (
               <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
             )}

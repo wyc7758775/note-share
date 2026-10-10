@@ -9,6 +9,8 @@ export const MAX_PANES = 3;
 export interface Pane {
   id: number;
   path: string | null; // null = 空栏（欢迎页）
+  /** 栏宽（像素）；未设置 = 平分剩余空间 */
+  width?: number;
 }
 
 export class Workspace {
@@ -46,6 +48,14 @@ export class Workspace {
       this.activeId = pane.id;
       this.bus.emit({ type: "paneOpened", paneId: pane.id, path });
     }
+    this.bump();
+  }
+
+  /** 调整栏宽（拖动分隔线）；低于最小宽度会被忽略 */
+  setSize(id: number, width: number) {
+    const pane = this.panes.find((p) => p.id === id);
+    if (!pane || width < 240) return;
+    pane.width = Math.round(width);
     this.bump();
   }
 

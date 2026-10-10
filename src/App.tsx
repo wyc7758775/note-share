@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Fragment, Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { backend } from "./backend";
 import { useSettings } from "./i18n";
 import { DomainProvider, useDomain, useWorkspaceVersion } from "./domain/provider";
@@ -180,6 +180,11 @@ export default function App() {
             canPickVault={backend.mode === "tauri"}
             onResize={setSideWidth}
             onOpenSettings={() => setSettingsOpen(true)}
+            canBack={canBack}
+            canForward={canForward}
+            onBack={() => jumpHistory(-1)}
+            onForward={() => jumpHistory(1)}
+            onToggleSidebar={() => setSideCollapsed((v) => !v)}
           />
         </div>
         <main className="flex min-w-0 flex-1 overflow-hidden">
@@ -209,26 +214,58 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="flex h-full min-w-0 w-full">
-              {workspace.all.map((pane) => {
+            <div className="relative flex h-full min-w-0 w-full">
+              {sideCollapsed && (
+                <button
+                  className="side-toggle-float"
+                  data-tip={t("expandSidebar")}
+                  onClick={() => setSideCollapsed(false)}
+                >
+                  {I.panelLeft}
+                </button>
+              )}
+              {workspace.all.map((pane, idx) => {
                 const isActive = pane.id === activePane.id;
+                const prev = workspace.all[idx - 1];
                 return (
-                  <section
-                    key={pane.id}
-                    className={`pane-col ${isActive ? "pane-col-active" : ""}`}
-                    onPointerDown={() => workspace.focus(pane.id)}
-                  >
+                  <Fragment key={pane.id}>
+                    {idx > 0 && (
+                      <div
+                        className="pane-resizer"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          const startX = e.clientX;
+                          const leftEl = (e.currentTarget as HTMLElement)
+                            .previousElementSibling as HTMLElement;
+                          const rightEl = (e.currentTarget as HTMLElement)
+                            .nextElementSibling as HTMLElement;
+                          const startL = leftEl.getBoundingClientRect().width;
+                          const startR = rightEl.getBoundingClientRect().width;
+                          document.body.classList.add("resizing");
+                          const move = (ev: PointerEvent) => {
+                            const dx = ev.clientX - startX;
+                            workspace.setSize(prev.id, startL + dx);
+                            workspace.setSize(pane.id, startR - dx);
+                          };
+                          const up = () => {
+                            window.removeEventListener("pointermove", move);
+                            window.removeEventListener("pointerup", up);
+                            window.removeEventListener("pointercancel", up);
+                            document.body.classList.remove("resizing");
+                          };
+                          window.addEventListener("pointermove", move);
+                          window.addEventListener("pointerup", up);
+                          window.addEventListener("pointercancel", up);
+                        }}
+                      />
+                    )}
+                    <section
+                      className={`pane-col ${isActive ? "pane-col-active" : ""}`}
+                      style={pane.width ? { flex: `0 0 ${pane.width}px` } : undefined}
+                      onPointerDown={() => workspace.focus(pane.id)}
+                    >
                     {pane.path === null ? (
                       <div className="view-swap relative h-full">
-                        {isActive && (
-                          <button
-                            className="side-toggle-float"
-                            data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-                            onClick={() => setSideCollapsed((v) => !v)}
-                          >
-                            {I.panelLeft}
-                          </button>
-                        )}
                         <EmptyState
                           vaultName={vaultName}
                           onNewNote={async () => {
@@ -244,15 +281,10 @@ export default function App() {
                         active={isActive}
                         closable={workspace.all.length > 1}
                         onClose={() => workspace.close(pane.id)}
-                        canBack={canBack}
-                        canForward={canForward}
-                        onBack={() => jumpHistory(-1)}
-                        onForward={() => jumpHistory(1)}
-                        onToggleSidebar={() => setSideCollapsed((v) => !v)}
-                        sideCollapsed={sideCollapsed}
                       />
                     )}
                   </section>
+                  </Fragment>
                 );
               })}
             </div>

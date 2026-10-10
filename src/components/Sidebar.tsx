@@ -40,6 +40,12 @@ interface Props {
   canPickVault: boolean;
   onResize: (width: number) => void;
   onOpenSettings: () => void;
+  /** 历史导航与侧栏收起（按钮放侧栏顶部 tab 行） */
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
+  onToggleSidebar: () => void;
 }
 
 export default function Sidebar(props: Props) {
@@ -184,6 +190,30 @@ export default function Sidebar(props: Props) {
           onClick={() => setTab("search")}
         >
           {I.search}
+        </button>
+        <span className="flex-1" />
+        <button
+          className="side-tab"
+          data-tip={t("navBack")}
+          disabled={!props.canBack}
+          onClick={props.onBack}
+        >
+          {I.back}
+        </button>
+        <button
+          className="side-tab"
+          data-tip={t("navForward")}
+          disabled={!props.canForward}
+          onClick={props.onForward}
+        >
+          {I.forward}
+        </button>
+        <button
+          className="side-tab"
+          data-tip={t("collapseSidebar")}
+          onClick={props.onToggleSidebar}
+        >
+          {I.panelLeft}
         </button>
       </div>
 
