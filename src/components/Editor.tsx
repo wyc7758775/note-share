@@ -44,8 +44,11 @@ const MOD_KEY = /mac|iphone|ipad|ipod/i.test(
 
 interface Props {
   initialPath: string;
-  onRenamed: (newPath: string) => Promise<void>;
-  onDeleted: () => Promise<void>;
+  /** 是否为活动栏：顶栏工具（返回/前进/收起侧栏）与 Ctrl+S/E 快捷键只在活动栏生效 */
+  active: boolean;
+  /** 多栏时显示关闭按钮 */
+  closable?: boolean;
+  onClose?: () => void;
   onToggleSidebar: () => void;
   sideCollapsed: boolean;
   canBack: boolean;
@@ -56,8 +59,9 @@ interface Props {
 
 export default function Editor({
   initialPath,
-  onRenamed,
-  onDeleted,
+  active,
+  closable,
+  onClose,
   onToggleSidebar,
   sideCollapsed,
   canBack,
@@ -255,20 +259,21 @@ export default function Editor({
     editorProps: {
       attributes: { class: "prose-note focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
-        // 点击双链：目标存在则跳转；已被删则当场重建（同级目录）并跳转
+        // 点击双链：目标存在则跳转（Ctrl/⌘+点击开新栏）；已被删则当场重建并跳转
         click: (_view, event) => {
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const name = el?.getAttribute("data-name");
           if (!name) return false;
+          const newPane = (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey;
           const hit = directory.resolve(name);
           if (hit.kind === "resolved") {
-            emitOpenNote(hit.path);
+            emitOpenNote(hit.path, newPane);
             return true;
           }
           if (el?.hasAttribute("data-missing")) {
             void (async () => {
               const path = await createNoteByName(name);
-              if (path) emitOpenNote(path);
+              if (path) emitOpenNote(path, newPane);
             })();
             return true;
           }
@@ -317,11 +322,10 @@ export default function Editor({
       if (wanted && wanted !== fileTitle) {
         const safe = sanitizeFileName(wanted);
         if (safe) {
-          // 重命名走应用服务：发 noteRenamed，名录/文件树/阅读位置自动跟随
+          // 重命名走应用服务：发 noteRenamed，名录/文件树/栏内路径（Workspace 订阅）自动跟随
           const newPath = await noteService.rename(pathRef.current, safe);
           if (newPath) {
             pathRef.current = newPath;
-            await onRenamed(newPath);
           }
         }
       }
@@ -340,7 +344,7 @@ export default function Editor({
     } finally {
       savingRef.current = false;
     }
-  }, [editor, onRenamed, locked]);
+  }, [editor, locked]);
 
   // 待保存内容快照：编辑事件发生时（编辑器必然存活）立即留存 markdown 文本到会话对象，
   // 卸载兜底直接写快照——销毁中的编辑器再取内容会拿到旧文档。
@@ -446,6 +450,7 @@ export default function Editor({
   // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!active) return; // 多栏时快捷键只作用于活动栏
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === "s") {
@@ -459,7 +464,7 @@ export default function Editor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [saveNow]);
+  }, [saveNow, active]);
 
   // 画板块请求编辑 / 图片请求查看 / 发布面板请求保存
   useEffect(() => {
@@ -558,34 +563,51 @@ export default function Editor({
           style={{ borderColor: "var(--line)" }}
         >
           <div className="flex items-center gap-1">
-            <button
-              className="top-icon-btn"
-              data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-              onClick={onToggleSidebar}
-            >
-              {I.panelLeft}
-            </button>
-            <button
-              className="top-icon-btn"
-              data-tip={t("navBack")}
-              disabled={!canBack}
-              onClick={onBack}
-            >
-              {I.back}
-            </button>
-            <button
-              className="top-icon-btn"
-              data-tip={t("navForward")}
-              disabled={!canForward}
-              onClick={onForward}
-            >
-              {I.forward}
-            </button>
+            {active ? (
+              <>
+                <button
+                  className="top-icon-btn"
+                  data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                  onClick={onToggleSidebar}
+                >
+                  {I.panelLeft}
+                </button>
+                <button
+                  className="top-icon-btn"
+                  data-tip={t("navBack")}
+                  disabled={!canBack}
+                  onClick={onBack}
+                >
+                  {I.back}
+                </button>
+                <button
+                  className="top-icon-btn"
+                  data-tip={t("navForward")}
+                  disabled={!canForward}
+                  onClick={onForward}
+                >
+                  {I.forward}
+                </button>
+              </>
+            ) : (
+              <span className="max-w-[160px] truncate px-1 text-xs text-faint" title={initialPath}>
+                {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
+              </span>
+            )}
             {saveState === "error" && (
               <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
             )}
           </div>
           <div className="flex items-center gap-1">
+            {closable && (
+              <button
+                className="top-icon-btn"
+                data-tip={t("closePane")}
+                onClick={() => onClose?.()}
+              >
+                ✕
+              </button>
+            )}
             <button
               className="top-icon-btn"
               data-tip={t("more")}
@@ -625,8 +647,8 @@ export default function Editor({
                           danger: true,
                           onClick: () => {
                             void (async () => {
-                              await noteService.trash(pathRef.current); // 事件驱动：名录/树/阅读位置自动清理
-                              await onDeleted();
+                              // 事件驱动：名录/树/阅读位置/分栏（Workspace.clearPath）自动清理
+                              await noteService.trash(pathRef.current);
                             })();
                           },
                         },

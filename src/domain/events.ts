@@ -36,6 +36,15 @@ export interface NotePublished {
 export interface SaveRequested {
   type: "saveRequested";
 }
+export interface PaneOpened {
+  type: "paneOpened";
+  paneId: number;
+  path: string;
+}
+export interface PaneClosed {
+  type: "paneClosed";
+  paneId: number;
+}
 
 export type DomainEvent =
   | NoteCreated
@@ -44,7 +53,9 @@ export type DomainEvent =
   | AssetMoved
   | NoteTrashed
   | NotePublished
-  | SaveRequested;
+  | SaveRequested
+  | PaneOpened
+  | PaneClosed;
 export type DomainEventType = DomainEvent["type"];
 
 export class EventBus {

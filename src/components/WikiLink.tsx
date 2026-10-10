@@ -13,10 +13,10 @@ import { useDomain, useDirectoryVersion } from "../domain/provider";
 /** forEditor 把 [[x]] 伪装成 markdown 链接时用的 href 前缀 */
 export const WIKILINK_PREFIX = "noteshare-wikilink:";
 
-/** 跳转到某篇笔记的事件（detail = vault 相对路径）；导航类交互，保留 window 事件 */
+/** 跳转到某篇笔记的事件；newPane = Ctrl/⌘+点击（在新分栏打开）；导航类交互，保留 window 事件 */
 export const OPEN_NOTE_EVENT = "noteshare:open-note";
-export function emitOpenNote(path: string) {
-  window.dispatchEvent(new CustomEvent(OPEN_NOTE_EVENT, { detail: path }));
+export function emitOpenNote(path: string, newPane = false) {
+  window.dispatchEvent(new CustomEvent(OPEN_NOTE_EVENT, { detail: { path, newPane } }));
 }
 
 // ---- 悬停预览卡（前 4 行，带内存缓存） ----

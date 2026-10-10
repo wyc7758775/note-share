@@ -33,10 +33,9 @@ interface Props {
   tree: TreeNode[];
   currentPath: string | null;
   width: number;
-  onOpenNote: (path: string) => void;
+  onOpenNote: (path: string, opts?: { newPane?: boolean }) => void;
   /** 文件夹级变化（新建文件夹等非笔记域操作）后刷新树 */
   onTreeChanged: () => Promise<void>;
-  onDeletedCurrent: () => Promise<void>;
   onPickVault: () => void;
   canPickVault: boolean;
   onResize: (width: number) => void;
@@ -85,10 +84,10 @@ export default function Sidebar(props: Props) {
   };
 
   const handlers: TreeHandlers = {
-    onOpenNote: (p) => {
+    onOpenNote: (p, opts) => {
       setQuery("");
       setTab("files");
-      onOpenNote(p);
+      onOpenNote(p, opts);
     },
     onNewNote: async (folder) => {
       const path = await noteService.create(t("untitledNote"), folder);
@@ -114,16 +113,11 @@ export default function Sidebar(props: Props) {
     },
     onDelete: async (path) => {
       armDelete(null);
-      const wasCurrent =
-        currentPath === path ||
-        currentPath?.startsWith(path + "/") ||
-        currentPath?.startsWith(path + "\\");
       if (/\.md$/i.test(path)) {
-        await noteService.trash(path); // 笔记走领域事件
+        await noteService.trash(path); // 笔记走领域事件（栏清理由 Workspace 订阅完成）
       } else {
         await backend.deletePath(path); // 文件夹
       }
-      if (wasCurrent) await props.onDeletedCurrent();
     },
     onArmDelete: armDelete,
     onViewAsset: async (item) => {
@@ -273,7 +267,7 @@ export default function Sidebar(props: Props) {
               key={h.path}
               className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-hover"
               title={h.path}
-              onClick={() => handlers.onOpenNote(h.path)}
+              onClick={(e) => handlers.onOpenNote(h.path, { newPane: e.ctrlKey || e.metaKey })}
             >
               <div className="truncate text-[13px] text-ink">{h.title}</div>
               <div className="truncate text-[11px] text-faint">{h.snippet}</div>

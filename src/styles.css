@@ -951,6 +951,20 @@ body {
   cursor: pointer;
 }
 
+/* ---------- 多栏（Workspace 分栏） ---------- */
+.pane-col {
+  flex: 1 1 0;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+.pane-col:first-child {
+  border-left: none;
+}
+.pane-col-active {
+  background: var(--paper);
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 10px;

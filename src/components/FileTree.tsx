@@ -46,7 +46,7 @@ export function InlineInputRow({
 }
 
 export interface TreeHandlers {
-  onOpenNote: (path: string) => void;
+  onOpenNote: (path: string, opts?: { newPane?: boolean }) => void;
   onNewNote: (folder: string) => void;
   onCommitRename: (item: TreeNode, name: string) => void;
   onRequestRename: (item: TreeNode) => void;
@@ -217,7 +217,7 @@ function TreeRow({
       >
         <button
           className="flex min-w-0 flex-1 items-center gap-1.5 pl-1"
-          onClick={() => h.onOpenNote(item.path)}
+          onClick={(e) => h.onOpenNote(item.path, { newPane: e.ctrlKey || e.metaKey })}
         >
           <span className={active ? "text-amber-700" : "text-faint"}>{I.note}</span>
           <span className="truncate">{item.name.replace(/\.md$/i, "")}</span>

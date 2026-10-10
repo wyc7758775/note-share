@@ -1,7 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { backend, type TreeNode } from "./backend";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { backend } from "./backend";
 import { useSettings } from "./i18n";
-import { createDomain, DomainProvider } from "./domain/provider";
+import { DomainProvider, useDomain, useWorkspaceVersion } from "./domain/provider";
 import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
@@ -15,12 +15,11 @@ const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
   const { t } = useSettings();
-  const domain = useMemo(() => createDomain(), []);
+  const { workspace, bus, directory } = useDomain();
+  useWorkspaceVersion(); // 分栏布局变化触发重渲染
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultName, setVaultName] = useState<string | null>(null);
-  const [tree, setTree] = useState<TreeNode[]>([]);
-  // sessionKey：打开"另一篇"笔记时自增以重建编辑器；重命名当前笔记时不自增
-  const [session, setSession] = useState<{ path: string; key: number } | null>(null);
+  const [tree, setTree] = useState<import("./backend").TreeNode[]>([]);
   const [sceneView, setSceneView] = useState<string | null>(null);
 
   // 侧栏宽度与收起（记忆到本地）
@@ -38,23 +37,57 @@ export default function App() {
     localStorage.setItem("noteshare.sideCollapsed", sideCollapsed ? "1" : "0");
   }, [sideCollapsed]);
 
+  // 笔记历史（MRU 去重栈）：双链跳转（阅读链路）进历史；树/搜索点击只切活动栏不动栈
+  const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
+
+  const openNote = useCallback(
+    (path: string, opts?: { viaHistory?: boolean; newPane?: boolean }) => {
+      if (opts?.newPane) workspace.openInNewPane(path);
+      else workspace.openInActive(path);
+      if (!opts?.viaHistory) return;
+      setHistory((h) => {
+        const stack = h.stack.filter((p) => p !== path); // MRU：移除旧位置
+        return { stack: [...stack, path], index: stack.length };
+      });
+    },
+    [workspace]
+  );
+
+  const jumpHistory = useCallback(
+    (delta: 1 | -1) => {
+      setHistory((h) => {
+        const i = h.index + delta;
+        if (i < 0 || i >= h.stack.length) return h;
+        workspace.openInActive(h.stack[i]); // 返回/前进作用于活动栏
+        return { ...h, index: i };
+      });
+    },
+    [workspace]
+  );
+
   const refreshTree = useCallback(async () => {
     setTree(await backend.tree());
   }, []);
 
-  // 领域装配：名录初始化；文件树订阅领域事件自动刷新（不再由各组件手动通知）
+  // 领域装配：名录初始化；文件树/分栏跟随领域事件自动更新
   useEffect(() => {
-    void domain.directory.init();
-  }, [domain]);
+    void directory.init();
+  }, [directory]);
   useEffect(() => {
-    const off = domain.bus.on(
+    const off = bus.on(
       ["noteCreated", "noteRenamed", "noteMoved", "assetMoved", "noteTrashed"],
-      () => {
+      (e) => {
         void refreshTree();
+        if (e.type === "noteRenamed" || e.type === "noteMoved") {
+          workspace.relocate(e.from, e.to); // 栏内路径跟随
+          setHistory((h) => ({ ...h, stack: h.stack.map((p) => (p === e.from ? e.to : p)) }));
+        } else if (e.type === "noteTrashed") {
+          workspace.clearPath(e.path); // 持有它的栏清空
+        }
       }
     );
     return off;
-  }, [domain, refreshTree]);
+  }, [bus, refreshTree, workspace]);
 
   useEffect(() => {
     (async () => {
@@ -74,46 +107,27 @@ export default function App() {
     return () => document.removeEventListener("contextmenu", onCtx);
   }, []);
 
-  // 没打开笔记时点击手绘文件 → 主区显示独立画板面板（有笔记打开时由 Editor 接管右侧面板）
+  // 没打开笔记时点击手绘文件 → 主区显示独立画板面板
   useEffect(() => {
     const onEdit = (e: Event) => {
-      if (session) return;
+      if (workspace.all.some((p) => p.path)) return; // 有栏开着笔记时由 Editor 接管
       setSceneView((e as CustomEvent<string>).detail);
     };
     window.addEventListener(EDIT_SCENE_EVENT, onEdit);
     return () => window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
-  }, [session]);
+  }, [workspace]);
 
-  // 笔记历史（MRU 去重栈）：只有"阅读链路"跳转（双链）进历史——
-  // 文件树/搜索点击属于重新定位，不动栈；重复跳转去重后移到栈顶，A↔B 不会堆成 A B A B。
-  const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
-
-  const openNote = (path: string, viaHistory = false) => {
-    setSession((s) => (s && s.path === path ? s : { path, key: (s?.key ?? 0) + 1 }));
-    if (!viaHistory) return;
-    setHistory((h) => {
-      const stack = h.stack.filter((p) => p !== path); // MRU：移除旧位置
-      return { stack: [...stack, path], index: stack.length };
-    });
-  };
-
-  const jumpHistory = (delta: 1 | -1) => {
-    setHistory((h) => {
-      const i = h.index + delta;
-      if (i < 0 || i >= h.stack.length) return h;
-      setSession({ path: h.stack[i], key: Date.now() });
-      return { ...h, index: i };
-    });
-  };
-
-  // 双链点击跳转（阅读链路，进历史）
+  // 双链点击跳转（阅读链路，进历史；Ctrl+点击开新栏）
   useEffect(() => {
-    const onOpen = (e: Event) => openNote((e as CustomEvent<string>).detail, true);
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ path: string; newPane?: boolean }>).detail;
+      openNote(d.path, { viaHistory: true, newPane: d.newPane });
+    };
     window.addEventListener(OPEN_NOTE_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
-  }, []);
+  }, [openNote]);
 
-  // 鼠标侧键（X1/X2 = button 3/4）驱动笔记历史：拦截浏览器的默认网页历史行为
+  // 鼠标侧键（X1/X2）驱动笔记历史
   useEffect(() => {
     const onAux = (e: MouseEvent) => {
       if (e.button === 3) {
@@ -124,122 +138,128 @@ export default function App() {
         jumpHistory(1);
       }
     };
-    // auxclick 兜底：部分浏览器的历史导航在 auxclick 上触发
     window.addEventListener("mousedown", onAux);
     window.addEventListener("auxclick", onAux);
     return () => {
       window.removeEventListener("mousedown", onAux);
       window.removeEventListener("auxclick", onAux);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [jumpHistory]);
 
   const pickVault = async () => {
     const dir = await backend.pickVault();
     if (dir) {
       setVaultName(await backend.getVaultName());
-      setSession(null);
       await refreshTree();
     }
   };
 
-  const handleRenamed = async (newPath: string) => {
-    setSession((s) => (s ? { ...s, path: newPath } : s));
-    await refreshTree();
-  };
-
-  const handleDeleted = async () => {
-    setSession(null);
-    await refreshTree();
-  };
+  const activePane = workspace.active;
+  const canBack = history.index > 0;
+  const canForward = history.index < history.stack.length - 1;
 
   return (
-    <DomainProvider domain={domain}>
     <div className="flex h-full">
-      {/* 侧栏外层做收起/展开的宽度动画；收起后隐藏内容防焦点进入 */}
-      <div
-        className="side-anim"
-        style={{
-          width: sideCollapsed ? 0 : sideWidth,
-          visibility: sideCollapsed ? "hidden" : "visible",
-        }}
-        aria-hidden={sideCollapsed}
-      >
-        <Sidebar
-          vaultName={vaultName}
-          tree={tree}
-          currentPath={session?.path ?? null}
-          width={sideWidth}
-          onOpenNote={openNote}
-          onTreeChanged={refreshTree}
-          onDeletedCurrent={handleDeleted}
-          onPickVault={pickVault}
-          canPickVault={backend.mode === "tauri"}
-          onResize={setSideWidth}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      </div>
-      <main className="min-w-0 flex-1 overflow-hidden">
-        {sceneView !== null ? (
-          <div className="view-swap h-full">
-            <Suspense
-              fallback={
-              <div className="flex h-full items-center justify-center text-sm text-faint">
+        {/* 侧栏外层做收起/展开的宽度动画；收起后隐藏内容防焦点进入 */}
+        <div
+          className="side-anim"
+          style={{
+            width: sideCollapsed ? 0 : sideWidth,
+            visibility: sideCollapsed ? "hidden" : "visible",
+          }}
+          aria-hidden={sideCollapsed}
+        >
+          <Sidebar
+            vaultName={vaultName}
+            tree={tree}
+            currentPath={activePane.path}
+            width={sideWidth}
+            onOpenNote={(path, opts) => openNote(path, opts)}
+            onTreeChanged={refreshTree}
+            onPickVault={pickVault}
+            canPickVault={backend.mode === "tauri"}
+            onResize={setSideWidth}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </div>
+        <main className="flex min-w-0 flex-1 overflow-hidden">
+          {sceneView !== null ? (
+            <div className="view-swap h-full w-full">
+              <Suspense
+                fallback={
+                  <div className="flex h-full w-full items-center justify-center text-sm text-faint">
                     {t("sceneLoading")}
                   </div>
-              }
-            >
-              <ScenePanelStandalone
-                src={sceneView}
-                onBack={() => setSceneView(null)}
-                backLabel="关闭"
-                onSaved={() => {}}
-              />
-            </Suspense>
-          </div>
-        ) : vaultName === null ? (
-          <div className="view-swap flex h-full flex-col items-center justify-center gap-4 text-soft">
-            <div className="serif text-2xl text-ink">NoteShare</div>
-            <p className="text-sm">{t("noVaultHint")}</p>
-            <button className="btn-primary" onClick={pickVault}>
-              {t("pickVaultBtn")}
-            </button>
-          </div>
-        ) : session ? (
-          <Editor
-            key={session.key}
-            initialPath={session.path}
-            onRenamed={handleRenamed}
-            onDeleted={handleDeleted}
-            onToggleSidebar={() => setSideCollapsed((v) => !v)}
-            sideCollapsed={sideCollapsed}
-            canBack={history.index > 0}
-            canForward={history.index < history.stack.length - 1}
-            onBack={() => jumpHistory(-1)}
-            onForward={() => jumpHistory(1)}
-          />
-        ) : (
-          <div className="view-swap relative h-full">
-            <button
-              className="side-toggle-float"
-              data-tip={sideCollapsed ? "展开左侧栏" : "收起左侧栏"}
-              onClick={() => setSideCollapsed((v) => !v)}
-            >
-              {I.panelLeft}
-            </button>
-            <EmptyState
-              vaultName={vaultName}
-              onNewNote={async () => {
-                const path = await backend.createNote("", t("untitledNote"));
-                openNote(path);
-              }}
-            />
-          </div>
-        )}
-      </main>
+                }
+              >
+                <ScenePanelStandalone
+                  src={sceneView}
+                  onBack={() => setSceneView(null)}
+                  backLabel={t("close")}
+                  onSaved={() => {}}
+                />
+              </Suspense>
+            </div>
+          ) : vaultName === null ? (
+            <div className="view-swap flex h-full w-full flex-col items-center justify-center gap-4 text-soft">
+              <div className="serif text-2xl text-ink">NoteShare</div>
+              <p className="text-sm">{t("noVaultHint")}</p>
+              <button className="btn-primary" onClick={pickVault}>
+                {t("pickVaultBtn")}
+              </button>
+            </div>
+          ) : (
+            <div className="flex h-full min-w-0 w-full">
+              {workspace.all.map((pane) => {
+                const isActive = pane.id === activePane.id;
+                return (
+                  <section
+                    key={pane.id}
+                    className={`pane-col ${isActive ? "pane-col-active" : ""}`}
+                    onPointerDown={() => workspace.focus(pane.id)}
+                  >
+                    {pane.path === null ? (
+                      <div className="view-swap relative h-full">
+                        {isActive && (
+                          <button
+                            className="side-toggle-float"
+                            data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                            onClick={() => setSideCollapsed((v) => !v)}
+                          >
+                            {I.panelLeft}
+                          </button>
+                        )}
+                        <EmptyState
+                          vaultName={vaultName}
+                          onNewNote={async () => {
+                            const path = await backend.createNote("", t("untitledNote"));
+                            openNote(path);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <Editor
+                        key={`${pane.id}:${pane.path}`}
+                        initialPath={pane.path}
+                        active={isActive}
+                        closable={workspace.all.length > 1}
+                        onClose={() => workspace.close(pane.id)}
+                        canBack={canBack}
+                        canForward={canForward}
+                        onBack={() => jumpHistory(-1)}
+                        onForward={() => jumpHistory(1)}
+                        onToggleSidebar={() => setSideCollapsed((v) => !v)}
+                        sideCollapsed={sideCollapsed}
+                      />
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </main>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
-    </DomainProvider>
   );
 }

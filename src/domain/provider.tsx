@@ -5,24 +5,32 @@ import { EventBus } from "./events";
 import { NoteDirectory } from "./directory";
 import { NoteService } from "../application/note-service";
 import { ReadingPositions } from "./session";
+import { Workspace } from "./workspace";
 
 export interface Domain {
   bus: EventBus;
   directory: NoteDirectory;
   notes: NoteService;
   positions: ReadingPositions;
+  workspace: Workspace;
 }
 
 const Ctx = createContext<Domain>(null!);
 
+// 组合根单例：tiptap 节点视图渲染在独立 React root 里，拿不到主树 context，
+// useDomain 在 context 缺失时回退到该单例（领域容器本就是应用级唯一实例）
+let singleton: Domain | null = null;
+
 export function createDomain(): Domain {
   const bus = new EventBus();
-  return {
+  singleton = {
     bus,
     directory: new NoteDirectory(bus),
     notes: new NoteService(bus),
     positions: new ReadingPositions(bus),
+    workspace: new Workspace(bus),
   };
+  return singleton;
 }
 
 export function DomainProvider({ domain, children }: { domain: Domain; children: React.ReactNode }) {
@@ -31,12 +39,17 @@ export function DomainProvider({ domain, children }: { domain: Domain; children:
 
 export function useDomain(): Domain {
   const d = useContext(Ctx);
-  if (!d) throw new Error("useDomain must be used inside DomainProvider");
-  return d;
+  return d ?? singleton!;
 }
 
 /** 订阅名录版本（名录任何变化触发重渲染） */
 export function useDirectoryVersion(): number {
   const { directory } = useDomain();
   return useSyncExternalStore(directory.subscribe, directory.getVersion, directory.getVersion);
+}
+
+/** 订阅工作台版本（分栏布局任何变化触发重渲染） */
+export function useWorkspaceVersion(): number {
+  const { workspace } = useDomain();
+  return useSyncExternalStore(workspace.subscribe, workspace.getVersion, workspace.getVersion);
 }
