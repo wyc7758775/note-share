@@ -22,7 +22,7 @@ import {
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
-import { Wikilink, emitOpenNote } from "./WikiLink";
+import { Wikilink, WikiPreviewCard, emitOpenNote, emitTreeChanged } from "./WikiLink";
 import { createWikiLinkMenu, type NoteEntry } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -85,6 +85,20 @@ export default function Editor({
   const [sceneRev, setSceneRev] = useState(0);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
+  // wikilink 悬停预览（100ms 防抖后弹出，跟随链接下方）
+  const [wikiPreview, setWikiPreview] = useState<
+    { name: string; path: string; top: number; left: number } | null
+  >(null);
+  const hoverWiki = useRef<{ el: Element | null; timer: number | undefined }>({
+    el: null,
+    timer: undefined,
+  });
+  const hideWikiPreview = () => {
+    window.clearTimeout(hoverWiki.current.timer);
+    hoverWiki.current.el = null;
+    setWikiPreview(null);
+  };
+
   // "[[" 双链菜单的笔记列表（挂载时拉取，呼出菜单时异步刷新，下次过滤生效）
   const notesRef = useRef<NoteEntry[]>([]);
   const refreshNotes = useCallback(() => {
@@ -124,6 +138,7 @@ export default function Editor({
             const dir = pathRef.current.split("/").slice(0, -1).join("/");
             const path = await backend.createNote(dir, safe);
             notesRef.current.push({ name: safe, path });
+            emitTreeChanged(); // 侧边栏局部刷新出新笔记
             ed
               .chain()
               .focus()
@@ -254,6 +269,26 @@ export default function Editor({
             emitOpenNote(hit.path);
             return true;
           }
+          return false;
+        },
+        // 悬停双链 100ms 后弹预览卡（在链接下方）
+        mouseover: (_view, event) => {
+          const el = (event.target as HTMLElement).closest?.(".wikilink");
+          const h = hoverWiki.current;
+          if (el === h.el) return false; // 仍在同一个链接内
+          h.el = el;
+          window.clearTimeout(h.timer);
+          if (!el) {
+            setWikiPreview(null);
+            return false;
+          }
+          const name = el.getAttribute("data-name");
+          const hit = name ? notesRef.current.find((n) => n.name === name) : null;
+          if (!hit) return false;
+          const r = el.getBoundingClientRect();
+          h.timer = window.setTimeout(() => {
+            setWikiPreview({ name: hit.name, path: hit.path, top: r.bottom + 8, left: r.left });
+          }, 100);
           return false;
         },
       },
@@ -570,7 +605,11 @@ export default function Editor({
         <div
           ref={scrollRef}
           className="min-h-0 flex-1 overflow-y-auto"
-          onScroll={(e) => rememberScroll(pathRef.current, e.currentTarget.scrollTop)}
+          onScroll={(e) => {
+            rememberScroll(pathRef.current, e.currentTarget.scrollTop);
+            setWikiPreview(null); // 滚动时预览卡不再跟随，直接关
+          }}
+          onMouseLeave={hideWikiPreview}
           onContextMenu={(e) => {
             // 画板块有自己的菜单
             if ((e.target as HTMLElement).closest(".excalidraw-fig")) return;
@@ -656,6 +695,17 @@ export default function Editor({
             </div>
           </div>
         </div>
+
+        {/* 双链悬停预览卡 */}
+        {wikiPreview && (
+          <WikiPreviewCard
+            key={wikiPreview.path}
+            name={wikiPreview.name}
+            path={wikiPreview.path}
+            top={wikiPreview.top}
+            left={wikiPreview.left}
+          />
+        )}
 
         <input
           ref={fileInputRef}

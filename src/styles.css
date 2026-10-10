@@ -967,6 +967,38 @@ body {
   background: rgb(180 83 9 / 0.1);
 }
 
+/* 双链悬停预览卡 */
+.wiki-preview {
+  position: fixed;
+  z-index: 250;
+  width: 316px;
+  max-width: calc(100vw - 16px);
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+  animation: modal-in 0.12s ease;
+}
+.wiki-preview-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-preview-line {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- 设置弹窗 ---------- */
 .settings-mask {
   position: fixed;

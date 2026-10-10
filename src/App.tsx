@@ -6,7 +6,7 @@ import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
 import SettingsModal from "./components/SettingsModal";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
-import { OPEN_NOTE_EVENT } from "./components/WikiLink";
+import { OPEN_NOTE_EVENT, TREE_CHANGED_EVENT } from "./components/WikiLink";
 import { I } from "./components/icons";
 
 // 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
@@ -93,6 +93,34 @@ export default function App() {
     const onOpen = (e: Event) => openNote((e as CustomEvent<string>).detail);
     window.addEventListener(OPEN_NOTE_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
+  }, []);
+
+  // 文件树局部刷新（如 [[ 创建新笔记），不动当前笔记会话
+  useEffect(() => {
+    const onTree = () => void refreshTree();
+    window.addEventListener(TREE_CHANGED_EVENT, onTree);
+    return () => window.removeEventListener(TREE_CHANGED_EVENT, onTree);
+  }, [refreshTree]);
+
+  // 鼠标侧键（X1/X2 = button 3/4）驱动笔记历史：拦截浏览器的默认网页历史行为
+  useEffect(() => {
+    const onAux = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        jumpHistory(-1);
+      } else if (e.button === 4) {
+        e.preventDefault();
+        jumpHistory(1);
+      }
+    };
+    // auxclick 兜底：部分浏览器的历史导航在 auxclick 上触发
+    window.addEventListener("mousedown", onAux);
+    window.addEventListener("auxclick", onAux);
+    return () => {
+      window.removeEventListener("mousedown", onAux);
+      window.removeEventListener("auxclick", onAux);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pickVault = async () => {
