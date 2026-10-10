@@ -12,6 +12,7 @@ import { useSettings, translate, currentLang } from "../i18n";
 import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
+import { rememberScroll, recallScroll, moveScrollMemory, forgetScroll } from "../lib/scroll-memory";
 import { sanitizeFileName } from "../lib/files";
 import {
   CustomImage,
@@ -71,6 +72,7 @@ export default function Editor({
   const loadingRef = useRef(true);
   const savingRef = useRef(false);
   const timerRef = useRef<number | undefined>(undefined);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
@@ -271,8 +273,10 @@ export default function Editor({
       if (wanted && wanted !== fileTitle) {
         const safe = sanitizeFileName(wanted);
         if (safe) {
+          const oldPath = pathRef.current;
           const newPath = await backend.renamePath(pathRef.current, `${safe}.md`);
           pathRef.current = newPath;
+          moveScrollMemory(oldPath, newPath);
           await onRenamed(newPath);
         }
       }
@@ -333,11 +337,19 @@ export default function Editor({
       }
       loadingRef.current = false;
       setLoaded(true);
+      // 恢复上次的阅读位置（等内容渲染后下一帧再设，高度才够）
+      requestAnimationFrame(() => {
+        if (!cancelled && scrollRef.current) {
+          scrollRef.current.scrollTop = recallScroll(initialPath);
+        }
+      });
     })().catch((e) => console.error("读取笔记失败", e));
     return () => {
       cancelled = true;
     };
   }, [initialPath, editor]);
+
+  // 阅读位置记忆：滚动时实时写入内存 Map（不依赖卸载时序），刷新页面自然清空
 
   // 锁定 / 解锁
   useEffect(() => {
@@ -536,6 +548,7 @@ export default function Editor({
                           danger: true,
                           onClick: () => {
                             void (async () => {
+                              forgetScroll(pathRef.current);
                               await backend.deletePath(pathRef.current);
                               await onDeleted();
                             })();
@@ -555,7 +568,9 @@ export default function Editor({
 
         {/* 正文滚动区 */}
         <div
+          ref={scrollRef}
           className="min-h-0 flex-1 overflow-y-auto"
+          onScroll={(e) => rememberScroll(pathRef.current, e.currentTarget.scrollTop)}
           onContextMenu={(e) => {
             // 画板块有自己的菜单
             if ((e.target as HTMLElement).closest(".excalidraw-fig")) return;
