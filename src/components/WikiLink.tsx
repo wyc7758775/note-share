@@ -163,11 +163,11 @@ export const Wikilink = Node.create({
   },
 });
 
-/** 节点视图：渲染初始化时即向名录解析目标存在性（名录变化时重检），缺失标记样式 */
+/** 节点视图：渲染初始化时即向名录解析目标存在性（名录变化时重检），缺失标记样式。
+ *  悬停提示统一走预览卡（missing 态在卡内提示），不再另设 data-tip 气泡。 */
 function WikiLinkView({ node }: any) {
   const { directory } = useDomain();
   useDirectoryVersion(); // 名录任何变化触发重渲染
-  const { t } = useSettings();
   const name = String(node.attrs.name ?? "");
   const missing = directory.resolve(name).kind === "dangling";
   return (
@@ -176,7 +176,6 @@ function WikiLinkView({ node }: any) {
       className={`wikilink ${missing ? "wikilink-missing" : ""}`}
       data-name={name}
       data-missing={missing ? "1" : undefined}
-      data-tip={missing ? t("wikilinkMissingTip") : undefined}
     >
       {name}
     </NodeViewWrapper>
