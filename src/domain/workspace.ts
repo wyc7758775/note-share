@@ -255,11 +255,17 @@ export class Workspace {
       const next = pane.tabs[idx] ?? pane.tabs[idx - 1];
       pane.activeTabId = next?.id ?? null;
     }
+    // 关掉的是最后一个标签且不是唯一栏：整栏从布局移除（无需关栏按钮）
+    if (pane.tabs.length === 0 && this.paneList.length > 1) {
+      this.close(paneId);
+      return;
+    }
     this.bump();
   }
 
   /** 拖拽标签：栏内重排或跨栏移动；toIndex 按移除后的目标栏计算。
-   *  移动的标签在目标栏激活，目标栏成为活动栏；源栏失去激活标签时相邻顶上。 */
+   *  移动的标签在目标栏激活，目标栏成为活动栏；源栏失去激活标签时相邻顶上，
+   *  被搬空且不是唯一栏时整栏移除（拖唯一标签去拆分 = 挪栏位置）。 */
   moveTab(fromPaneId: number, tabId: number, toPaneId: number, toIndex: number) {
     const from = this.panes.get(fromPaneId);
     const to = this.panes.get(toPaneId);
@@ -274,6 +280,10 @@ export class Workspace {
     to.tabs.splice(Math.max(0, Math.min(toIndex, to.tabs.length)), 0, tab);
     to.activeTabId = tab.id;
     this.activePaneId = toPaneId;
+    if (from !== to && from.tabs.length === 0 && this.paneList.length > 1) {
+      this.close(fromPaneId); // 源栏被搬空：移除（close 不动 activePaneId，目标栏保持活动）
+      return;
+    }
     this.bump();
   }
 
@@ -301,7 +311,7 @@ export class Workspace {
 
   // ---- 路径联动 ----
 
-  /** 笔记/画板被删除：持有它的标签关闭（相邻标签顶上） */
+  /** 笔记/画板被删除：持有它的标签关闭（相邻标签顶上），被清空的栏一并移除 */
   clearPath(path: string) {
     let changed = false;
     for (const pane of this.panes.values()) {
@@ -319,7 +329,19 @@ export class Workspace {
       }
       changed = true;
     }
-    if (changed) this.bump();
+    if (changed) {
+      this.removeEmptyPanes();
+      this.bump();
+    }
+  }
+
+  /** 移除所有空栏（布局里至少保留一栏） */
+  private removeEmptyPanes() {
+    while (this.paneList.length > 1) {
+      const empty = this.paneList.find((p) => p.tabs.length === 0);
+      if (!empty) break;
+      this.close(empty.id);
+    }
   }
 
   /** 笔记/画板重命名或移动：所有标签的路径跟随 */

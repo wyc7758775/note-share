@@ -438,7 +438,7 @@ export default function Editor({
   }, []);
 
   // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）；
-  // 锁定切换与发布入口都走领域事件/全局事件（标签条 ⋯ 菜单共用同一路径）
+  // 锁定切换经 SessionBook 广播（下方镜像由 lockToggled 驱动，菜单/快捷键同一路径）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active) return; // 多栏时快捷键只作用于活动栏
@@ -457,20 +457,10 @@ export default function Editor({
       if (ev.type !== "lockToggled" || ev.path !== pathRef.current) return;
       setLocked(ev.mode === "locked");
     };
-    const onPublish = (e: Event) => {
-      const path = (e as CustomEvent<string>).detail;
-      if (path !== pathRef.current) return; // 只响应对应笔记的请求
-      void (async () => {
-        await saveNow();
-        setView("publish");
-      })();
-    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("noteshare:open-publish", onPublish as EventListener);
     const offLock = bus.on("lockToggled", onLock as (e: import("../domain/events").DomainEvent) => void);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("noteshare:open-publish", onPublish as EventListener);
       offLock();
     };
   }, [saveNow, active, sessions, bus]);
@@ -551,13 +541,64 @@ export default function Editor({
   return (
     <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
       <div className="view-swap relative flex h-full flex-col">
-        {/* 顶部左上角悬浮：返回 / 前进（阅读历史，作用于活动栏） */}
+        {/* 顶部左上角悬浮：返回 / 前进 / 更多操作（作用于本栏当前笔记） */}
         <div className="editor-nav-float">
           <button className="top-icon-btn" data-tip={t("navBack")} disabled={!canBack} onClick={onBack}>
             {I.back}
           </button>
           <button className="top-icon-btn" data-tip={t("navForward")} disabled={!canForward} onClick={onForward}>
             {I.forward}
+          </button>
+          <button
+            className="top-icon-btn"
+            data-tip={t("more")}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
+                {
+                  label: locked
+                    ? t("unlockEdit", { mod: `${MOD_KEY}E` })
+                    : t("lockReading", { mod: `${MOD_KEY}E` }),
+                  icon: locked ? I.unlock : I.lock,
+                  onClick: () => {
+                    void saveNow();
+                    sessions.toggle(pathRef.current);
+                  },
+                },
+                { separator: true },
+                {
+                  label: t("publishExportMenu"),
+                  onClick: () => {
+                    void (async () => {
+                      await saveNow();
+                      setView("publish");
+                    })();
+                  },
+                },
+                { separator: true },
+                {
+                  label: t("deleteNote"),
+                  danger: true,
+                  disabled: locked,
+                  onClick: () => {
+                    // 二级确认菜单（与第一级同位置弹出）
+                    showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
+                      {
+                        label: t("confirmTrash"),
+                        danger: true,
+                        onClick: () => {
+                          // 事件驱动：名录/树/阅读位置/分栏（Workspace.clearPath）自动清理
+                          void noteService.trash(pathRef.current);
+                        },
+                      },
+                      { label: t("cancel") },
+                    ]);
+                  },
+                },
+              ]);
+            }}
+          >
+            {I.more}
           </button>
         </div>
 

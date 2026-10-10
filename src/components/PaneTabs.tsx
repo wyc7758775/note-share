@@ -1,24 +1,16 @@
 // 栏内标签条：一栏可叠多个标签（笔记/画板），点击切换、中键或 × 关闭、
 // 拖拽重排/拖到其他栏换位置、+ 在当前标签所在文件夹新建笔记并开新标签。
-// 行尾：⋯（当前标签的锁定/发布/删除）、✕ 关栏（多栏时）。
-// 只调领域服务（Workspace / SessionBook / NoteService），布局渲染由 PaneView 负责。
-import { useEffect, useRef, useState } from "react";
+// 笔记操作菜单（⋯）在编辑器左上角的悬浮导航组里，与前进后退同行；
+// 关栏没有按钮（拖拽拆分自由布局，关掉全部标签即得空栏）。
+// 只调领域服务（Workspace / NoteService），布局渲染由 PaneView 负责。
+import { useRef, useState } from "react";
 import { useDomain, useWorkspaceVersion } from "../domain/provider";
 import { useSettings } from "../i18n";
 import type { Pane } from "../domain/workspace";
-import { showContextMenu } from "./ContextMenu";
 import { I } from "./icons";
 
 /** 标签拖拽的 dataTransfer 类型（栏内重排、跨栏移动与拆分落区共用） */
 export const TAB_MIME = "application/x-noteshare-tab";
-
-/** 快捷键修饰键的显示名（苹果设备是 Command；与 Editor 保持一致） */
-const MOD_KEY = /mac|iphone|ipad|ipod/i.test(
-  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-    navigator.platform ?? ""
-)
-  ? "⌘"
-  : "Ctrl+";
 
 interface Props {
   pane: Pane;
@@ -32,68 +24,21 @@ function tabLabel(path: string): string {
 
 export default function PaneTabs({ pane, active }: Props) {
   const { t } = useSettings();
-  const { workspace, notes: noteService, sessions, bus } = useDomain();
+  const { workspace, notes: noteService } = useDomain();
   useWorkspaceVersion(); // 标签增删/切换/激活跟随工作台版本
 
   // 本栏内正被拖拽的标签 id（淡化显示）；dropHint = 落点指示线的插入位置
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [, setLockTick] = useState(0); // lockToggled 事件驱动菜单文案刷新
   const stripRef = useRef<HTMLDivElement>(null);
 
   const activeTab = pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? null;
-  const multiPane = workspace.paneList.length > 1;
-
-  // 锁定状态变化（快捷键或菜单触发）时刷新，菜单文案跟随
-  useEffect(() => {
-    return bus.on("lockToggled", () => setLockTick((v) => v + 1));
-  }, [bus]);
 
   const newNote = async () => {
     const cur = activeTab;
     const folder = cur ? cur.path.split("/").slice(0, -1).join("/") : "";
     const path = await noteService.create(t("untitledNote"), folder);
     if (path) workspace.open(path, "newTab");
-  };
-
-  /** 当前标签的操作菜单（锁定 / 发布 / 删除） */
-  const openTabMenu = (e: React.MouseEvent) => {
-    if (!activeTab) return;
-    const path = activeTab.path;
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const locked = sessions.mode(path) === "locked";
-    showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
-      {
-        label: locked ? t("unlockEdit", { mod: `${MOD_KEY}E` }) : t("lockReading", { mod: `${MOD_KEY}E` }),
-        icon: locked ? I.unlock : I.lock,
-        onClick: () => {
-          bus.emit({ type: "saveRequested" }); // 锁定前先保存当前编辑
-          sessions.toggle(path);
-        },
-      },
-      { separator: true },
-      {
-        label: t("publishExportMenu"),
-        onClick: () => {
-          window.dispatchEvent(new CustomEvent("noteshare:open-publish", { detail: path }));
-        },
-      },
-      { separator: true },
-      {
-        label: t("deleteNote"),
-        danger: true,
-        onClick: () => {
-          showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
-            {
-              label: t("confirmTrash"),
-              danger: true,
-              onClick: () => void noteService.trash(path),
-            },
-            { label: t("cancel") },
-          ]);
-        },
-      },
-    ]);
   };
 
   /** 根据鼠标位置算插入位置：经过标签左半插它前面，右半插后面 */
@@ -215,22 +160,6 @@ export default function PaneTabs({ pane, active }: Props) {
         >
           {I.plus}
         </button>
-      </div>
-      <div className="flex items-center gap-0.5">
-        {activeTab && (
-          <button className="tab-more" data-tip={t("more")} onClick={openTabMenu}>
-            {I.more}
-          </button>
-        )}
-        {multiPane && (
-          <button
-            className="tab-pane-close"
-            data-tip={t("closePane")}
-            onClick={() => workspace.close(pane.id)}
-          >
-            ✕
-          </button>
-        )}
       </div>
     </div>
   );
