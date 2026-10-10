@@ -119,10 +119,16 @@ export const I = {
   ),
   gear: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-        <circle cx="8" cy="8" r="2.6" />
-        <path d="M8 1.6v2.2M8 12.2v2.2M1.6 8h2.2M12.2 8h2.2" />
-        <path d="M3.5 3.5l1.5 1.5M12.5 3.5L11 5M3.5 12.5L5 11M12.5 12.5L11 11" />
+      <g stroke="currentColor" strokeLinecap="round">
+        {/* 外圈环带（齿轮本体） */}
+        <circle cx="8" cy="8" r="4.4" strokeWidth="2.2" />
+        {/* 中心孔 */}
+        <circle cx="8" cy="8" r="1.3" strokeWidth="1.4" />
+        {/* 环上的八颗外齿 */}
+        <path
+          d="M13 8h1.9M8 13v1.9M3 8H1.1M8 3V1.1M11.54 11.54l1.34 1.34M4.46 11.54l-1.34 1.34M11.54 4.46l1.34-1.34M4.46 4.46L3.12 3.12"
+          strokeWidth="1.8"
+        />
       </g>
     </svg>
   ),
