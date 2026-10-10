@@ -112,6 +112,8 @@ const zh: Record<string, string> = {
   clickToView: "点击查看图片",
   clickToEdit: "点击在右侧编辑画板",
   clickCanvas: "点击查看画板",
+  wikilinkMissingTip: "笔记不存在 · 点击创建",
+  wikilinkMissingCard: "笔记不存在 · 点击创建",
 
   // ---- 空状态 / 首启 ----
   emptyHint: "左侧选择一篇笔记，或",
@@ -251,6 +253,8 @@ const en: Record<string, string> = {
   clickToView: "Click to view",
   clickToEdit: "Click to edit canvas",
   clickCanvas: "View canvas",
+  wikilinkMissingTip: "Note doesn't exist · Click to create",
+  wikilinkMissingCard: "Note doesn't exist · Click to create",
 
   emptyHint: "Pick a note on the left, or",
   noVaultHint: "No note vault folder selected yet",

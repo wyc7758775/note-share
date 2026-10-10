@@ -3,6 +3,7 @@ import { backend, type SearchHit, type TreeNode } from "../backend";
 import { useSettings } from "../i18n";
 import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
+import { emitTreeChanged } from "./WikiLink";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -90,6 +91,7 @@ export default function Sidebar(props: Props) {
     onNewNote: async (folder) => {
       const path = await backend.createNote(folder, t("untitledNote"));
       await onTreeChanged();
+      emitTreeChanged(); // 编辑器里的双链存在性状态同步刷新
       onOpenNote(path);
     },
     onRequestRename: (item) => {
@@ -105,6 +107,7 @@ export default function Sidebar(props: Props) {
       if (n === old) return;
       const target = await backend.renamePath(item.path, n);
       await onTreeChanged();
+      if (item.kind === "note") emitTreeChanged();
       if (currentPath === item.path) onOpenNote(target);
     },
     onDelete: async (path) => {
@@ -115,6 +118,7 @@ export default function Sidebar(props: Props) {
         currentPath?.startsWith(path + "\\");
       await backend.deletePath(path);
       await onTreeChanged();
+      emitTreeChanged();
       if (wasCurrent) await props.onDeletedCurrent();
     },
     onArmDelete: armDelete,

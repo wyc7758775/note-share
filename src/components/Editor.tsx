@@ -22,7 +22,7 @@ import {
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
-import { Wikilink, WikiPreviewCard, emitOpenNote, emitTreeChanged } from "./WikiLink";
+import { Wikilink, WikiPreviewCard, emitOpenNote, emitTreeChanged, TREE_CHANGED_EVENT } from "./WikiLink";
 import { createWikiLinkMenu, type NoteEntry } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -85,9 +85,9 @@ export default function Editor({
   const [sceneRev, setSceneRev] = useState(0);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
-  // wikilink 悬停预览（100ms 防抖后弹出，跟随链接下方）
+  // wikilink 悬停预览（100ms 防抖后弹出，跟随链接下方；missing 表示目标不存在）
   const [wikiPreview, setWikiPreview] = useState<
-    { name: string; path: string; top: number; left: number } | null
+    { name: string; path: string | null; top: number; left: number; missing?: boolean } | null
   >(null);
   const hoverWiki = useRef<{ el: Element | null; timer: number | undefined }>({
     el: null,
@@ -99,8 +99,10 @@ export default function Editor({
     setWikiPreview(null);
   };
 
-  // "[[" 双链菜单的笔记列表（挂载时拉取，呼出菜单时异步刷新，下次过滤生效）
+  // "[[" 双链菜单的笔记列表（挂载时拉取，呼出菜单时异步刷新，下次过滤生效）；
+  // notesList 同时进 context，wikilink 节点渲染时据此检测目标是否存在
   const notesRef = useRef<NoteEntry[]>([]);
+  const [notesList, setNotesList] = useState<NoteEntry[]>([]);
   const refreshNotes = useCallback(() => {
     void (async () => {
       const flat: NoteEntry[] = [];
@@ -112,11 +114,33 @@ export default function Editor({
       };
       walk(await backend.tree());
       notesRef.current = flat;
+      setNotesList(flat);
     })();
   }, []);
   useEffect(() => {
     refreshNotes();
   }, [refreshNotes]);
+  // 笔记在别处（如目录树）被删/改名后重新拉取，缺失链接状态随之刷新
+  useEffect(() => {
+    const onTree = () => refreshNotes();
+    window.addEventListener(TREE_CHANGED_EVENT, onTree);
+    return () => window.removeEventListener(TREE_CHANGED_EVENT, onTree);
+  }, [refreshNotes]);
+
+  /** 在当前笔记的同级目录创建笔记，更新名单并通知侧栏 */
+  const createNoteByName = useCallback(
+    async (name: string): Promise<string | null> => {
+      const safe = sanitizeFileName(name);
+      if (!safe) return null;
+      const dir = pathRef.current.split("/").slice(0, -1).join("/");
+      const path = await backend.createNote(dir, safe);
+      notesRef.current.push({ name: safe, path });
+      setNotesList([...notesRef.current]);
+      emitTreeChanged();
+      return path;
+    },
+    []
+  );
 
   const wikiLinkExtension = useMemo(
     () =>
@@ -131,18 +155,13 @@ export default function Editor({
               .run();
             return;
           }
-          // 创建新笔记：放在当前笔记的同级文件夹
-          const safe = sanitizeFileName(item.name);
-          if (!safe) return;
           void (async () => {
-            const dir = pathRef.current.split("/").slice(0, -1).join("/");
-            const path = await backend.createNote(dir, safe);
-            notesRef.current.push({ name: safe, path });
-            emitTreeChanged(); // 侧边栏局部刷新出新笔记
+            const path = await createNoteByName(item.name);
+            if (!path) return;
             ed
               .chain()
               .focus()
-              .insertContent({ type: "wikilink", attrs: { name: safe } })
+              .insertContent({ type: "wikilink", attrs: { name: sanitizeFileName(item.name) } })
               .run();
           })();
         }
@@ -259,7 +278,7 @@ export default function Editor({
     editorProps: {
       attributes: { class: "prose-note focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
-        // 点击双链跳转目标笔记（可编辑/锁定态都生效；走原生 DOM 事件最稳）
+        // 点击双链：目标存在则跳转；已被删则当场重建（同级目录）并跳转
         click: (_view, event) => {
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const name = el?.getAttribute("data-name");
@@ -269,9 +288,16 @@ export default function Editor({
             emitOpenNote(hit.path);
             return true;
           }
+          if (el?.hasAttribute("data-missing")) {
+            void (async () => {
+              const path = await createNoteByName(name);
+              if (path) emitOpenNote(path);
+            })();
+            return true;
+          }
           return false;
         },
-        // 悬停双链 100ms 后弹预览卡（在链接下方）
+        // 悬停双链 100ms 后弹预览卡（在链接下方）；缺失的弹"点击创建"提示
         mouseover: (_view, event) => {
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const h = hoverWiki.current;
@@ -283,11 +309,17 @@ export default function Editor({
             return false;
           }
           const name = el.getAttribute("data-name");
-          const hit = name ? notesRef.current.find((n) => n.name === name) : null;
-          if (!hit) return false;
+          if (!name) return false;
           const r = el.getBoundingClientRect();
+          const hit = notesRef.current.find((n) => n.name === name);
           h.timer = window.setTimeout(() => {
-            setWikiPreview({ name: hit.name, path: hit.path, top: r.bottom + 8, left: r.left });
+            setWikiPreview({
+              name,
+              path: hit?.path ?? null,
+              top: r.bottom + 8,
+              left: r.left,
+              missing: !hit,
+            });
           }, 100);
           return false;
         },
@@ -312,6 +344,7 @@ export default function Editor({
           const newPath = await backend.renamePath(pathRef.current, `${safe}.md`);
           pathRef.current = newPath;
           moveScrollMemory(oldPath, newPath);
+          refreshNotes(); // 笔记名单换新路径，双链存在性状态同步
           await onRenamed(newPath);
         }
       }
@@ -535,7 +568,7 @@ export default function Editor({
 
   // ---- 笔记视图 ----
   return (
-    <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
+    <EditorStateContext.Provider value={{ rev: sceneRev, locked, notes: notesList }}>
       <div className="view-swap flex h-full flex-col">
         {/* 顶栏 */}
         <div
@@ -726,11 +759,12 @@ export default function Editor({
         {/* 双链悬停预览卡 */}
         {wikiPreview && (
           <WikiPreviewCard
-            key={wikiPreview.path}
+            key={wikiPreview.path ?? wikiPreview.name}
             name={wikiPreview.name}
             path={wikiPreview.path}
             top={wikiPreview.top}
             left={wikiPreview.left}
+            missing={wikiPreview.missing}
           />
         )}
 

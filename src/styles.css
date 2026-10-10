@@ -966,6 +966,16 @@ body {
 .wikilink:hover {
   background: rgb(180 83 9 / 0.1);
 }
+/* 缺失目标的链接（笔记被删）：提示可点击重建 */
+.wikilink-missing {
+  color: var(--ink-faint);
+  border-bottom-style: dotted;
+  border-bottom-color: rgb(220 38 38 / 0.5);
+}
+.wikilink-missing:hover {
+  background: rgb(220 38 38 / 0.08);
+  color: #dc2626;
+}
 
 /* 双链悬停预览卡 */
 .wiki-preview {

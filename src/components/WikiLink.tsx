@@ -1,10 +1,15 @@
 // [[笔记名]] 双链节点：编辑器里渲染为可点击链接（不显示括号原文本），点击跳转目标笔记。
 // 磁盘格式保持 Obsidian 的 [[名字]]；进出编辑器走 forEditor/forSave 的链接伪装互转。
-import { useEffect, useState } from "react";
+// 目标笔记不存在时（被删）：渲染即检测并标记缺失样式，悬停提示"点击创建"，点击重建。
+import { useContext, useEffect, useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
+import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { backend } from "../backend";
+import { useSettings } from "../i18n";
 import { parseNote } from "../lib/frontmatter";
 import { safeDecode } from "../lib/markdown";
+import { EditorStateContext } from "./ExcalidrawBlock";
+import type { NoteEntry } from "./WikiLinkMenu";
 
 /** forEditor 把 [[x]] 伪装成 markdown 链接时用的 href 前缀 */
 export const WIKILINK_PREFIX = "noteshare-wikilink:";
@@ -41,16 +46,33 @@ export function WikiPreviewCard({
   path,
   top,
   left,
+  missing,
 }: {
   name: string;
-  path: string;
+  path: string | null;
   top: number;
   left: number;
+  missing?: boolean;
 }) {
-  const [lines, setLines] = useState<string[] | null>(previewCache.get(path) ?? null);
+  const { t } = useSettings();
+  const [lines, setLines] = useState<string[] | null>(
+    missing || !path ? [] : previewCache.get(path) ?? null
+  );
+
+  if (missing) {
+    return (
+      <div
+        className="wiki-preview"
+        style={{ top, left: Math.max(8, Math.min(left, window.innerWidth - 330)) }}
+      >
+        <div className="wiki-preview-title">{name}</div>
+        <div className="wiki-preview-line text-faint">{t("wikilinkMissingCard")}</div>
+      </div>
+    );
+  }
 
   useEffect(() => {
-    if (lines) return;
+    if (lines || !path) return;
     let dead = false;
     void (async () => {
       const out: string[] = [];
@@ -132,6 +154,10 @@ export const Wikilink = Node.create({
     ];
   },
 
+  addNodeView() {
+    return ReactNodeViewRenderer(WikiLinkView);
+  },
+
   addStorage() {
     return {
       markdown: {
@@ -143,3 +169,22 @@ export const Wikilink = Node.create({
     };
   },
 });
+
+/** 节点视图：渲染初始化时即检测目标笔记是否存在（notes 列表变化时重检），缺失标记样式 */
+function WikiLinkView({ node }: any) {
+  const { notes } = useContext(EditorStateContext);
+  const { t } = useSettings();
+  const name = String(node.attrs.name ?? "");
+  const missing = !notes?.some((n: NoteEntry) => n.name === name);
+  return (
+    <NodeViewWrapper
+      as="span"
+      className={`wikilink ${missing ? "wikilink-missing" : ""}`}
+      data-name={name}
+      data-missing={missing ? "1" : undefined}
+      data-tip={missing ? t("wikilinkMissingTip") : undefined}
+    >
+      {name}
+    </NodeViewWrapper>
+  );
+}
