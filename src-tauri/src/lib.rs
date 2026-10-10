@@ -33,7 +33,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             vault_name, set_vault, tree, read_note, write_note, create_note, create_folder,
-            rename_path, delete_path, search, read_scene, save_scene, save_asset, read_asset,
+            rename_path, move_path, delete_path, search, read_scene, save_scene, save_asset, read_asset,
             save_text_file, save_binary_file
         ])
         .run(tauri::generate_context!())
@@ -294,6 +294,25 @@ fn create_note(state: State<AppState>, folder: String, title: String) -> Result<
     let template = format!("---\ntags: []\ncreated: {now}\nupdated: {now}\n---\n\n");
     fs::write(&abs, template).map_err(|e| e.to_string())?;
     Ok(to_posix(&abs.strip_prefix(&v).map_err(|e| e.to_string())?))
+}
+
+#[tauri::command]
+#[tauri::command]
+fn move_path(state: State<AppState>, from: String, to_folder: String) -> Result<String, String> {
+    let v = vault_of(&state)?;
+    let abs = resolve_inside(&v, &from)?;
+    let dest_dir = if to_folder.is_empty() {
+        v.clone()
+    } else {
+        resolve_inside(&v, &to_folder)?
+    };
+    if !dest_dir.is_dir() {
+        return Err("目标不是文件夹".into());
+    }
+    fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let target = unique_abs(&dest_dir.join(abs.file_name().unwrap_or_default()));
+    fs::rename(&abs, &target).map_err(|e| e.to_string())?;
+    Ok(to_posix(&target.strip_prefix(&v).map_err(|e| e.to_string())?))
 }
 
 #[tauri::command]

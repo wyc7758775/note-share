@@ -35,6 +35,7 @@ export const webBackend: Backend = {
   createNote: (folder, title) => call<string>("note-create", { folder, title }),
   createFolder: (parent, name) => call<string>("folder-create", { parent, name }),
   renamePath: (from, newName) => call<string>("rename", { from, newName }),
+  movePath: (from, toFolder) => call<string>("move", { from, toFolder }),
   deletePath: (path) => call<void>("delete", { path }),
   search: (q) => call<SearchHit[]>("search", { q }),
   readScene: (path) => call<string>("scene", { path }),

@@ -47,9 +47,12 @@ export default function App() {
     void domain.directory.init();
   }, [domain]);
   useEffect(() => {
-    const off = domain.bus.on(["noteCreated", "noteRenamed", "noteTrashed"], () => {
-      void refreshTree();
-    });
+    const off = domain.bus.on(
+      ["noteCreated", "noteRenamed", "noteMoved", "assetMoved", "noteTrashed"],
+      () => {
+        void refreshTree();
+      }
+    );
     return off;
   }, [domain, refreshTree]);
 

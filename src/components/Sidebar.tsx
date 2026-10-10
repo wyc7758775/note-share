@@ -197,6 +197,24 @@ export default function Sidebar(props: Props) {
         <>
           <div
             className="side-scroll"
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes("application/x-noteshare-tree")) e.preventDefault();
+            }}
+            onDrop={(e) => {
+              // 拖到树空白区 = 移回根目录
+              const raw = e.dataTransfer.getData("application/x-noteshare-tree");
+              if (!raw) return;
+              e.preventDefault();
+              try {
+                const { path, kind } = JSON.parse(raw);
+                const fromFolder = path.split("/").slice(0, -1).join("/");
+                if (!fromFolder) return; // 已在根
+                const svc = noteService;
+                void (kind === "note" ? svc.moveNote(path, "") : svc.moveAsset(path, ""));
+              } catch {
+                /* 非法数据忽略 */
+              }
+            }}
             onContextMenu={(e) => {
               // 目录树空白处右键：新建笔记 / 新建文件夹（树内行有自己的菜单且不冒泡）
               e.preventDefault();

@@ -25,10 +25,10 @@ export class NoteDirectory {
   /** 订阅领域事件并从文件树初始化（App 顶层调用一次） */
   async init() {
     if (this.off) return;
-    this.off = this.bus.on(["noteCreated", "noteRenamed", "noteTrashed"], (e) => {
+    this.off = this.bus.on(["noteCreated", "noteRenamed", "noteMoved", "noteTrashed"], (e) => {
       if (e.type === "noteCreated") {
         this.entries.push({ name: e.name, path: e.path });
-      } else if (e.type === "noteRenamed") {
+      } else if (e.type === "noteRenamed" || e.type === "noteMoved") {
         const hit = this.entries.find((n) => n.path === e.from);
         if (hit) {
           hit.path = e.to;

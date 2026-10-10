@@ -115,6 +115,16 @@ const handlers = {
     fs.mkdirSync(abs, { recursive: true });
     return toPosix(path.relative(VAULT, abs));
   },
+  // 把文件/笔记移动到指定文件夹（拖拽用）；撞名自动加序号
+  "move": async ({ from, toFolder }) => {
+    const abs = resolveInside(from);
+    const destDir = toFolder ? resolveInside(toFolder) : VAULT;
+    if (!fs.statSync(destDir).isDirectory()) throw new Error("目标不是文件夹");
+    fs.mkdirSync(destDir, { recursive: true });
+    const target = uniqueAbs(path.join(destDir, path.basename(abs)));
+    fs.renameSync(abs, target);
+    return toPosix(path.relative(VAULT, target));
+  },
   "rename": async ({ from, newName }) => {
     const abs = resolveInside(from);
     const isNote = from.toLowerCase().endsWith(".md");

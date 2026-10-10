@@ -10,8 +10,8 @@ export class ReadingPositions {
   private map = new Map<string, number>();
 
   constructor(bus: EventBus) {
-    bus.on(["noteRenamed", "noteTrashed"], (e) => {
-      if (e.type === "noteRenamed") {
+    bus.on(["noteRenamed", "noteMoved", "noteTrashed"], (e) => {
+      if (e.type === "noteRenamed" || e.type === "noteMoved") {
         const v = this.map.get(e.from);
         if (v !== undefined) {
           this.map.set(e.to, v);

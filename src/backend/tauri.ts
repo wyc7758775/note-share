@@ -25,6 +25,7 @@ export const tauriBackend: Backend = {
   createNote: (folder, title) => invoke<string>("create_note", { folder, title }),
   createFolder: (parent, name) => invoke<string>("create_folder", { parent, name }),
   renamePath: (from, newName) => invoke<string>("rename_path", { from, newName }),
+  movePath: (from, toFolder) => invoke<string>("move_path", { from, toFolder }),
   deletePath: (path) => invoke<void>("delete_path", { path }),
   search: (q) => invoke<SearchHit[]>("search", { q }),
   readScene: (path) => invoke<string>("read_scene", { path }),

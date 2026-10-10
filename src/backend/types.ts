@@ -47,6 +47,8 @@ export interface Backend {
   createFolder(parent: string, name: string): Promise<string>;
   /** 同一文件夹内重命名（含改标题） */
   renamePath(from: string, newName: string): Promise<string>;
+  /** 移动到指定文件夹（目录树拖拽）；撞名自动加序号 */
+  movePath(from: string, toFolder: string): Promise<string>;
   /** 移入 vault 内 .trash/（Obsidian 同款回收站约定） */
   deletePath(path: string): Promise<void>;
   search(q: string): Promise<SearchHit[]>;

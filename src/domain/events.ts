@@ -12,6 +12,17 @@ export interface NoteRenamed {
   to: string;
   name: string; // 新标题（不含 .md）
 }
+export interface NoteMoved {
+  type: "noteMoved";
+  from: string;
+  to: string;
+  name: string; // 标题不变（不含 .md）
+}
+export interface AssetMoved {
+  type: "assetMoved";
+  from: string;
+  to: string; // 附件（图片/画板）移动，引用它的笔记已同步改写
+}
 export interface NoteTrashed {
   type: "noteTrashed";
   path: string;
@@ -26,7 +37,14 @@ export interface SaveRequested {
   type: "saveRequested";
 }
 
-export type DomainEvent = NoteCreated | NoteRenamed | NoteTrashed | NotePublished | SaveRequested;
+export type DomainEvent =
+  | NoteCreated
+  | NoteRenamed
+  | NoteMoved
+  | AssetMoved
+  | NoteTrashed
+  | NotePublished
+  | SaveRequested;
 export type DomainEventType = DomainEvent["type"];
 
 export class EventBus {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../backend";
 import { showContextMenu } from "./ContextMenu";
 import { useSettings } from "../i18n";
+import { useDomain } from "../domain/provider";
 import { EDIT_SCENE_EVENT } from "./ExcalidrawBlock";
 import { I } from "./icons";
 
@@ -81,9 +82,15 @@ function TreeRow({
 }: Props & { item: TreeNode }) {
   void _items;
   const { t } = useSettings();
+  const { notes: noteService } = useDomain();
   const [open, setOpen] = useState(true);
   const renaming = renamingPath === item.path;
   const armed = confirmPath === item.path;
+  const [dropHint, setDropHint] = useState(false);
+  const dragging = useRef(false);
+
+  const isFolder = item.kind === "folder";
+  const parentFolder = item.path.split("/").slice(0, -1).join("/");
 
   if (renaming) {
     return (
@@ -99,13 +106,37 @@ function TreeRow({
   const rowCls = "tree-row group flex w-full items-center gap-1.5 rounded-md py-[5px] pr-1 text-left text-[13px]";
   const pad = { paddingLeft: 6 + depth * 14 };
 
-  if (item.kind === "folder") {
+  if (isFolder) {
     return (
       <div>
         <div
-          className={`${rowCls} ${open ? "text-ink" : "text-soft"}`}
+          className={`${rowCls} ${open ? "text-ink" : "text-soft"} ${dropHint ? "tree-row-drop" : ""}`}
           style={pad}
           title={item.name}
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes("application/x-noteshare-tree")) return;
+            e.preventDefault(); // 允许放置
+            e.dataTransfer.dropEffect = "move";
+            setDropHint(true);
+          }}
+          onDragLeave={() => setDropHint(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDropHint(false);
+            const raw = e.dataTransfer.getData("application/x-noteshare-tree");
+            if (!raw) return;
+            try {
+              const { path, kind } = JSON.parse(raw);
+              if (path === item.path) return; // 拖到自己（文件夹）无效
+              const fromFolder = path.split("/").slice(0, -1).join("/");
+              if (fromFolder === item.path) return; // 已在此文件夹
+              void (kind === "note"
+                ? noteService.moveNote(path, item.path)
+                : noteService.moveAsset(path, item.path));
+            } catch {
+              /* 非法数据忽略 */
+            }
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -159,9 +190,20 @@ function TreeRow({
     const active = currentPath === item.path;
     return (
       <div
-        className={`${rowCls} ${active ? "tree-row-active" : ""}`}
+        className={`${rowCls} ${active ? "tree-row-active" : ""} ${dragging.current ? "tree-row-dragging" : ""}`}
         style={pad}
         title={item.name.replace(/\.md$/i, "")}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(
+            "application/x-noteshare-tree",
+            JSON.stringify({ path: item.path, kind: "note" })
+          );
+          e.dataTransfer.effectAllowed = "move";
+          dragging.current = true;
+          setDropHint(false);
+        }}
+        onDragEnd={() => (dragging.current = false)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -196,9 +238,19 @@ function TreeRow({
   const active = isImg || isScene;
   return (
     <div
-      className={`${rowCls} ${active ? "cursor-pointer text-soft hover:bg-hover" : "text-faint"}`}
+      className={`${rowCls} ${active ? "cursor-pointer text-soft hover:bg-hover" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
       style={pad}
       title={isScene ? t("clickToEdit") : isImg ? t("clickToView") : item.path}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-noteshare-tree",
+          JSON.stringify({ path: item.path, kind: "asset" })
+        );
+        e.dataTransfer.effectAllowed = "move";
+        dragging.current = true;
+      }}
+      onDragEnd={() => (dragging.current = false)}
       onClick={() => {
         if (isImg) h.onViewAsset(item);
         else if (isScene)
