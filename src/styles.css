@@ -401,6 +401,9 @@ body {
   min-height: 55vh;
   font-size: 17px;
   line-height: 1.85;
+  /* 底部书写留白（约 5 行）：写到底也不用先按回车腾地方；
+     点击留白光标落在正文末尾，继续输入即可。纯内边距，不进文档、不导出 */
+  padding-bottom: 9em;
 }
 .ProseMirror > * + * {
   margin-top: 0.8em;

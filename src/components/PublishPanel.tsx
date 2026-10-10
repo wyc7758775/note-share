@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Editor as TipTapEditor } from "@tiptap/react";
 import { backend } from "../backend";
 import { useSettings } from "../i18n";
+import { useDomain } from "../domain/provider";
 import { getPublishConfig, setPublishConfig } from "../lib/config";
 import { tagsOf } from "../lib/frontmatter";
 import { composeArticleHtml, inlineAssets } from "../lib/exportHtml";
@@ -16,8 +17,9 @@ interface Props {
   onBack: () => void;
 }
 
-export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
+export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: Props) {
   const { t } = useSettings();
+  const { notes: noteService } = useDomain();
   const [exportState, setExportState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [exportMsg, setExportMsg] = useState("");
 
@@ -91,24 +93,16 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
     try {
       const html = await inlineAssets(editor.getHTML());
       const titleText = title.current.trim() || t("untitled");
-      const res = await fetch(`${base}/api/publish`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token.trim()}`,
-        },
-        body: JSON.stringify({
-          slug: slug.trim(),
-          title: titleText,
-          html,
-          tags: tagsOf(fmRef.current),
-          date: date(),
-        }),
+      const data = await noteService.publish({
+        path: pathRef.current,
+        base,
+        token: token.trim(),
+        slug: slug.trim(),
+        title: titleText,
+        html,
+        tags: tagsOf(fmRef.current),
+        date: date(),
       });
-      if (!res.ok) {
-        throw new Error(`${res.status} ${(await res.text()).slice(0, 120)}`);
-      }
-      const data = (await res.json()) as { url: string };
       const full = base + data.url;
       setPubUrl(full);
       setPubMsg(t("pubOk"));
@@ -116,7 +110,7 @@ export default function PublishPanel({ editor, fmRef, title, onBack }: Props) {
       setPublishConfig({ serverUrl: base, token: token.trim() });
       fmRef.current.slug = slug.trim();
       fmRef.current.publishedAt = new Date().toISOString();
-      window.dispatchEvent(new CustomEvent("noteshare:save-now"));
+      noteService.requestSave();
     } catch (e: any) {
       console.error(e);
       setPubState("error");

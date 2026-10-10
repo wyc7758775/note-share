@@ -1,12 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { backend, type TreeNode } from "./backend";
 import { useSettings } from "./i18n";
+import { createDomain, DomainProvider } from "./domain/provider";
 import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
 import SettingsModal from "./components/SettingsModal";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
-import { OPEN_NOTE_EVENT, TREE_CHANGED_EVENT } from "./components/WikiLink";
+import { OPEN_NOTE_EVENT } from "./components/WikiLink";
 import { I } from "./components/icons";
 
 // 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
@@ -14,6 +15,7 @@ const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
   const { t } = useSettings();
+  const domain = useMemo(() => createDomain(), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -39,6 +41,17 @@ export default function App() {
   const refreshTree = useCallback(async () => {
     setTree(await backend.tree());
   }, []);
+
+  // 领域装配：名录初始化；文件树订阅领域事件自动刷新（不再由各组件手动通知）
+  useEffect(() => {
+    void domain.directory.init();
+  }, [domain]);
+  useEffect(() => {
+    const off = domain.bus.on(["noteCreated", "noteRenamed", "noteTrashed"], () => {
+      void refreshTree();
+    });
+    return off;
+  }, [domain, refreshTree]);
 
   useEffect(() => {
     (async () => {
@@ -95,13 +108,6 @@ export default function App() {
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
   }, []);
 
-  // 文件树局部刷新（如 [[ 创建新笔记），不动当前笔记会话
-  useEffect(() => {
-    const onTree = () => void refreshTree();
-    window.addEventListener(TREE_CHANGED_EVENT, onTree);
-    return () => window.removeEventListener(TREE_CHANGED_EVENT, onTree);
-  }, [refreshTree]);
-
   // 鼠标侧键（X1/X2 = button 3/4）驱动笔记历史：拦截浏览器的默认网页历史行为
   useEffect(() => {
     const onAux = (e: MouseEvent) => {
@@ -143,6 +149,7 @@ export default function App() {
   };
 
   return (
+    <DomainProvider domain={domain}>
     <div className="flex h-full">
       {/* 侧栏外层做收起/展开的宽度动画；收起后隐藏内容防焦点进入 */}
       <div
@@ -228,5 +235,6 @@ export default function App() {
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
+    </DomainProvider>
   );
 }

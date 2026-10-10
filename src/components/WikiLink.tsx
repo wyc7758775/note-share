@@ -1,29 +1,22 @@
 // [[笔记名]] 双链节点：编辑器里渲染为可点击链接（不显示括号原文本），点击跳转目标笔记。
 // 磁盘格式保持 Obsidian 的 [[名字]]；进出编辑器走 forEditor/forSave 的链接伪装互转。
 // 目标笔记不存在时（被删）：渲染即检测并标记缺失样式，悬停提示"点击创建"，点击重建。
-import { useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { backend } from "../backend";
 import { useSettings } from "../i18n";
 import { parseNote } from "../lib/frontmatter";
 import { safeDecode } from "../lib/markdown";
-import { EditorStateContext } from "./ExcalidrawBlock";
-import type { NoteEntry } from "./WikiLinkMenu";
+import { useDomain, useDirectoryVersion } from "../domain/provider";
 
 /** forEditor 把 [[x]] 伪装成 markdown 链接时用的 href 前缀 */
 export const WIKILINK_PREFIX = "noteshare-wikilink:";
 
-/** 跳转到某篇笔记的事件（detail = vault 相对路径） */
+/** 跳转到某篇笔记的事件（detail = vault 相对路径）；导航类交互，保留 window 事件 */
 export const OPEN_NOTE_EVENT = "noteshare:open-note";
 export function emitOpenNote(path: string) {
   window.dispatchEvent(new CustomEvent(OPEN_NOTE_EVENT, { detail: path }));
-}
-
-/** 文件树需要局部刷新的事件（如 [[ 创建了新笔记） */
-export const TREE_CHANGED_EVENT = "noteshare:tree-changed";
-export function emitTreeChanged() {
-  window.dispatchEvent(new CustomEvent(TREE_CHANGED_EVENT));
 }
 
 // ---- 悬停预览卡（前 4 行，带内存缓存） ----
@@ -170,12 +163,13 @@ export const Wikilink = Node.create({
   },
 });
 
-/** 节点视图：渲染初始化时即检测目标笔记是否存在（notes 列表变化时重检），缺失标记样式 */
+/** 节点视图：渲染初始化时即向名录解析目标存在性（名录变化时重检），缺失标记样式 */
 function WikiLinkView({ node }: any) {
-  const { notes } = useContext(EditorStateContext);
+  const { directory } = useDomain();
+  useDirectoryVersion(); // 名录任何变化触发重渲染
   const { t } = useSettings();
   const name = String(node.attrs.name ?? "");
-  const missing = !notes?.some((n: NoteEntry) => n.name === name);
+  const missing = directory.resolve(name).kind === "dangling";
   return (
     <NodeViewWrapper
       as="span"

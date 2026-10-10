@@ -17,16 +17,10 @@ export const EMPTY_SCENE_JSON = JSON.stringify({
   files: {},
 });
 
-/** 画板相关全局状态：rev 是内容版本号（保存后 +1 刷新预览），locked 是编辑器锁定态；
- *  notes 是当前笔记名单（wikilink 节点用它检测目标是否存在） */
-export const EditorStateContext = createContext<{
-  rev: number;
-  locked: boolean;
-  notes: { name: string; path: string }[];
-}>({
+/** 画板相关全局状态：rev 是内容版本号（保存后 +1 刷新预览），locked 是编辑器锁定态 */
+export const EditorStateContext = createContext<{ rev: number; locked: boolean }>({
   rev: 0,
   locked: false,
-  notes: [],
 });
 
 /** 节点视图请求打开画板编辑器的事件 */

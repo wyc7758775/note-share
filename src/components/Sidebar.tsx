@@ -3,7 +3,7 @@ import { backend, type SearchHit, type TreeNode } from "../backend";
 import { useSettings } from "../i18n";
 import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
-import { emitTreeChanged } from "./WikiLink";
+import { useDomain } from "../domain/provider";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -34,6 +34,7 @@ interface Props {
   currentPath: string | null;
   width: number;
   onOpenNote: (path: string) => void;
+  /** 文件夹级变化（新建文件夹等非笔记域操作）后刷新树 */
   onTreeChanged: () => Promise<void>;
   onDeletedCurrent: () => Promise<void>;
   onPickVault: () => void;
@@ -43,8 +44,9 @@ interface Props {
 }
 
 export default function Sidebar(props: Props) {
-  const { vaultName, tree, currentPath, onOpenNote, onTreeChanged, width, onResize } = props;
+  const { vaultName, tree, currentPath, onOpenNote, width, onResize } = props;
   const { t } = useSettings();
+  const { notes: noteService } = useDomain();
   const [tab, setTab] = useState<"files" | "search">("files");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
@@ -89,10 +91,8 @@ export default function Sidebar(props: Props) {
       onOpenNote(p);
     },
     onNewNote: async (folder) => {
-      const path = await backend.createNote(folder, t("untitledNote"));
-      await onTreeChanged();
-      emitTreeChanged(); // 编辑器里的双链存在性状态同步刷新
-      onOpenNote(path);
+      const path = await noteService.create(t("untitledNote"), folder);
+      if (path) onOpenNote(path); // 树/名录由 noteCreated 事件驱动刷新
     },
     onRequestRename: (item) => {
       armDelete(null);
@@ -105,10 +105,12 @@ export default function Sidebar(props: Props) {
       if (!n) return;
       const old = item.kind === "note" ? item.name.replace(/\.md$/i, "") : item.name;
       if (n === old) return;
-      const target = await backend.renamePath(item.path, n);
-      await onTreeChanged();
-      if (item.kind === "note") emitTreeChanged();
-      if (currentPath === item.path) onOpenNote(target);
+      if (item.kind === "note") {
+        const target = await noteService.rename(item.path, n);
+        if (target && currentPath === item.path) onOpenNote(target);
+      } else {
+        await backend.renamePath(item.path, n); // 文件夹重命名不属于笔记聚合，走 backend
+      }
     },
     onDelete: async (path) => {
       armDelete(null);
@@ -116,9 +118,11 @@ export default function Sidebar(props: Props) {
         currentPath === path ||
         currentPath?.startsWith(path + "/") ||
         currentPath?.startsWith(path + "\\");
-      await backend.deletePath(path);
-      await onTreeChanged();
-      emitTreeChanged();
+      if (/\.md$/i.test(path)) {
+        await noteService.trash(path); // 笔记走领域事件
+      } else {
+        await backend.deletePath(path); // 文件夹
+      }
       if (wasCurrent) await props.onDeletedCurrent();
     },
     onArmDelete: armDelete,
@@ -216,7 +220,7 @@ export default function Sidebar(props: Props) {
                   setNewFolderMode(false);
                   if (v.trim()) {
                     await backend.createFolder("", v.trim());
-                    await onTreeChanged();
+                    await props.onTreeChanged();
                   }
                 }}
                 onCancel={() => setNewFolderMode(false)}

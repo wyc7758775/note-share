@@ -7,12 +7,13 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
-import { backend, type TreeNode } from "../backend";
+import { backend } from "../backend";
 import { useSettings, translate, currentLang } from "../i18n";
 import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
-import { rememberScroll, recallScroll, moveScrollMemory, forgetScroll } from "../lib/scroll-memory";
+import { useDomain, useDirectoryVersion } from "../domain/provider";
+import { EditingSession } from "../domain/session";
 import { sanitizeFileName } from "../lib/files";
 import {
   CustomImage,
@@ -22,8 +23,8 @@ import {
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
-import { Wikilink, WikiPreviewCard, emitOpenNote, emitTreeChanged, TREE_CHANGED_EVENT } from "./WikiLink";
-import { createWikiLinkMenu, type NoteEntry } from "./WikiLinkMenu";
+import { Wikilink, WikiPreviewCard, emitOpenNote } from "./WikiLink";
+import { createWikiLinkMenu } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import { showContextMenu } from "./ContextMenu";
@@ -65,6 +66,13 @@ export default function Editor({
   onForward,
 }: Props) {
   const { t } = useSettings();
+  const { directory, notes: noteService, positions, bus } = useDomain();
+  useDirectoryVersion(); // 名录变化触发重渲染（双链存在性等）
+
+  // 编辑会话：锁定模式 + 待落盘快照 + 阅读位置（领域对象，见 domain/session.ts）
+  const sessionRef = useRef<EditingSession | null>(null);
+  if (!sessionRef.current) sessionRef.current = new EditingSession(initialPath, positions);
+  const session = sessionRef.current;
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
@@ -79,7 +87,7 @@ export default function Editor({
   const [tagsText, setTagsText] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [loaded, setLoaded] = useState(false);
-  const [locked, setLocked] = useState(false); // 默认可编辑
+  const [locked, setLocked] = useState(false); // 会话模式的视图镜像（权威在 session.mode）
   const [view, setView] = useState<View>("note");
   const [editingScene, setEditingScene] = useState<string | null>(null);
   const [sceneRev, setSceneRev] = useState(0);
@@ -99,53 +107,22 @@ export default function Editor({
     setWikiPreview(null);
   };
 
-  // "[[" 双链菜单的笔记列表（挂载时拉取，呼出菜单时异步刷新，下次过滤生效）；
-  // notesList 同时进 context，wikilink 节点渲染时据此检测目标是否存在
-  const notesRef = useRef<NoteEntry[]>([]);
-  const [notesList, setNotesList] = useState<NoteEntry[]>([]);
-  const refreshNotes = useCallback(() => {
-    void (async () => {
-      const flat: NoteEntry[] = [];
-      const walk = (nodes: TreeNode[]) => {
-        for (const n of nodes) {
-          if (n.kind === "note") flat.push({ name: n.name.replace(/\.md$/i, ""), path: n.path });
-          else if (n.kind === "folder") walk(n.children ?? []);
-        }
-      };
-      walk(await backend.tree());
-      notesRef.current = flat;
-      setNotesList(flat);
-    })();
-  }, []);
-  useEffect(() => {
-    refreshNotes();
-  }, [refreshNotes]);
-  // 笔记在别处（如目录树）被删/改名后重新拉取，缺失链接状态随之刷新
-  useEffect(() => {
-    const onTree = () => refreshNotes();
-    window.addEventListener(TREE_CHANGED_EVENT, onTree);
-    return () => window.removeEventListener(TREE_CHANGED_EVENT, onTree);
-  }, [refreshNotes]);
+  // 名录（directory）由领域层事件驱动维护，这里不再自建名单；
+  // "[[" 菜单候选、双链解析、缺失检测全部问它。
 
-  /** 在当前笔记的同级目录创建笔记，更新名单并通知侧栏 */
+  /** 在当前笔记的同级目录创建笔记（服务发事件，名录/文件树自动更新） */
   const createNoteByName = useCallback(
     async (name: string): Promise<string | null> => {
-      const safe = sanitizeFileName(name);
-      if (!safe) return null;
       const dir = pathRef.current.split("/").slice(0, -1).join("/");
-      const path = await backend.createNote(dir, safe);
-      notesRef.current.push({ name: safe, path });
-      setNotesList([...notesRef.current]);
-      emitTreeChanged();
-      return path;
+      return noteService.create(name, dir);
     },
-    []
+    [noteService]
   );
 
   const wikiLinkExtension = useMemo(
     () =>
       createWikiLinkMenu(
-        () => notesRef.current,
+        () => directory.all(),
         (ed, item) => {
           if (item.kind === "note") {
             ed
@@ -283,8 +260,8 @@ export default function Editor({
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const name = el?.getAttribute("data-name");
           if (!name) return false;
-          const hit = notesRef.current.find((n) => n.name === name);
-          if (hit) {
+          const hit = directory.resolve(name);
+          if (hit.kind === "resolved") {
             emitOpenNote(hit.path);
             return true;
           }
@@ -311,14 +288,14 @@ export default function Editor({
           const name = el.getAttribute("data-name");
           if (!name) return false;
           const r = el.getBoundingClientRect();
-          const hit = notesRef.current.find((n) => n.name === name);
+          const hit = directory.resolve(name);
           h.timer = window.setTimeout(() => {
             setWikiPreview({
               name,
-              path: hit?.path ?? null,
+              path: hit.kind === "resolved" ? hit.path : null,
               top: r.bottom + 8,
               left: r.left,
-              missing: !hit,
+              missing: hit.kind === "dangling",
             });
           }, 100);
           return false;
@@ -340,16 +317,16 @@ export default function Editor({
       if (wanted && wanted !== fileTitle) {
         const safe = sanitizeFileName(wanted);
         if (safe) {
-          const oldPath = pathRef.current;
-          const newPath = await backend.renamePath(pathRef.current, `${safe}.md`);
-          pathRef.current = newPath;
-          moveScrollMemory(oldPath, newPath);
-          refreshNotes(); // 笔记名单换新路径，双链存在性状态同步
-          await onRenamed(newPath);
+          // 重命名走应用服务：发 noteRenamed，名录/文件树/阅读位置自动跟随
+          const newPath = await noteService.rename(pathRef.current, safe);
+          if (newPath) {
+            pathRef.current = newPath;
+            await onRenamed(newPath);
+          }
         }
       }
       const md = forSave((editor.storage as any).markdown.getMarkdown() as string);
-      pendingMdRef.current = null; // 已落盘，清掉快照
+      session.pendingMarkdown = null; // 已落盘，清掉快照
       const fm = fmRef.current;
       setTags(fm, splitTags(tagsRef.current));
       const now = new Date().toISOString();
@@ -365,9 +342,8 @@ export default function Editor({
     }
   }, [editor, onRenamed, locked]);
 
-  // 待保存内容快照：编辑事件发生时（编辑器必然存活）立即留存 markdown 文本，
+  // 待保存内容快照：编辑事件发生时（编辑器必然存活）立即留存 markdown 文本到会话对象，
   // 卸载兜底直接写快照——销毁中的编辑器再取内容会拿到旧文档。
-  const pendingMdRef = useRef<string | null>(null);
   const editorRefLive = useRef<any>(null);
   editorRefLive.current = editor;
 
@@ -375,12 +351,13 @@ export default function Editor({
     if (loadingRef.current || locked) return;
     setSaveState("dirty");
     try {
-      pendingMdRef.current = editorRefLive.current?.storage?.markdown?.getMarkdown();
+      session.pendingMarkdown = editorRefLive.current?.storage?.markdown?.getMarkdown();
     } catch {
       /* 快照失败则留给防抖保存 */
     }
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => void saveNow(), 1200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveNow, locked]);
 
   // 载入笔记
@@ -417,11 +394,14 @@ export default function Editor({
       }
       loadingRef.current = false;
       setLoaded(true);
-      // 恢复上次的阅读位置（等内容渲染后下一帧再设，高度才够）
+      // 恢复上次的阅读位置：下一帧先设一次；图片等异步撑高后再校正一次（避免被 clamp）
       requestAnimationFrame(() => {
-        if (!cancelled && scrollRef.current) {
-          scrollRef.current.scrollTop = recallScroll(initialPath);
-        }
+        if (cancelled || !scrollRef.current) return;
+        const target = positions.recall(initialPath);
+        scrollRef.current.scrollTop = target;
+        window.setTimeout(() => {
+          if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
+        }, 300);
       });
     })().catch((e) => console.error("读取笔记失败", e));
     return () => {
@@ -446,12 +426,12 @@ export default function Editor({
     };
   }, [editor, scheduleSave]);
 
-  // 卸载兜底：防抖窗口内切走笔记时，把编辑时刻的快照直接落盘（不碰已销毁的编辑器）
+  // 卸载兜底：防抖窗口内切走笔记时，把会话里编辑时刻的快照直接落盘（不碰已销毁的编辑器）
   useEffect(() => {
     return () => {
-      const md = pendingMdRef.current;
+      const md = session.pendingMarkdown;
       if (md === null) return;
-      pendingMdRef.current = null;
+      session.pendingMarkdown = null;
       const fm = fmRef.current;
       setTags(fm, splitTags(tagsRef.current));
       const now = new Date().toISOString();
@@ -459,6 +439,7 @@ export default function Editor({
       fm.updated = now;
       void backend.writeNote(pathRef.current, buildRaw(fm, forSave(md)));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）
@@ -472,7 +453,7 @@ export default function Editor({
       } else if (k === "e") {
         e.preventDefault();
         void saveNow();
-        setLocked((v) => !v);
+        setLocked(session.toggleLock() === "locked");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -501,13 +482,13 @@ export default function Editor({
     const onSave = () => void saveNow();
     window.addEventListener(EDIT_SCENE_EVENT, onEdit);
     window.addEventListener(VIEW_IMAGE_EVENT, onViewImg);
-    window.addEventListener("noteshare:save-now", onSave);
+    const offSave = bus.on("saveRequested", onSave);
     return () => {
       window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
       window.removeEventListener(VIEW_IMAGE_EVENT, onViewImg);
-      window.removeEventListener("noteshare:save-now", onSave);
+      offSave();
     };
-  }, [saveNow]);
+  }, [saveNow, bus]);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
@@ -568,7 +549,7 @@ export default function Editor({
 
   // ---- 笔记视图 ----
   return (
-    <EditorStateContext.Provider value={{ rev: sceneRev, locked, notes: notesList }}>
+    <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
       <div className="view-swap flex h-full flex-col">
         {/* 顶栏 */}
         <div
@@ -617,7 +598,7 @@ export default function Editor({
                     icon: locked ? I.unlock : I.lock,
                     onClick: () => {
                       void saveNow();
-                      setLocked((v) => !v);
+                      setLocked(session.toggleLock() === "locked");
                     },
                   },
                   { separator: true },
@@ -643,8 +624,7 @@ export default function Editor({
                           danger: true,
                           onClick: () => {
                             void (async () => {
-                              forgetScroll(pathRef.current);
-                              await backend.deletePath(pathRef.current);
+                              await noteService.trash(pathRef.current); // 事件驱动：名录/树/阅读位置自动清理
                               await onDeleted();
                             })();
                           },
@@ -666,7 +646,7 @@ export default function Editor({
           ref={scrollRef}
           className="min-h-0 flex-1 overflow-y-auto"
           onScroll={(e) => {
-            rememberScroll(pathRef.current, e.currentTarget.scrollTop);
+            positions.remember(pathRef.current, e.currentTarget.scrollTop);
             setWikiPreview(null); // 滚动时预览卡不再跟随，直接关
           }}
           onMouseLeave={hideWikiPreview}
