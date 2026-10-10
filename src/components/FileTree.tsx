@@ -212,6 +212,8 @@ function TreeRow({
           e.stopPropagation();
           showContextMenu(e.clientX, e.clientY, [
             { label: t("open"), onClick: () => h.onOpenNote(item.path) },
+            { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
+            { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
             { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
             { label: t("trashLabel"), danger: true, onClick: () => h.onDelete(item.path) },
@@ -264,13 +266,24 @@ function TreeRow({
         else if (isScene) emitEditScene(item.path, e.ctrlKey || e.metaKey); // 画板进标签（Ctrl=新标签）
       }}
       onContextMenu={(e) => {
-        if (!isImg) return;
         e.preventDefault();
         e.stopPropagation();
-        showContextMenu(e.clientX, e.clientY, [
-          { label: t("viewAsset"), onClick: () => h.onViewAsset(item) },
-          { label: t("downloadImage"), onClick: () => h.onDownloadAsset(item) },
-        ]);
+        if (isImg) {
+          showContextMenu(e.clientX, e.clientY, [
+            { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
+            { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+            { separator: true },
+            { label: t("viewAsset"), onClick: () => h.onViewAsset(item) },
+            { label: t("downloadImage"), onClick: () => h.onDownloadAsset(item) },
+          ]);
+          return;
+        }
+        if (isScene) {
+          showContextMenu(e.clientX, e.clientY, [
+            { label: t("openInNewTab"), onClick: () => emitEditScene(item.path, true) },
+            { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+          ]);
+        }
       }}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">

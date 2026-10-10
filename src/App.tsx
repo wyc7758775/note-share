@@ -166,8 +166,6 @@ export default function App() {
           pane={pane}
           active={pane.id === activePaneId}
           vaultName={vaultName}
-          sideCollapsed={sideCollapsed}
-          onToggleSidebar={() => setSideCollapsed((v) => !v)}
           onNewNote={async () => {
             const path = await backend.createNote("", t("untitledNote"));
             openNote(path);
@@ -254,7 +252,7 @@ export default function App() {
             onToggleSidebar={() => setSideCollapsed((v) => !v)}
           />
         </div>
-        <main className="relative flex min-w-0 flex-1 overflow-hidden">
+        <main className={`relative flex min-w-0 flex-1 overflow-hidden ${sideCollapsed ? "sidebar-collapsed" : ""}`}>
           {vaultName === null ? (
             <div className="view-swap flex h-full w-full flex-col items-center justify-center gap-4 text-soft">
               <div className="serif text-2xl text-ink">NoteShare</div>

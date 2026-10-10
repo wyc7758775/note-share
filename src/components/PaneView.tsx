@@ -1,17 +1,21 @@
-// 栏视图：标签条 + 内容（笔记/画板/欢迎页）+ 拖拽落区。
+// 栏视图：标签条 + 内容（笔记/画板/图片/欢迎页）+ 拖拽落区。
 // 拖标签悬停到栏上时按鼠标位置判定落区（四边 25% 条带 = 拆分新栏，中央 = 加入
 // 标签列表），半透明高亮预览——与 Obsidian 的拖拽分栏一致；拖到标签条上则由
 // 标签条自己处理（插入到指定位置），不进入这里的判定。
-import { Suspense, lazy, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type { Pane, DropZone } from "../domain/workspace";
 import { useDomain } from "../domain/provider";
 import { useSettings } from "../i18n";
+import { backend } from "../backend";
 import PaneTabs, { TAB_MIME } from "./PaneTabs";
 import Editor from "./Editor";
 import EmptyState from "./EmptyState";
-import { I } from "./icons";
+import { emitViewImage } from "./ExcalidrawBlock";
 
 const ScenePanel = lazy(() => import("./ExcalidrawPanel"));
+
+/** 标签可承载的图片附件 */
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
 /** 靠边多宽的比例内算"边缘落区"（拆分），其余为中央（加入标签） */
 const EDGE = 0.25;
@@ -20,8 +24,6 @@ interface Props {
   pane: Pane;
   active: boolean;
   vaultName: string | null;
-  sideCollapsed: boolean;
-  onToggleSidebar: () => void;
   /** 欢迎页"新建笔记" */
   onNewNote: () => void;
   /** 画板保存后刷新文件树 */
@@ -63,8 +65,6 @@ export default function PaneView({
   pane,
   active,
   vaultName,
-  sideCollapsed,
-  onToggleSidebar,
   onNewNote,
   onSceneSaved,
   canBack,
@@ -134,15 +134,6 @@ export default function PaneView({
 
       {activeTab === null ? (
         <div className="view-swap relative min-h-0 flex-1">
-          {active && (
-            <button
-              className="side-toggle-float"
-              data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-              onClick={onToggleSidebar}
-            >
-              {I.panelLeft}
-            </button>
-          )}
           <EmptyState vaultName={vaultName ?? ""} onNewNote={onNewNote} />
         </div>
       ) : /\.excalidraw$/i.test(activeTab.path) ? (
@@ -162,6 +153,10 @@ export default function PaneView({
             />
           </Suspense>
         </div>
+      ) : IMG_RE.test(activeTab.path) ? (
+        <div className="view-swap min-h-0 flex-1">
+          <ImagePane key={`${pane.id}:${activeTab.path}`} src={activeTab.path} />
+        </div>
       ) : (
         <Editor
           key={`${pane.id}:${activeTab.path}`}
@@ -179,6 +174,38 @@ export default function PaneView({
         <div className="pane-drop-layer">
           <div className="pane-drop-hint" style={zoneRect(zone)} />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 图片标签视图：附件以标签打开时的居中预览，双击用阅览器看大图 */
+function ImagePane({ src }: { src: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let dead = false;
+    void (async () => {
+      try {
+        const { base64, mime } = await backend.readAssetBase64(src);
+        if (!dead) setUrl(`data:${mime};base64,${base64}`);
+      } catch {
+        if (!dead) setUrl(src); // 外链等读不到就退回原始路径
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [src]);
+  return (
+    <div className="img-tab">
+      {url ? (
+        <img
+          src={url}
+          alt={src.split("/").pop() ?? ""}
+          onClick={() => emitViewImage(url)}
+        />
+      ) : (
+        <span className="text-sm text-faint">…</span>
       )}
     </div>
   );

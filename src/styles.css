@@ -293,32 +293,7 @@ body.resizing .side-anim {
   transform: scale(0.97);
 }
 
-/* 即时提示气泡（Obsidian 式黑底小气泡；原生 title 在 WebKit 上延迟近 1 秒，故自绘） */
-[data-tip] {
-  position: relative;
-}
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 7px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-2px);
-  z-index: 220;
-  padding: 4px 9px;
-  border-radius: 6px;
-  background: var(--tip-bg);
-  color: var(--tip-fg);
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.14s ease 0.35s, transform 0.14s ease 0.35s;
-}
-[data-tip]:hover::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
+/* data-tip 提示已全局移除（按需求）：属性保留仅作语义标记，不再渲染气泡 */
 
 html,
 body,
@@ -1042,6 +1017,27 @@ body {
   border: 1px solid var(--line);
   background: var(--paper);
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+}
+/* 侧栏收起时给左上角的展开按钮让位 */
+.sidebar-collapsed .editor-nav-float {
+  left: 46px;
+}
+
+/* ---------- 图片标签视图（附件以标签打开） ---------- */
+.img-tab {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--paper-side);
+}
+.img-tab img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: zoom-in;
 }
 
 /* ---------- 拖拽拆分落区（拖标签到栏的边缘/中央，与 Obsidian 一致） ---------- */
