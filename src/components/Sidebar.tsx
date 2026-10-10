@@ -33,7 +33,7 @@ interface Props {
   tree: TreeNode[];
   currentPath: string | null;
   width: number;
-  onOpenNote: (path: string, opts?: { newPane?: boolean }) => void;
+  onOpenNote: (path: string, opts?: { newTab?: boolean; newPane?: boolean }) => void;
   /** 文件夹级变化（新建文件夹等非笔记域操作）后刷新树 */
   onTreeChanged: () => Promise<void>;
   onPickVault: () => void;
@@ -303,7 +303,12 @@ export default function Sidebar(props: Props) {
               key={h.path}
               className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-hover"
               title={h.path}
-              onClick={(e) => handlers.onOpenNote(h.path, { newPane: e.ctrlKey || e.metaKey })}
+              onClick={(e) =>
+                handlers.onOpenNote(h.path, {
+                  newTab: e.ctrlKey || e.metaKey,
+                  newPane: (e.ctrlKey || e.metaKey) && e.shiftKey,
+                })
+              }
             >
               <div className="truncate text-[13px] text-ink">{h.title}</div>
               <div className="truncate text-[11px] text-faint">{h.snippet}</div>

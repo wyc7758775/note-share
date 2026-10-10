@@ -23,10 +23,11 @@ export const EditorStateContext = createContext<{ rev: number; locked: boolean }
   locked: false,
 });
 
-/** 节点视图请求打开画板编辑器的事件 */
+/** 节点视图请求打开画板编辑器的事件（detail = { path, newTab }）；
+ *  从笔记内进入画板默认开新标签（保留笔记标签），App 统一处理 */
 export const EDIT_SCENE_EVENT = "noteshare:edit-scene";
-export function emitEditScene(src: string) {
-  window.dispatchEvent(new CustomEvent(EDIT_SCENE_EVENT, { detail: src }));
+export function emitEditScene(src: string, newTab = true) {
+  window.dispatchEvent(new CustomEvent(EDIT_SCENE_EVENT, { detail: { path: src, newTab } }));
 }
 
 /** 请求用共用阅览器查看图片的事件（detail = 图片 src） */

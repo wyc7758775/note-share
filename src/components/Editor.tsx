@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
@@ -19,7 +19,7 @@ import {
   CustomImage,
   EditorStateContext,
   EMPTY_SCENE_JSON,
-  EDIT_SCENE_EVENT,
+  emitEditScene,
   VIEW_IMAGE_EVENT,
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
@@ -32,7 +32,7 @@ import { createSlashMenu } from "./SlashMenu";
 import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
-type View = "note" | "publish" | "scene";
+type View = "note" | "publish";
 
 // 快捷键修饰键的显示名（苹果设备是 Command）
 const MOD_KEY = /mac|iphone|ipad|ipod/i.test(
@@ -46,17 +46,9 @@ interface Props {
   initialPath: string;
   /** 是否为活动栏：顶栏工具（返回/前进/收起侧栏）与 Ctrl+S/E 快捷键只在活动栏生效 */
   active: boolean;
-  /** 多栏时显示关闭按钮 */
-  closable?: boolean;
-  onClose?: () => void;
 }
 
-export default function Editor({
-  initialPath,
-  active,
-  closable,
-  onClose,
-}: Props) {
+export default function Editor({ initialPath, active }: Props) {
   const { t } = useSettings();
   const { directory, notes: noteService, positions, bus } = useDomain();
   useDirectoryVersion(); // 名录变化触发重渲染（双链存在性等）
@@ -81,7 +73,6 @@ export default function Editor({
   const [loaded, setLoaded] = useState(false);
   const [locked, setLocked] = useState(false); // 会话模式的视图镜像（权威在 session.mode）
   const [view, setView] = useState<View>("note");
-  const [editingScene, setEditingScene] = useState<string | null>(null);
   const [sceneRev, setSceneRev] = useState(0);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
 
@@ -247,21 +238,22 @@ export default function Editor({
     editorProps: {
       attributes: { class: "prose-note focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
-        // 点击双链：目标存在则跳转（Ctrl/⌘+点击开新栏）；已被删则当场重建并跳转
+        // 点击双链：目标存在则跳转（Ctrl/⌘+点击当前栏新标签，Ctrl+Shift+点击新栏）；已被删则当场重建并跳转
         click: (_view, event) => {
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const name = el?.getAttribute("data-name");
           if (!name) return false;
-          const newPane = (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey;
+          const ctrl = (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey;
+          const opts = { newTab: ctrl, newPane: ctrl && (event as MouseEvent).shiftKey };
           const hit = directory.resolve(name);
           if (hit.kind === "resolved") {
-            emitOpenNote(hit.path, newPane);
+            emitOpenNote(hit.path, opts);
             return true;
           }
           if (el?.hasAttribute("data-missing")) {
             void (async () => {
               const path = await createNoteByName(name);
-              if (path) emitOpenNote(path, newPane);
+              if (path) emitOpenNote(path, opts);
             })();
             return true;
           }
@@ -454,12 +446,8 @@ export default function Editor({
     return () => window.removeEventListener("keydown", onKey);
   }, [saveNow, active]);
 
-  // 画板块请求编辑 / 图片请求查看 / 发布面板请求保存
+  // 图片请求查看 / 发布面板请求保存 / 画板保存后刷新笔记内预览
   useEffect(() => {
-    const onEdit = (e: Event) => {
-      setEditingScene((e as CustomEvent<string>).detail);
-      setView("scene");
-    };
     const onViewImg = (e: Event) => {
       const clicked = (e as CustomEvent<string>).detail;
       // 收集当前笔记里的所有普通图片（不含画板预览）组成图片廊
@@ -474,13 +462,14 @@ export default function Editor({
       if (images.length) setViewer({ images, index });
     };
     const onSave = () => void saveNow();
-    window.addEventListener(EDIT_SCENE_EVENT, onEdit);
+    const onSceneSaved = () => setSceneRev((v) => v + 1);
     window.addEventListener(VIEW_IMAGE_EVENT, onViewImg);
     const offSave = bus.on("saveRequested", onSave);
+    const offScene = bus.on("sceneSaved", onSceneSaved);
     return () => {
-      window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
       window.removeEventListener(VIEW_IMAGE_EVENT, onViewImg);
       offSave();
+      offScene();
     };
   }, [saveNow, bus]);
 
@@ -490,8 +479,8 @@ export default function Editor({
     if (!editor || locked) return;
     const saved = await backend.saveScene(null, EMPTY_SCENE_JSON, null);
     editor.chain().focus().setImage({ src: saved.scenePath }).run();
-    setEditingScene(saved.scenePath);
-    setView("scene");
+    // 新标签打开画板（保留当前笔记标签），关闭标签即回到笔记
+    emitEditScene(saved.scenePath);
   }, [editor, locked]);
 
   // 斜杠菜单的两类特殊插入
@@ -514,7 +503,7 @@ export default function Editor({
 
   if (!editor) return null;
 
-  // ---- 视图切换：发布 / 画板（整区推入，返回回到笔记） ----
+  // ---- 视图切换：发布（整区推入，返回回到笔记） ----
   if (view === "publish") {
     return (
       <div className="view-swap h-full">
@@ -524,18 +513,6 @@ export default function Editor({
           fmRef={fmRef}
           title={titleRef}
           onBack={() => setView("note")}
-        />
-      </div>
-    );
-  }
-  if (view === "scene" && editingScene !== null) {
-    return (
-      <div className="view-swap h-full">
-        <ExcalidrawPanelLazy
-          src={editingScene}
-          onBack={() => setView("note")}
-          backLabel={t("backToNote")}
-          onSaved={() => setSceneRev((v) => v + 1)}
         />
       </div>
     );
@@ -551,26 +528,19 @@ export default function Editor({
           style={{ borderColor: "var(--line)" }}
         >
           <div className="flex items-center gap-1">
-            <span
-              className={`max-w-[200px] truncate px-1 text-xs ${active ? "text-soft" : "text-faint"}`}
-              title={initialPath}
-            >
-              {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
-            </span>
-            {saveState === "error" && (
-              <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
-            )}
+            <div className="flex items-center gap-1">
+              <span
+                className={`max-w-[200px] truncate px-1 text-xs ${active ? "text-soft" : "text-faint"}`}
+                title={initialPath}
+              >
+                {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
+              </span>
+              {saveState === "error" && (
+                <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1">
-            {closable && (
-              <button
-                className="top-icon-btn"
-                data-tip={t("closePane")}
-                onClick={() => onClose?.()}
-              >
-                ✕
-              </button>
-            )}
             <button
               className="top-icon-btn"
               data-tip={t("more")}
@@ -780,26 +750,6 @@ function IconBtn({
 }
 
 // 画板面板按需加载（体积大）
-const ExcalidrawPanelLazyImpl = lazy(() => import("./ExcalidrawPanel"));
-function ExcalidrawPanelLazy(props: {
-  src: string;
-  onBack: () => void;
-  backLabel?: string;
-  onSaved: () => void;
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-full items-center justify-center text-sm text-faint">
-          {translate(currentLang(), "sceneLoading")}
-        </div>
-      }
-    >
-      <ExcalidrawPanelLazyImpl {...props} />
-    </Suspense>
-  );
-}
-
 function splitTags(s: string): string[] {
   return s
     .split(/[,，]/)

@@ -3,7 +3,7 @@ import type { TreeNode } from "../backend";
 import { showContextMenu } from "./ContextMenu";
 import { useSettings } from "../i18n";
 import { useDomain } from "../domain/provider";
-import { EDIT_SCENE_EVENT } from "./ExcalidrawBlock";
+import { emitEditScene } from "./ExcalidrawBlock";
 import { I } from "./icons";
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
@@ -46,7 +46,7 @@ export function InlineInputRow({
 }
 
 export interface TreeHandlers {
-  onOpenNote: (path: string, opts?: { newPane?: boolean }) => void;
+  onOpenNote: (path: string, opts?: { newTab?: boolean; newPane?: boolean }) => void;
   onNewNote: (folder: string) => void;
   onCommitRename: (item: TreeNode, name: string) => void;
   onRequestRename: (item: TreeNode) => void;
@@ -143,7 +143,7 @@ function TreeRow({
             showContextMenu(e.clientX, e.clientY, [
               { label: t("newNoteHere"), onClick: () => h.onNewNote(item.path) },
               { label: t("newScene"), onClick: () => void noteService.createScene(item.path).then((p) => {
-                if (p) window.dispatchEvent(new CustomEvent("noteshare:edit-scene", { detail: p }));
+                if (p) emitEditScene(p); // 新标签打开新画的画板
               }) },
               { separator: true },
               { label: t("rename"), onClick: () => h.onRequestRename(item) },
@@ -220,7 +220,12 @@ function TreeRow({
       >
         <button
           className="flex min-w-0 flex-1 items-center gap-1.5 pl-1"
-          onClick={(e) => h.onOpenNote(item.path, { newPane: e.ctrlKey || e.metaKey })}
+          onClick={(e) =>
+            h.onOpenNote(item.path, {
+              newTab: e.ctrlKey || e.metaKey, // Ctrl+点击：当前栏新标签
+              newPane: (e.ctrlKey || e.metaKey) && e.shiftKey, // Ctrl+Shift+点击：新栏
+            })
+          }
         >
           <span className={active ? "text-amber-700" : "text-faint"}>{I.note}</span>
           <span className="truncate">{item.name.replace(/\.md$/i, "")}</span>
@@ -254,10 +259,9 @@ function TreeRow({
         dragging.current = true;
       }}
       onDragEnd={() => (dragging.current = false)}
-      onClick={() => {
+      onClick={(e) => {
         if (isImg) h.onViewAsset(item);
-        else if (isScene)
-          window.dispatchEvent(new CustomEvent(EDIT_SCENE_EVENT, { detail: item.path }));
+        else if (isScene) emitEditScene(item.path, e.ctrlKey || e.metaKey); // 画板进标签（Ctrl=新标签）
       }}
       onContextMenu={(e) => {
         if (!isImg) return;

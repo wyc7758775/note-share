@@ -49,6 +49,11 @@ export interface PaneClosed {
   type: "paneClosed";
   paneId: number;
 }
+/** 画板场景已保存（PNG 预览已导出）；编辑器里的画板卡片据此刷新预览 */
+export interface SceneSaved {
+  type: "sceneSaved";
+  path: string;
+}
 
 export type DomainEvent =
   | NoteCreated
@@ -60,7 +65,8 @@ export type DomainEvent =
   | NotePublished
   | SaveRequested
   | PaneOpened
-  | PaneClosed;
+  | PaneClosed
+  | SceneSaved;
 export type DomainEventType = DomainEvent["type"];
 
 export class EventBus {

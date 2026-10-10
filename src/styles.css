@@ -998,6 +998,153 @@ body {
   background: rgb(var(--accent-rgb) / 0.35);
 }
 
+/* ---------- 栏内标签条（一栏多标签：笔记/画板堆叠） ---------- */
+.tab-bar {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  padding: 6px 4px 0 8px;
+  background: var(--paper-side);
+  border-bottom: 1px solid var(--line);
+}
+.tab-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-strip::-webkit-scrollbar {
+  display: none;
+}
+.tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 33px;
+  max-width: 200px;
+  padding: 0 7px 0 10px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.tab-item:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+.tab-item-on {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--line);
+}
+/* 激活标签底边盖住标签条底线，视觉上与内容区连成一体 */
+.tab-item-on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--paper);
+}
+.tab-item-drag {
+  opacity: 0.45;
+}
+/* 拖拽落点指示线 */
+.tab-item-drop::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.tab-item-drop-before::before {
+  left: -3px;
+}
+.tab-item-drop-after::before {
+  right: -3px;
+}
+.tab-ico {
+  display: flex;
+  color: var(--ink-faint);
+  flex: none;
+}
+.tab-ico-scene {
+  color: var(--accent);
+}
+.tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.tab-item:hover .tab-close,
+.tab-item-on .tab-close {
+  opacity: 0.75;
+}
+.tab-close:hover {
+  opacity: 1 !important;
+  color: #dc2626;
+  background: var(--surface-hover);
+}
+.tab-new {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  color: var(--ink-faint);
+}
+.tab-new:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+.tab-pane-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.tab-pane-close:hover {
+  color: #dc2626;
+  background: var(--surface-hover);
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 10px;

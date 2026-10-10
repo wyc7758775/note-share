@@ -1,5 +1,5 @@
-// 画板编辑面板：渲染在编辑器右侧（与笔记并排，不是全局遮罩）
-// 实时保存：改动后 ~1 秒自动存场景，~2.6 秒自动导出 PNG 预览；关闭时兜底保存
+// 画板编辑面板：以标签页形态渲染在栏内（打开/关闭由 Workspace 标签管理）
+// 实时保存：改动后 ~1 秒自动存场景，~2.6 秒自动导出 PNG 预览（发 sceneSaved 事件刷新笔记内预览）
 // 支持插入"笔记卡片"：标题 + 前 10 行预览的文本元素，带 noteshare:// 链接可点击跳转
 import { useEffect, useRef, useState } from "react";
 import { Excalidraw, exportToBlob, convertToExcalidrawElements } from "@excalidraw/excalidraw";
@@ -16,17 +16,16 @@ const NOTE_LINK = "noteshare://";
 
 interface Props {
   src: string;
-  onBack: () => void;
-  /** 返回按钮文案：从笔记推入时"← 返回笔记"，独立打开时"关闭" */
-  backLabel?: string;
+  /** PNG 落盘后回调（App 刷新文件树） */
   onSaved: () => void;
+  /** 关闭当前标签（Esc / 兜底保存后调用） */
+  onClose: () => void;
 }
 
 type SaveState = "saved" | "saving" | "error";
 
-export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Props) {
+export default function ExcalidrawPanel({ src, onSaved, onClose }: Props) {
   const { t, dark } = useSettings();
-  const backText = backLabel ?? t("close");
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -100,6 +99,7 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
       });
       const pngBase64 = await blobToBase64(blob);
       await backend.saveScene(src, buildSceneJson(), pngBase64);
+      bus.emit({ type: "sceneSaved", path: src }); // 笔记内的画板卡片刷新预览
       onSaved();
     } catch (e) {
       console.error(e);
@@ -121,17 +121,17 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
     pngTimer.current = window.setTimeout(() => void doSavePng(), 2600);
   };
 
-  const handleBack = async () => {
+  const handleClose = async () => {
     window.clearTimeout(sceneTimer.current);
     window.clearTimeout(pngTimer.current);
     await doSaveScene().catch(() => {});
     await doSavePng().catch(() => {});
-    onBack();
+    onClose();
   };
 
-  // Esc 返回：捕获阶段先于 Excalidraw 自己的 Esc 处理读状态——
+  // Esc 关闭：捕获阶段先于 Excalidraw 自己的 Esc 处理读状态——
   // 有选中元素或正在编辑文本时，这一次 Esc 留给画板（取消选中/结束编辑），
-  // 只有"空闲"状态下的 Esc 才退出画板返回笔记。
+  // 只有"空闲"状态下的 Esc 才关闭标签（先兜底保存）。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -144,7 +144,7 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
       if (busy) return;
       e.preventDefault();
       e.stopPropagation();
-      void handleBack();
+      void handleClose();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -160,7 +160,7 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
   );
 
   // ---- 插入笔记卡片：选择笔记 → 标题 + 前 10 行预览的文本元素（带跳转链接） ----
-  const { directory } = useDomain();
+  const { directory, bus } = useDomain();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickQuery, setPickQuery] = useState("");
 
@@ -218,7 +218,7 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
         <div className="flex min-w-0 items-center gap-2 text-sm text-soft">
           <span className="text-faint">✏</span>
-          <span>{t("sceneTitle")}</span>
+          <span className="truncate">{src.split("/").pop()?.replace(/\.excalidraw$/i, "")}</span>
           <span
             className={`text-xs ${
               saveState === "saving"
@@ -277,8 +277,8 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
             </span>
           )}
         </div>
-        <button className="btn-ghost !py-1" onClick={() => void handleBack()}>
-          {backText}
+        <button className="btn-ghost !py-1" onClick={() => void handleClose()}>
+          {t("close")}
         </button>
       </div>
       <div className="min-h-0 flex-1">
@@ -288,12 +288,13 @@ export default function ExcalidrawPanel({ src, onBack, backLabel, onSaved }: Pro
             initialData={initialData}
             onChange={handleChange}
             theme={dark ? "dark" : "light"}
-            // 点击笔记卡片（noteshare:// 链接）跳转到那篇笔记
+            // 点击笔记卡片（noteshare:// 链接）跳转：普通点击当前栏新标签（保留画板），Ctrl+点击新栏
             onLinkOpen={(element: any, event: any) => {
               const link = String(element?.link ?? "");
               if (link.startsWith(NOTE_LINK)) {
                 event?.preventDefault?.();
-                emitOpenNote(link.slice(NOTE_LINK.length), event?.ctrlKey || event?.metaKey);
+                const ctrl = event?.ctrlKey || event?.metaKey;
+                emitOpenNote(link.slice(NOTE_LINK.length), { newTab: !ctrl, newPane: ctrl });
               }
             }}
           />

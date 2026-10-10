@@ -6,21 +6,21 @@ import Sidebar from "./components/Sidebar";
 import Editor from "./components/Editor";
 import EmptyState from "./components/EmptyState";
 import SettingsModal from "./components/SettingsModal";
+import PaneTabs from "./components/PaneTabs";
 import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
 import { OPEN_NOTE_EVENT } from "./components/WikiLink";
 import { I } from "./components/icons";
 
-// 没打开笔记时点击手绘文件：主区直接显示画板编辑面板
-const ScenePanelStandalone = lazy(() => import("./components/ExcalidrawPanel"));
+// 画板编辑面板：以标签形态懒加载（Excalidraw 体积大）
+const ScenePanel = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
   const { t } = useSettings();
   const { workspace, bus, directory } = useDomain();
-  useWorkspaceVersion(); // 分栏布局变化触发重渲染
+  useWorkspaceVersion(); // 分栏/标签布局变化触发重渲染
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [vaultName, setVaultName] = useState<string | null>(null);
   const [tree, setTree] = useState<import("./backend").TreeNode[]>([]);
-  const [sceneView, setSceneView] = useState<string | null>(null);
 
   // 侧栏宽度与收起（记忆到本地）
   const [sideWidth, setSideWidth] = useState(() => {
@@ -40,10 +40,10 @@ export default function App() {
   // 笔记历史（MRU 去重栈）：双链跳转（阅读链路）进历史；树/搜索点击只切活动栏不动栈
   const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
 
+  // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击新栏
   const openNote = useCallback(
-    (path: string, opts?: { viaHistory?: boolean; newPane?: boolean }) => {
-      if (opts?.newPane) workspace.openInNewPane(path);
-      else workspace.openInActive(path);
+    (path: string, opts?: { viaHistory?: boolean; newTab?: boolean; newPane?: boolean }) => {
+      workspace.open(path, opts?.newPane ? "newPane" : opts?.newTab ? "newTab" : "replace");
       if (!opts?.viaHistory) return;
       setHistory((h) => {
         const stack = h.stack.filter((p) => p !== path); // MRU：移除旧位置
@@ -58,7 +58,7 @@ export default function App() {
       setHistory((h) => {
         const i = h.index + delta;
         if (i < 0 || i >= h.stack.length) return h;
-        workspace.openInActive(h.stack[i]); // 返回/前进作用于活动栏
+        workspace.open(h.stack[i]); // 返回/前进作用于活动栏当前标签
         return { ...h, index: i };
       });
     },
@@ -107,21 +107,21 @@ export default function App() {
     return () => document.removeEventListener("contextmenu", onCtx);
   }, []);
 
-  // 没打开笔记时点击手绘文件 → 主区显示独立画板面板
+  // 打开画板编辑：统一进标签（detail = { path, newTab }），不进阅读历史
   useEffect(() => {
     const onEdit = (e: Event) => {
-      if (workspace.all.some((p) => p.path)) return; // 有栏开着笔记时由 Editor 接管
-      setSceneView((e as CustomEvent<string>).detail);
+      const d = (e as CustomEvent<{ path: string; newTab?: boolean }>).detail;
+      workspace.open(d.path, d.newTab ? "newTab" : "replace");
     };
     window.addEventListener(EDIT_SCENE_EVENT, onEdit);
     return () => window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
   }, [workspace]);
 
-  // 双链点击跳转（阅读链路，进历史；Ctrl+点击开新栏）
+  // 双链点击跳转（阅读链路，进历史；Ctrl+点击当前栏新标签，Ctrl+Shift+点击新栏）
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const d = (e as CustomEvent<{ path: string; newPane?: boolean }>).detail;
-      openNote(d.path, { viaHistory: true, newPane: d.newPane });
+      const d = (e as CustomEvent<{ path: string; newTab?: boolean; newPane?: boolean }>).detail;
+      openNote(d.path, { viaHistory: true, newTab: d.newTab, newPane: d.newPane });
     };
     window.addEventListener(OPEN_NOTE_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
@@ -172,7 +172,7 @@ export default function App() {
           <Sidebar
             vaultName={vaultName}
             tree={tree}
-            currentPath={activePane.path}
+            currentPath={workspace.activePath}
             width={sideWidth}
             onOpenNote={(path, opts) => openNote(path, opts)}
             onTreeChanged={refreshTree}
@@ -188,24 +188,7 @@ export default function App() {
           />
         </div>
         <main className="flex min-w-0 flex-1 overflow-hidden">
-          {sceneView !== null ? (
-            <div className="view-swap h-full w-full">
-              <Suspense
-                fallback={
-                  <div className="flex h-full w-full items-center justify-center text-sm text-faint">
-                    {t("sceneLoading")}
-                  </div>
-                }
-              >
-                <ScenePanelStandalone
-                  src={sceneView}
-                  onBack={() => setSceneView(null)}
-                  backLabel={t("close")}
-                  onSaved={() => {}}
-                />
-              </Suspense>
-            </div>
-          ) : vaultName === null ? (
+          {vaultName === null ? (
             <div className="view-swap flex h-full w-full flex-col items-center justify-center gap-4 text-soft">
               <div className="serif text-2xl text-ink">NoteShare</div>
               <p className="text-sm">{t("noVaultHint")}</p>
@@ -227,6 +210,10 @@ export default function App() {
               {workspace.all.map((pane, idx) => {
                 const isActive = pane.id === activePane.id;
                 const prev = workspace.all[idx - 1];
+                const activeTab =
+                  pane.tabs.find((tb) => tb.id === pane.activeTabId) ??
+                  pane.tabs[pane.tabs.length - 1] ??
+                  null;
                 return (
                   <Fragment key={pane.id}>
                     {idx > 0 && (
@@ -264,26 +251,68 @@ export default function App() {
                       style={pane.width ? { flex: `0 0 ${pane.width}px` } : undefined}
                       onPointerDown={() => workspace.focus(pane.id)}
                     >
-                    {pane.path === null ? (
-                      <div className="view-swap relative h-full">
-                        <EmptyState
-                          vaultName={vaultName}
-                          onNewNote={async () => {
-                            const path = await backend.createNote("", t("untitledNote"));
-                            openNote(path);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <Editor
-                        key={`${pane.id}:${pane.path}`}
-                        initialPath={pane.path}
-                        active={isActive}
-                        closable={workspace.all.length > 1}
-                        onClose={() => workspace.close(pane.id)}
-                      />
-                    )}
-                  </section>
+                      {activeTab === null ? (
+                        <div className="flex h-full min-h-0 flex-col">
+                          <PaneTabs
+                            pane={pane}
+                            active={isActive}
+                            multiPane={workspace.all.length > 1}
+                            onClosePane={() => workspace.close(pane.id)}
+                          />
+                          <div className="view-swap relative min-h-0 flex-1">
+                            {isActive && (
+                              <button
+                                className="side-toggle-float"
+                                data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+                                onClick={() => setSideCollapsed((v) => !v)}
+                              >
+                                {I.panelLeft}
+                              </button>
+                            )}
+                            <EmptyState
+                              vaultName={vaultName}
+                              onNewNote={async () => {
+                                const path = await backend.createNote("", t("untitledNote"));
+                                openNote(path);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex h-full min-h-0 flex-col">
+                          <PaneTabs
+                            pane={pane}
+                            active={isActive}
+                            multiPane={workspace.all.length > 1}
+                            onClosePane={() => workspace.close(pane.id)}
+                          />
+                          {/\.excalidraw$/i.test(activeTab.path) ? (
+                            <div className="view-swap min-h-0 flex-1">
+                              <Suspense
+                                fallback={
+                                  <div className="flex h-full items-center justify-center text-sm text-faint">
+                                    {t("sceneLoading")}
+                                  </div>
+                                }
+                              >
+                                <ScenePanel
+                                  key={`${pane.id}:${activeTab.path}`}
+                                  src={activeTab.path}
+                                  onSaved={() => void refreshTree()}
+                                  onClose={() => workspace.closeTab(pane.id, activeTab.id)}
+                                />
+                              </Suspense>
+                            </div>
+                          ) : (
+                            <Editor
+                              key={`${pane.id}:${activeTab.path}`}
+                              initialPath={activeTab.path}
+                              active={isActive}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </section>
                   </Fragment>
                 );
               })}
