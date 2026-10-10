@@ -372,6 +372,16 @@ export default function Editor({
       setTitle(initialPath.split("/").pop()?.replace(/\.md$/i, "") ?? "");
       setTagsText(tagsOf(fm).join(", "));
       editor?.commands.setContent(forEditor(body));
+      // 阅读位置恢复：setContent 同步完成后、浏览器绘制之前直接设置——
+      // 首帧就在正确位置，不会出现"先顶部再跳下来"的闪动
+      if (scrollRef.current) {
+        const target = positions.recall(initialPath);
+        scrollRef.current.scrollTop = target;
+        // 图片等异步资源撑高内容后静默校正一次（首屏内位移极小，无感）
+        window.setTimeout(() => {
+          if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
+        }, 300);
+      }
       // 把 alt 里的 Obsidian 宽度标记（![alt|300](src)）拆成 width 属性
       if (editor) {
         const tr = editor.state.tr;
@@ -394,15 +404,6 @@ export default function Editor({
       }
       loadingRef.current = false;
       setLoaded(true);
-      // 恢复上次的阅读位置：下一帧先设一次；图片等异步撑高后再校正一次（避免被 clamp）
-      requestAnimationFrame(() => {
-        if (cancelled || !scrollRef.current) return;
-        const target = positions.recall(initialPath);
-        scrollRef.current.scrollTop = target;
-        window.setTimeout(() => {
-          if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
-        }, 300);
-      });
     })().catch((e) => console.error("读取笔记失败", e));
     return () => {
       cancelled = true;

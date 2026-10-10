@@ -81,14 +81,16 @@ export default function App() {
     return () => window.removeEventListener(EDIT_SCENE_EVENT, onEdit);
   }, [session]);
 
-  // 打开过的笔记历史（浏览器式返回/前进）
+  // 笔记历史（MRU 去重栈）：只有"阅读链路"跳转（双链）进历史——
+  // 文件树/搜索点击属于重新定位，不动栈；重复跳转去重后移到栈顶，A↔B 不会堆成 A B A B。
   const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
 
-  const openNote = (path: string) => {
+  const openNote = (path: string, viaHistory = false) => {
     setSession((s) => (s && s.path === path ? s : { path, key: (s?.key ?? 0) + 1 }));
+    if (!viaHistory) return;
     setHistory((h) => {
-      if (h.stack[h.index] === path) return h; // 连续重复不进栈
-      return { stack: [...h.stack.slice(0, h.index + 1), path], index: h.index + 1 };
+      const stack = h.stack.filter((p) => p !== path); // MRU：移除旧位置
+      return { stack: [...stack, path], index: stack.length };
     });
   };
 
@@ -101,9 +103,9 @@ export default function App() {
     });
   };
 
-  // 双链点击跳转（Editor 里 wikilink 节点发出）
+  // 双链点击跳转（阅读链路，进历史）
   useEffect(() => {
-    const onOpen = (e: Event) => openNote((e as CustomEvent<string>).detail);
+    const onOpen = (e: Event) => openNote((e as CustomEvent<string>).detail, true);
     window.addEventListener(OPEN_NOTE_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
   }, []);
