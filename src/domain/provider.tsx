@@ -1,10 +1,10 @@
-// 领域容器：EventBus / NoteDirectory / NoteService / ReadingPositions 全局单例 + React 绑定。
+// 领域容器：EventBus / NoteDirectory / NoteService / ReadingPositions / SessionBook 全局单例 + React 绑定。
 // 组件通过 useDomain() 取服务；名录变化通过 useSyncExternalStore 订阅。
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { EventBus } from "./events";
 import { NoteDirectory } from "./directory";
 import { NoteService } from "../application/note-service";
-import { ReadingPositions } from "./session";
+import { ReadingPositions, SessionBook } from "./session";
 import { Workspace } from "./workspace";
 
 export interface Domain {
@@ -12,6 +12,7 @@ export interface Domain {
   directory: NoteDirectory;
   notes: NoteService;
   positions: ReadingPositions;
+  sessions: SessionBook;
   workspace: Workspace;
 }
 
@@ -23,11 +24,13 @@ let singleton: Domain | null = null;
 
 export function createDomain(): Domain {
   const bus = new EventBus();
+  const positions = new ReadingPositions(bus);
   singleton = {
     bus,
     directory: new NoteDirectory(bus),
     notes: new NoteService(bus),
-    positions: new ReadingPositions(bus),
+    positions,
+    sessions: new SessionBook(bus, positions),
     workspace: new Workspace(bus),
   };
   return singleton;

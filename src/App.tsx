@@ -1,18 +1,14 @@
-import { Fragment, Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { backend } from "./backend";
 import { useSettings } from "./i18n";
 import { DomainProvider, useDomain, useWorkspaceVersion } from "./domain/provider";
+import type { LayoutNode } from "./domain/workspace";
 import Sidebar from "./components/Sidebar";
-import Editor from "./components/Editor";
-import EmptyState from "./components/EmptyState";
+import PaneView from "./components/PaneView";
 import SettingsModal from "./components/SettingsModal";
-import PaneTabs from "./components/PaneTabs";
-import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
 import { OPEN_NOTE_EVENT } from "./components/WikiLink";
+import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
 import { I } from "./components/icons";
-
-// 画板编辑面板：以标签形态懒加载（Excalidraw 体积大）
-const ScenePanel = lazy(() => import("./components/ExcalidrawPanel"));
 
 export default function App() {
   const { t } = useSettings();
@@ -40,7 +36,7 @@ export default function App() {
   // 笔记历史（MRU 去重栈）：双链跳转（阅读链路）进历史；树/搜索点击只切活动栏不动栈
   const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
 
-  // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击新栏
+  // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击在右侧拆新栏
   const openNote = useCallback(
     (path: string, opts?: { viaHistory?: boolean; newTab?: boolean; newPane?: boolean }) => {
       workspace.open(path, opts?.newPane ? "newPane" : opts?.newTab ? "newTab" : "replace");
@@ -79,10 +75,10 @@ export default function App() {
       (e) => {
         void refreshTree();
         if (e.type === "noteRenamed" || e.type === "noteMoved") {
-          workspace.relocate(e.from, e.to); // 栏内路径跟随
+          workspace.relocate(e.from, e.to); // 所有栏的标签路径跟随
           setHistory((h) => ({ ...h, stack: h.stack.map((p) => (p === e.from ? e.to : p)) }));
         } else if (e.type === "noteTrashed") {
-          workspace.clearPath(e.path); // 持有它的栏清空
+          workspace.clearPath(e.path); // 持有它的标签关闭（相邻顶上）
         }
       }
     );
@@ -154,9 +150,84 @@ export default function App() {
     }
   };
 
-  const activePane = workspace.active;
   const canBack = history.index > 0;
   const canForward = history.index < history.stack.length - 1;
+
+  // ---- 布局树递归渲染：row = 左右并排，col = 上下堆叠，叶子是栏（标签组） ----
+  const activePaneId = workspace.active.id;
+
+  const renderLayout = (node: LayoutNode): ReactNode => {
+    if (node.kind === "pane") {
+      const pane = workspace.paneOf(node.paneId);
+      if (!pane) return null;
+      return (
+        <PaneView
+          key={pane.id}
+          pane={pane}
+          active={pane.id === activePaneId}
+          vaultName={vaultName}
+          sideCollapsed={sideCollapsed}
+          onToggleSidebar={() => setSideCollapsed((v) => !v)}
+          onNewNote={async () => {
+            const path = await backend.createNote("", t("untitledNote"));
+            openNote(path);
+          }}
+          onSceneSaved={() => void refreshTree()}
+          canBack={canBack}
+          canForward={canForward}
+          onBack={() => jumpHistory(-1)}
+          onForward={() => jumpHistory(1)}
+        />
+      );
+    }
+    const row = node.kind === "row";
+    return (
+      <div key={node.id} className={row ? "layout-row" : "layout-col"}>
+        {node.children.map((child, i) => (
+          <Fragment key={child.id}>
+            {i > 0 && (
+              <div
+                className={`layout-resizer ${row ? "layout-resizer-col" : "layout-resizer-row"}`}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  const leftEl = (e.currentTarget as HTMLElement)
+                    .previousElementSibling as HTMLElement;
+                  const rightEl = (e.currentTarget as HTMLElement)
+                    .nextElementSibling as HTMLElement;
+                  const startA = row
+                    ? leftEl.getBoundingClientRect().width
+                    : leftEl.getBoundingClientRect().height;
+                  const startB = row
+                    ? rightEl.getBoundingClientRect().width
+                    : rightEl.getBoundingClientRect().height;
+                  document.body.classList.add("resizing");
+                  const move = (ev: PointerEvent) => {
+                    const axis = row ? "clientX" : "clientY";
+                    const total = startA + startB;
+                    const delta = ev[axis] - e[axis];
+                    // 按像素比实时分配（flex-grow 归一化）
+                    workspace.resize(node.id, i - 1, (startA + delta) / total);
+                  };
+                  const up = () => {
+                    window.removeEventListener("pointermove", move);
+                    window.removeEventListener("pointerup", up);
+                    window.removeEventListener("pointercancel", up);
+                    document.body.classList.remove("resizing");
+                  };
+                  window.addEventListener("pointermove", move);
+                  window.addEventListener("pointerup", up);
+                  window.addEventListener("pointercancel", up);
+                }}
+              />
+            )}
+            <div className="layout-child" style={{ flexGrow: child.size, flexBasis: 0 }}>
+              {renderLayout(child)}
+            </div>
+          </Fragment>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="flex h-full">
@@ -180,14 +251,10 @@ export default function App() {
             canPickVault={backend.mode === "tauri"}
             onResize={setSideWidth}
             onOpenSettings={() => setSettingsOpen(true)}
-            canBack={canBack}
-            canForward={canForward}
-            onBack={() => jumpHistory(-1)}
-            onForward={() => jumpHistory(1)}
             onToggleSidebar={() => setSideCollapsed((v) => !v)}
           />
         </div>
-        <main className="flex min-w-0 flex-1 overflow-hidden">
+        <main className="relative flex min-w-0 flex-1 overflow-hidden">
           {vaultName === null ? (
             <div className="view-swap flex h-full w-full flex-col items-center justify-center gap-4 text-soft">
               <div className="serif text-2xl text-ink">NoteShare</div>
@@ -197,7 +264,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="relative flex h-full min-w-0 w-full">
+            <>
               {sideCollapsed && (
                 <button
                   className="side-toggle-float"
@@ -207,116 +274,10 @@ export default function App() {
                   {I.panelLeft}
                 </button>
               )}
-              {workspace.all.map((pane, idx) => {
-                const isActive = pane.id === activePane.id;
-                const prev = workspace.all[idx - 1];
-                const activeTab =
-                  pane.tabs.find((tb) => tb.id === pane.activeTabId) ??
-                  pane.tabs[pane.tabs.length - 1] ??
-                  null;
-                return (
-                  <Fragment key={pane.id}>
-                    {idx > 0 && (
-                      <div
-                        className="pane-resizer"
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          const startX = e.clientX;
-                          const leftEl = (e.currentTarget as HTMLElement)
-                            .previousElementSibling as HTMLElement;
-                          const rightEl = (e.currentTarget as HTMLElement)
-                            .nextElementSibling as HTMLElement;
-                          const startL = leftEl.getBoundingClientRect().width;
-                          const startR = rightEl.getBoundingClientRect().width;
-                          document.body.classList.add("resizing");
-                          const move = (ev: PointerEvent) => {
-                            const dx = ev.clientX - startX;
-                            workspace.setSize(prev.id, startL + dx);
-                            workspace.setSize(pane.id, startR - dx);
-                          };
-                          const up = () => {
-                            window.removeEventListener("pointermove", move);
-                            window.removeEventListener("pointerup", up);
-                            window.removeEventListener("pointercancel", up);
-                            document.body.classList.remove("resizing");
-                          };
-                          window.addEventListener("pointermove", move);
-                          window.addEventListener("pointerup", up);
-                          window.addEventListener("pointercancel", up);
-                        }}
-                      />
-                    )}
-                    <section
-                      className={`pane-col ${isActive ? "pane-col-active" : ""}`}
-                      style={pane.width ? { flex: `0 0 ${pane.width}px` } : undefined}
-                      onPointerDown={() => workspace.focus(pane.id)}
-                    >
-                      {activeTab === null ? (
-                        <div className="flex h-full min-h-0 flex-col">
-                          <PaneTabs
-                            pane={pane}
-                            active={isActive}
-                            multiPane={workspace.all.length > 1}
-                            onClosePane={() => workspace.close(pane.id)}
-                          />
-                          <div className="view-swap relative min-h-0 flex-1">
-                            {isActive && (
-                              <button
-                                className="side-toggle-float"
-                                data-tip={sideCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-                                onClick={() => setSideCollapsed((v) => !v)}
-                              >
-                                {I.panelLeft}
-                              </button>
-                            )}
-                            <EmptyState
-                              vaultName={vaultName}
-                              onNewNote={async () => {
-                                const path = await backend.createNote("", t("untitledNote"));
-                                openNote(path);
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex h-full min-h-0 flex-col">
-                          <PaneTabs
-                            pane={pane}
-                            active={isActive}
-                            multiPane={workspace.all.length > 1}
-                            onClosePane={() => workspace.close(pane.id)}
-                          />
-                          {/\.excalidraw$/i.test(activeTab.path) ? (
-                            <div className="view-swap min-h-0 flex-1">
-                              <Suspense
-                                fallback={
-                                  <div className="flex h-full items-center justify-center text-sm text-faint">
-                                    {t("sceneLoading")}
-                                  </div>
-                                }
-                              >
-                                <ScenePanel
-                                  key={`${pane.id}:${activeTab.path}`}
-                                  src={activeTab.path}
-                                  onSaved={() => void refreshTree()}
-                                  onClose={() => workspace.closeTab(pane.id, activeTab.id)}
-                                />
-                              </Suspense>
-                            </div>
-                          ) : (
-                            <Editor
-                              key={`${pane.id}:${activeTab.path}`}
-                              initialPath={activeTab.path}
-                              active={isActive}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </section>
-                  </Fragment>
-                );
-              })}
-            </div>
+              <div className="flex h-full min-h-0 w-full flex-1">
+                {renderLayout(workspace.layout)}
+              </div>
+            </>
           )}
         </main>
 

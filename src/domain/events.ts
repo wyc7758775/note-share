@@ -54,6 +54,12 @@ export interface SceneSaved {
   type: "sceneSaved";
   path: string;
 }
+/** 笔记会话锁定状态切换（SessionBook.toggle 广播） */
+export interface LockToggled {
+  type: "lockToggled";
+  path: string;
+  mode: "editing" | "locked";
+}
 
 export type DomainEvent =
   | NoteCreated
@@ -66,7 +72,8 @@ export type DomainEvent =
   | SaveRequested
   | PaneOpened
   | PaneClosed
-  | SceneSaved;
+  | SceneSaved
+  | LockToggled;
 export type DomainEventType = DomainEvent["type"];
 
 export class EventBus {

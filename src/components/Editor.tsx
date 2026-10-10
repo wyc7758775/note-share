@@ -13,7 +13,6 @@ import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { useDomain, useDirectoryVersion } from "../domain/provider";
-import { EditingSession } from "../domain/session";
 import { sanitizeFileName } from "../lib/files";
 import {
   CustomImage,
@@ -44,19 +43,30 @@ const MOD_KEY = /mac|iphone|ipad|ipod/i.test(
 
 interface Props {
   initialPath: string;
-  /** 是否为活动栏：顶栏工具（返回/前进/收起侧栏）与 Ctrl+S/E 快捷键只在活动栏生效 */
+  /** 是否为活动栏：Ctrl+S/E 快捷键只在活动栏生效 */
   active: boolean;
+  /** 顶部左上角悬浮的阅读历史导航（作用于活动栏） */
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
 }
 
-export default function Editor({ initialPath, active }: Props) {
+export default function Editor({
+  initialPath,
+  active,
+  canBack,
+  canForward,
+  onBack,
+  onForward,
+}: Props) {
   const { t } = useSettings();
-  const { directory, notes: noteService, positions, bus } = useDomain();
+  const { directory, notes: noteService, positions, sessions, bus } = useDomain();
   useDirectoryVersion(); // 名录变化触发重渲染（双链存在性等）
 
-  // 编辑会话：锁定模式 + 待落盘快照 + 阅读位置（领域对象，见 domain/session.ts）
-  const sessionRef = useRef<EditingSession | null>(null);
-  if (!sessionRef.current) sessionRef.current = new EditingSession(initialPath, positions);
-  const session = sessionRef.current;
+  // 编辑会话：锁定模式 + 待落盘快照 + 阅读位置（领域登记簿按路径全局持有，
+  // 多栏打开同一笔记共享锁定状态；见 domain/session.ts）
+  const session = sessions.get(initialPath);
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
@@ -71,7 +81,7 @@ export default function Editor({ initialPath, active }: Props) {
   const [tagsText, setTagsText] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [loaded, setLoaded] = useState(false);
-  const [locked, setLocked] = useState(false); // 会话模式的视图镜像（权威在 session.mode）
+  const [locked, setLocked] = useState(() => sessions.mode(initialPath) === "locked"); // 视图镜像（权威在 SessionBook）
   const [view, setView] = useState<View>("note");
   const [sceneRev, setSceneRev] = useState(0);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
@@ -427,7 +437,8 @@ export default function Editor({ initialPath, active }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）
+  // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）；
+  // 锁定切换与发布入口都走领域事件/全局事件（标签条 ⋯ 菜单共用同一路径）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active) return; // 多栏时快捷键只作用于活动栏
@@ -439,12 +450,30 @@ export default function Editor({ initialPath, active }: Props) {
       } else if (k === "e") {
         e.preventDefault();
         void saveNow();
-        setLocked(session.toggleLock() === "locked");
+        sessions.toggle(pathRef.current); // lockToggled 事件驱动下方镜像更新
       }
     };
+    const onLock = (ev: { type: string; path?: string; mode?: "editing" | "locked" }) => {
+      if (ev.type !== "lockToggled" || ev.path !== pathRef.current) return;
+      setLocked(ev.mode === "locked");
+    };
+    const onPublish = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (path !== pathRef.current) return; // 只响应对应笔记的请求
+      void (async () => {
+        await saveNow();
+        setView("publish");
+      })();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [saveNow, active]);
+    window.addEventListener("noteshare:open-publish", onPublish as EventListener);
+    const offLock = bus.on("lockToggled", onLock as (e: import("../domain/events").DomainEvent) => void);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("noteshare:open-publish", onPublish as EventListener);
+      offLock();
+    };
+  }, [saveNow, active, sessions, bus]);
 
   // 图片请求查看 / 发布面板请求保存 / 画板保存后刷新笔记内预览
   useEffect(() => {
@@ -521,86 +550,21 @@ export default function Editor({ initialPath, active }: Props) {
   // ---- 笔记视图 ----
   return (
     <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
-      <div className="view-swap flex h-full flex-col">
-        {/* 顶栏 */}
-        <div
-          className="flex h-11 shrink-0 items-center justify-between border-b px-2.5"
-          style={{ borderColor: "var(--line)" }}
-        >
-          <div className="flex items-center gap-1">
-            <div className="flex items-center gap-1">
-              <span
-                className={`max-w-[200px] truncate px-1 text-xs ${active ? "text-soft" : "text-faint"}`}
-                title={initialPath}
-              >
-                {initialPath.split("/").pop()?.replace(/\.md$/i, "")}
-              </span>
-              {saveState === "error" && (
-                <span className="px-1 text-xs text-red-500">{t("saveErrorHint", { mod: MOD_KEY })}</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              className="top-icon-btn"
-              data-tip={t("more")}
-              onClick={(e) => {
-                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
-                  {
-                    label: locked
-                      ? t("unlockEdit", { mod: `${MOD_KEY}E` })
-                      : t("lockReading", { mod: `${MOD_KEY}E` }),
-                    icon: locked ? I.unlock : I.lock,
-                    onClick: () => {
-                      void saveNow();
-                      setLocked(session.toggleLock() === "locked");
-                    },
-                  },
-                  { separator: true },
-                  {
-                    label: t("publishExportMenu"),
-                    onClick: () => {
-                      void (async () => {
-                        await saveNow();
-                        setView("publish");
-                      })();
-                    },
-                  },
-                  { separator: true },
-                  {
-                    label: t("deleteNote"),
-                    danger: true,
-                    disabled: locked,
-                    onClick: () => {
-                      // 二级确认菜单（与第一级同位置弹出）
-                      showContextMenu(Math.round(r.left), Math.round(r.bottom + 6), [
-                        {
-                          label: t("confirmTrash"),
-                          danger: true,
-                          onClick: () => {
-                            void (async () => {
-                              // 事件驱动：名录/树/阅读位置/分栏（Workspace.clearPath）自动清理
-                              await noteService.trash(pathRef.current);
-                            })();
-                          },
-                        },
-                        { label: t("cancel") },
-                      ]);
-                    },
-                  },
-                ]);
-              }}
-            >
-              {I.more}
-            </button>
-          </div>
+      <div className="view-swap relative flex h-full flex-col">
+        {/* 顶部左上角悬浮：返回 / 前进（阅读历史，作用于活动栏） */}
+        <div className="editor-nav-float">
+          <button className="top-icon-btn" data-tip={t("navBack")} disabled={!canBack} onClick={onBack}>
+            {I.back}
+          </button>
+          <button className="top-icon-btn" data-tip={t("navForward")} disabled={!canForward} onClick={onForward}>
+            {I.forward}
+          </button>
         </div>
 
         {/* 正文滚动区 */}
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto"
+          className="relative min-h-0 flex-1 overflow-y-auto"
           onScroll={(e) => {
             positions.remember(pathRef.current, e.currentTarget.scrollTop);
             setWikiPreview(null); // 滚动时预览卡不再跟随，直接关
@@ -661,6 +625,18 @@ export default function Editor({ initialPath, active }: Props) {
             }
           }}
         >
+          {/* 保存失败悬浮条（无顶栏设计；贴内容顶部居中） */}
+          {saveState === "error" && (
+            <div className="sticky top-0 z-20 mx-auto w-fit rounded-b-lg border border-red-300/50 bg-[var(--danger-bg)] px-3 py-1 text-xs text-red-600 dark:text-red-400">
+              {t("saveErrorHint", { mod: MOD_KEY })}
+              <button
+                className="ml-2 underline underline-offset-2"
+                onClick={() => void saveNow()}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          )}
           <div className={`mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
             <input
               className="serif w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-faint"
