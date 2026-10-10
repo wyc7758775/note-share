@@ -138,6 +138,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
         >
           <img
             src={dataUrl}
+            data-src={raw}
             alt={node.attrs.alt ?? ""}
             title={locked ? t("imgTitleLock") : t("imgTitleEdit")}
             style={displayW ? { width: "100%" } : undefined}
@@ -255,7 +256,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
             {locked ? "画板" : t("canvasReadyHint")}
           </div>
         ) : url ? (
-          <img src={url} alt={t("sceneAlt")} />
+          <img src={url} data-src={raw} alt={t("sceneAlt")} />
         ) : (
           <div className="fig-empty">画板加载中…</div>
         )}
@@ -268,6 +269,14 @@ export const CustomImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      // 真实资源路径：解析时优先读 data-src——NodeView 展示用的 img 可能是
+      // dataUrl（画板 PNG 预览/图片内联），拖拽/粘贴时 ProseMirror 会从 DOM
+      // 重新解析节点，没有 data-src 保护的话 dataUrl 会被写回文档顶掉路径
+      src: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-src") ?? element.getAttribute("src"),
+      },
       // 显示宽度（像素）；保存为 Obsidian 风格 ![alt|宽度](src)
       width: {
         default: null,
