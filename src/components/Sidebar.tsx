@@ -35,7 +35,6 @@ function collectImageAssets(items: TreeNode[], folder: string): TreeNode[] {
 const HIDDEN = new Set([".obsidian", ".trash"]);
 
 interface Props {
-  vaultName: string | null;
   tree: TreeNode[];
   currentPath: string | null;
   width: number;
@@ -53,7 +52,7 @@ interface Props {
 }
 
 export default function Sidebar(props: Props) {
-  const { vaultName, tree, currentPath, onOpenNote, width, onResize } = props;
+  const { tree, currentPath, onOpenNote, width, onResize } = props;
   const { t } = useSettings();
   const { notes: noteService, bus } = useDomain();
   const [tab, setTab] = useState<"files" | "search">("files");

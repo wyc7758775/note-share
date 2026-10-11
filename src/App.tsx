@@ -365,7 +365,6 @@ function VaultApp({
           aria-hidden={sideCollapsed}
         >
           <Sidebar
-            vaultName={vault.name}
             tree={tree}
             currentPath={workspace.activePath}
             width={sideWidth}

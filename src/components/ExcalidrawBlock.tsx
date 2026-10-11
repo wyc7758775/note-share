@@ -291,7 +291,7 @@ export const CustomImage = Image.extend({
     return {
       markdown: {
         serialize(state: any, node: any) {
-          const alt = String(node.attrs.alt || "").replace(/[\[\]|]/g, "");
+          const alt = String(node.attrs.alt || "").replace(/[[\]|]/g, "");
           const w = node.attrs.width ? `|${node.attrs.width}` : "";
           state.ensureNewLine();
           state.write(`![${alt}${w}](${node.attrs.src})`);

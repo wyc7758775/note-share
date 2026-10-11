@@ -759,26 +759,6 @@ export default function Editor({
   );
 }
 
-function IconBtn({
-  title,
-  onClick,
-  children,
-}: {
-  title: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-md text-soft transition-colors hover:bg-hover hover:text-ink"
-    >
-      {children}
-    </button>
-  );
-}
-
 // 画板面板按需加载（体积大）
 function splitTags(s: string): string[] {
   return s

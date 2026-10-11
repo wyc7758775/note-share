@@ -43,18 +43,7 @@ export function WikiPreviewCard({
     missing || !path ? [] : previewCache.get(path) ?? null
   );
 
-  if (missing) {
-    return (
-      <div
-        className="wiki-preview"
-        style={{ top, left: Math.max(8, Math.min(left, window.innerWidth - 330)) }}
-      >
-        <div className="wiki-preview-title">{name}</div>
-        <div className="wiki-preview-line text-faint">{t("wikilinkMissingCard")}</div>
-      </div>
-    );
-  }
-
+  // 注意：early return 必须放在所有 hook 之后，否则 missing 状态变化时 hook 数量不一致
   useEffect(() => {
     if (lines || !path) return;
     let dead = false;
@@ -80,6 +69,18 @@ export function WikiPreviewCard({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
+
+  if (missing) {
+    return (
+      <div
+        className="wiki-preview"
+        style={{ top, left: Math.max(8, Math.min(left, window.innerWidth - 330)) }}
+      >
+        <div className="wiki-preview-title">{name}</div>
+        <div className="wiki-preview-line text-faint">{t("wikilinkMissingCard")}</div>
+      </div>
+    );
+  }
 
   return (
     <div

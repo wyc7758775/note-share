@@ -200,7 +200,7 @@ export class Workspace {
     }
     const found = this.findNodeByPane(this.root, id);
     if (!found) return;
-    const { node, replace } = found;
+    const { node } = found;
     const parent = this.parentOf(this.root, node.id);
     if (!parent) {
       // 根被关（唯一栏关成空栏的分支已在上面处理；这里防御）

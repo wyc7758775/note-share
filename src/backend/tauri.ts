@@ -32,7 +32,7 @@ export const tauriBackend: Backend = {
   deletePath: (path) => invoke<void>("delete_path", { path }),
   search: (q) => invoke<SearchHit[]>("search", { q }),
   readScene: (path) => invoke<string>("read_scene", { path }),
-  saveScene: (name, sceneJson, pngBase64, folder?) =>
+  saveScene: (name, sceneJson, pngBase64, _folder?) =>
     invoke<SavedScene>("save_scene", { name, sceneJson, pngBase64 }),
   createCanvas: (folder, name) =>
     invoke<string>("create_canvas", { folder: folder ?? null, name: name ?? null }),

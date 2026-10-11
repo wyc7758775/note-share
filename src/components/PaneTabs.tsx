@@ -32,8 +32,6 @@ export default function PaneTabs({ pane, active }: Props) {
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
 
-  const activeTab = pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? null;
-
   /** 根据鼠标位置算插入位置：经过标签左半插它前面，右半插后面 */
   const indexAt = (e: React.DragEvent, el: HTMLElement): number => {
     const r = el.getBoundingClientRect();

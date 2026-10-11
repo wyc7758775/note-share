@@ -29,7 +29,7 @@ export default function ExcalidrawPanel({ src, active, onSaved, onClose }: Props
   const { bus } = useDomain();
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
-  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [, setSaveState] = useState<SaveState>("saved");
   const latestRef = useRef<{ elements: any[]; files: any; appState: any } | null>(null);
   const sceneTimer = useRef<number | undefined>(undefined);
   const pngTimer = useRef<number | undefined>(undefined);
