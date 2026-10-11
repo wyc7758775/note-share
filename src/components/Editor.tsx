@@ -299,11 +299,11 @@ export default function Editor({
     },
   });
 
-  const saveNow = useCallback(async () => {
-    if (!editor || savingRef.current || loadingRef.current || locked) return;
-    savingRef.current = true;
-    setSaveState("saving");
-    try {
+  /** 落盘的唯一路径：标题≠文件名时先走应用服务改名（发 noteRenamed，名录/文件树/
+   *  栏内标签路径全靠事件局部刷新），再写正文。防抖保存与卸载兜底共用，
+   *  保证标题改动在任何出口（包括防抖窗口内切走笔记）都不丢。 */
+  const persist = useCallback(
+    async (md: string) => {
       const fileTitle = decodeURIComponent(pathRef.current.split("/").pop() ?? "").replace(
         /\.md$/i,
         ""
@@ -312,21 +312,30 @@ export default function Editor({
       if (wanted && wanted !== fileTitle) {
         const safe = sanitizeFileName(wanted);
         if (safe) {
-          // 重命名走应用服务：发 noteRenamed，名录/文件树/栏内路径（Workspace 订阅）自动跟随
           const newPath = await noteService.rename(pathRef.current, safe);
           if (newPath) {
             pathRef.current = newPath;
           }
         }
       }
-      const md = forSave((editor.storage as any).markdown.getMarkdown() as string);
-      session.pendingMarkdown = null; // 已落盘，清掉快照
       const fm = fmRef.current;
       setTags(fm, splitTags(tagsRef.current));
       const now = new Date().toISOString();
       if (!fm.created) fm.created = now;
       fm.updated = now;
       await backend.writeNote(pathRef.current, buildRaw(fm, md));
+    },
+    [noteService]
+  );
+
+  const saveNow = useCallback(async () => {
+    if (!editor || savingRef.current || loadingRef.current || locked) return;
+    savingRef.current = true;
+    setSaveState("saving");
+    try {
+      const md = forSave((editor.storage as any).markdown.getMarkdown() as string);
+      session.pendingMarkdown = null; // 已落盘，清掉快照
+      await persist(md);
       setSaveState("saved");
     } catch (err) {
       console.error(err);
@@ -334,7 +343,7 @@ export default function Editor({
     } finally {
       savingRef.current = false;
     }
-  }, [editor, locked]);
+  }, [editor, locked, persist]);
 
   // 待保存内容快照：编辑事件发生时（编辑器必然存活）立即留存 markdown 文本到会话对象，
   // 卸载兜底直接写快照——销毁中的编辑器再取内容会拿到旧文档。
@@ -367,14 +376,16 @@ export default function Editor({
       setTagsText(tagsOf(fm).join(", "));
       editor?.commands.setContent(forEditor(body));
       // 阅读位置恢复：setContent 同步完成后、浏览器绘制之前直接设置——
-      // 首帧就在正确位置，不会出现"先顶部再跳下来"的闪动
+      // 首帧就在正确位置，不会出现"先顶部再跳下来"的闪动。
+      // 图片/画板预览等异步资源会继续撑高内容，300ms / 1200ms 各静默校正一次
       if (scrollRef.current) {
         const target = positions.recall(initialPath);
         scrollRef.current.scrollTop = target;
-        // 图片等异步资源撑高内容后静默校正一次（首屏内位移极小，无感）
-        window.setTimeout(() => {
-          if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
-        }, 300);
+        for (const delay of [300, 1200]) {
+          window.setTimeout(() => {
+            if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
+          }, delay);
+        }
       }
       // 把 alt 里的 Obsidian 宽度标记（![alt|300](src)）拆成 width 属性
       if (editor) {
@@ -421,18 +432,14 @@ export default function Editor({
     };
   }, [editor, scheduleSave]);
 
-  // 卸载兜底：防抖窗口内切走笔记时，把会话里编辑时刻的快照直接落盘（不碰已销毁的编辑器）
+  // 卸载兜底：防抖窗口内切走笔记时，把会话里编辑时刻的快照直接落盘（不碰已销毁的编辑器）。
+  // 走 persist 而非裸 writeNote：标题/标签改动在防抖未到点时也一并生效，不会随切换丢失
   useEffect(() => {
     return () => {
       const md = session.pendingMarkdown;
       if (md === null) return;
       session.pendingMarkdown = null;
-      const fm = fmRef.current;
-      setTags(fm, splitTags(tagsRef.current));
-      const now = new Date().toISOString();
-      if (!fm.created) fm.created = now;
-      fm.updated = now;
-      void backend.writeNote(pathRef.current, buildRaw(fm, forSave(md)));
+      void persist(forSave(md)).catch((e) => console.error("卸载兜底保存失败", e));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -540,7 +547,7 @@ export default function Editor({
   // ---- 笔记视图 ----
   return (
     <EditorStateContext.Provider value={{ rev: sceneRev, locked }}>
-      <div className="view-swap relative flex h-full flex-col">
+      <div className="relative flex h-full flex-col">
         {/* 顶部左上角悬浮：返回 / 前进 / 更多操作（作用于本栏当前笔记） */}
         <div className="editor-nav-float">
           <button className="top-icon-btn" data-tip={t("navBack")} disabled={!canBack} onClick={onBack}>
@@ -688,6 +695,11 @@ export default function Editor({
                 setTitle(e.target.value);
                 scheduleSave();
               }}
+              // 失焦/回车立即落盘：改名即时生效（树/标签靠事件局部刷新），不等 1.2s 防抖
+              onBlur={() => void saveNow()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
             />
             <div className="mt-2 flex items-center gap-2 text-[13px] text-faint">
               <span>#</span>
@@ -700,6 +712,7 @@ export default function Editor({
                   setTagsText(e.target.value);
                   scheduleSave();
                 }}
+                onBlur={() => void saveNow()}
               />
             </div>
 

@@ -53,6 +53,13 @@ export class NoteService {
     return saved.scenePath;
   }
 
+  /** 新建空白白板（Obsidian 式 .canvas，可命名），发 assetCreated；路径跟随语义与附件一致 */
+  async createCanvas(folder: string, name?: string): Promise<string | null> {
+    const path = await backend.createCanvas(folder || undefined, name || undefined);
+    this.bus.emit({ type: "assetCreated", path });
+    return path;
+  }
+
   /** 移动笔记到指定文件夹（目录树拖拽）；标题不变，发 noteMoved（名录/阅读位置自动迁移） */
   async moveNote(path: string, toFolder: string): Promise<string | null> {
     const name = path.split("/").pop()?.replace(/\.md$/i, "") ?? "";

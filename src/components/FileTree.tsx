@@ -55,6 +55,8 @@ export interface TreeHandlers {
   onArmDelete: (path: string | null) => void;
   onViewAsset: (item: TreeNode) => void;
   onDownloadAsset: (item: TreeNode) => void;
+  /** 在指定文件夹里新建白板（弹行内命名输入；null = 取消） */
+  onNewCanvasIn: (folder: string | null) => void;
 }
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -65,6 +67,8 @@ interface Props extends TreeHandlers {
   currentPath: string | null;
   renamingPath: string | null;
   confirmPath: string | null;
+  /** 正在命名的白板目标文件夹（"" = 根） */
+  newCanvasIn: string | null;
 }
 
 export default function FileTree(props: Props) {
@@ -77,6 +81,7 @@ function TreeRow({
   currentPath,
   renamingPath,
   confirmPath,
+  newCanvasIn,
   items: _items,
   ...h
 }: Props & { item: TreeNode }) {
@@ -85,17 +90,33 @@ function TreeRow({
   const { notes: noteService } = useDomain();
   const [open, setOpen] = useState(true);
   const renaming = renamingPath === item.path;
-  const armed = confirmPath === item.path;
   const [dropHint, setDropHint] = useState(false);
   const dragging = useRef(false);
+  // 删除退出动画：先播收起动效，再真正走回收站（防止连点重复删）
+  const [exiting, setExiting] = useState(false);
+  const animatedDelete = () => {
+    if (exiting) return;
+    setExiting(true);
+    window.setTimeout(() => h.onDelete(item.path), 200);
+  };
 
   const isFolder = item.kind === "folder";
   const parentFolder = item.path.split("/").slice(0, -1).join("/");
 
+  /** 行内命名完成 → 在目标文件夹创建白板并开新标签 */
+  const commitCanvas = async (folder: string, name: string) => {
+    h.onNewCanvasIn(null);
+    const n = name.trim();
+    if (!n) return;
+    const p = await noteService.createCanvas(folder, n);
+    if (p) h.onOpenNote(p, { newTab: true });
+  };
+
   if (renaming) {
     return (
       <InlineInputRow
-        initial={item.kind === "note" ? item.name.replace(/\.md$/i, "") : item.name}
+        // 所有文件类型编辑时都隐藏后缀（提交时自动拼回，见 Sidebar.onCommitRename）
+        initial={item.kind === "folder" ? item.name : item.name.replace(/\.[^.]+$/, "")}
         depth={depth}
         onCommit={(v) => h.onCommitRename(item, v)}
         onCancel={h.onCancelRename}
@@ -103,14 +124,17 @@ function TreeRow({
     );
   }
 
-  const rowCls = "tree-row group flex w-full items-center gap-1.5 rounded-md py-[5px] pr-1 text-left text-[13px]";
+  // 行高固定 30px，主按钮 h-full 撑满——整行高度都可点击
+  const rowCls =
+    "tree-row group flex h-[30px] w-full items-center gap-1.5 rounded-md pr-1 text-left text-[13px]";
   const pad = { paddingLeft: 6 + depth * 14 };
+  const exitCls = exiting ? "tree-row-exiting" : "";
 
   if (isFolder) {
     return (
       <div>
         <div
-          className={`${rowCls} ${open ? "text-ink" : "text-soft"} ${dropHint ? "tree-row-drop" : ""}`}
+          className={`${rowCls} ${exitCls} ${open ? "text-ink" : "text-soft"} ${dropHint ? "tree-row-drop" : ""}`}
           style={pad}
           title={item.name}
           onDragOver={(e) => {
@@ -145,44 +169,68 @@ function TreeRow({
               { label: t("newScene"), onClick: () => void noteService.createScene(item.path).then((p) => {
                 if (p) emitEditScene(p); // 新标签打开新画的画板
               }) },
+              { label: t("newCanvas"), onClick: () => {
+                setOpen(true); // 保证输入行可见
+                h.onNewCanvasIn(item.path);
+              } },
               { separator: true },
               { label: t("rename"), onClick: () => h.onRequestRename(item) },
-              { label: t("trashLabel"), danger: true, onClick: () => h.onDelete(item.path) },
+              {
+                label: t("trashLabel"),
+                danger: true,
+                onClick: () => {
+                  // 二级确认（与编辑器删除一致），避免右键单击误删
+                  showContextMenu(e.clientX, e.clientY, [
+                    { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
+                    { label: t("cancel") },
+                  ]);
+                },
+              },
             ]);
           }}
         >
           <button
-            className="flex min-w-0 flex-1 items-center gap-1"
+            className="flex h-full min-w-0 flex-1 items-center gap-1"
             onClick={() => setOpen((v) => !v)}
           >
             <span className={`tree-chev text-faint ${open ? "tree-chev-open" : ""}`}>
               {I.chevron}
             </span>
-            <span className="text-soft">{I.folder}</span>
+            <span className="text-soft tree-ico-jelly">{I.folder}</span>
             <span className="truncate">{item.name}</span>
           </button>
           <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
             <IconBtn title={t("newNoteHere")} onClick={() => h.onNewNote(item.path)}>
               {I.plus}
             </IconBtn>
-            <IconBtn title={t("rename")} onClick={() => h.onRequestRename(item)}>
-              {I.pencil}
-            </IconBtn>
-            <ArmDeleteBtn armed={armed} onArm={() => h.onArmDelete(item.path)} onConfirm={() => h.onDelete(item.path)} />
           </span>
         </div>
-        {item.children && (
-          <div className={`tree-children ${open ? "" : "tree-children-closed"}`}>
-            <div>
-              <FileTree
-                items={item.children}
+        {(item.children || newCanvasIn === item.path) && (
+          <div
+            className={`tree-children ${open || newCanvasIn === item.path ? "" : "tree-children-closed"}`}
+          >
+            {newCanvasIn === item.path && (
+              <InlineInputRow
+                initial=""
+                placeholder={t("newCanvasPh")}
                 depth={depth + 1}
-                currentPath={currentPath}
-                renamingPath={renamingPath}
-                confirmPath={confirmPath}
-                {...h}
+                onCommit={(v) => void commitCanvas(item.path, v)}
+                onCancel={() => h.onNewCanvasIn(null)}
               />
-            </div>
+            )}
+            {item.children && (
+              <div>
+                <FileTree
+                  items={item.children}
+                  depth={depth + 1}
+                  currentPath={currentPath}
+                  renamingPath={renamingPath}
+                  confirmPath={confirmPath}
+                  newCanvasIn={newCanvasIn}
+                  {...h}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -193,7 +241,7 @@ function TreeRow({
     const active = currentPath === item.path;
     return (
       <div
-        className={`${rowCls} ${active ? "tree-row-active" : ""} ${dragging.current ? "tree-row-dragging" : ""}`}
+        className={`${rowCls} ${exitCls} ${active ? "tree-row-active" : ""} ${dragging.current ? "tree-row-dragging" : ""}`}
         style={pad}
         title={item.name.replace(/\.md$/i, "")}
         draggable
@@ -215,13 +263,25 @@ function TreeRow({
             { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
             { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
             { separator: true },
+            { label: t("newCanvas"), onClick: () => h.onNewCanvasIn(parentFolder) }, // 同级目录新建白板（行内命名）
+            { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
-            { label: t("trashLabel"), danger: true, onClick: () => h.onDelete(item.path) },
+            {
+              label: t("trashLabel"),
+              danger: true,
+              onClick: () => {
+                // 二级确认（与编辑器删除一致），避免右键单击误删
+                showContextMenu(e.clientX, e.clientY, [
+                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
+                  { label: t("cancel") },
+                ]);
+              },
+            },
           ]);
         }}
       >
         <button
-          className="flex min-w-0 flex-1 items-center gap-1.5 pl-1"
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1"
           onClick={(e) =>
             h.onOpenNote(item.path, {
               newTab: e.ctrlKey || e.metaKey, // Ctrl+点击：当前栏新标签
@@ -229,28 +289,23 @@ function TreeRow({
             })
           }
         >
-          <span className={active ? "text-amber-700" : "text-faint"}>{I.note}</span>
+          <span className={`tree-ico-jelly ${active ? "text-amber-700" : "text-faint"}`}>{I.note}</span>
           <span className="truncate">{item.name.replace(/\.md$/i, "")}</span>
         </button>
-        <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-          <IconBtn title={t("rename")} onClick={() => h.onRequestRename(item)}>
-            {I.pencil}
-          </IconBtn>
-          <ArmDeleteBtn armed={armed} onArm={() => h.onArmDelete(item.path)} onConfirm={() => h.onDelete(item.path)} />
-        </span>
       </div>
     );
   }
 
-  // 附件：图片可点击查看/右键下载；.excalidraw 手绘文件可点击编辑；其他只展示
+  // 附件：图片可点击查看/右键下载；.excalidraw 手绘、.canvas 白板可点击编辑；其他只展示
   const isImg = IMG_RE.test(item.name);
   const isScene = /\.excalidraw$/i.test(item.name);
-  const active = isImg || isScene;
+  const isCanvas = /\.canvas$/i.test(item.name);
+  const active = isImg || isScene || isCanvas;
   return (
     <div
-      className={`${rowCls} ${active ? "cursor-pointer text-soft hover:bg-hover" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
+      className={`${rowCls} ${exitCls} ${active ? "cursor-pointer hover:bg-hover" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
       style={pad}
-      title={isScene ? t("clickToEdit") : isImg ? t("clickToView") : item.path}
+      title={isScene ? t("clickToEdit") : isCanvas ? t("clickToEditCanvas") : isImg ? t("clickToView") : item.path}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(
@@ -264,6 +319,7 @@ function TreeRow({
       onClick={(e) => {
         if (isImg) h.onViewAsset(item);
         else if (isScene) emitEditScene(item.path, e.ctrlKey || e.metaKey); // 画板进标签（Ctrl=新标签）
+        else if (isCanvas) h.onOpenNote(item.path, { newTab: e.ctrlKey || e.metaKey }); // 白板进标签
       }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -282,47 +338,46 @@ function TreeRow({
           showContextMenu(e.clientX, e.clientY, [
             { label: t("openInNewTab"), onClick: () => emitEditScene(item.path, true) },
             { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+            { separator: true },
+            { label: t("rename"), onClick: () => h.onRequestRename(item) },
+            {
+              label: t("trashLabel"),
+              danger: true,
+              onClick: () => {
+                showContextMenu(e.clientX, e.clientY, [
+                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
+                  { label: t("cancel") },
+                ]);
+              },
+            },
+          ]);
+          return;
+        }
+        if (isCanvas) {
+          showContextMenu(e.clientX, e.clientY, [
+            { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
+            { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+            { separator: true },
+            { label: t("rename"), onClick: () => h.onRequestRename(item) },
+            {
+              label: t("trashLabel"),
+              danger: true,
+              onClick: () => {
+                showContextMenu(e.clientX, e.clientY, [
+                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
+                  { label: t("cancel") },
+                ]);
+              },
+            },
           ]);
         }
       }}
     >
-      <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">
-        {isScene ? I.pen : I.asset}
-        <span className="truncate text-[12px]">{item.name}</span>
+      <span className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1">
+        <span className="tree-ico-jelly">{isScene ? I.pen : isCanvas ? I.canvas : I.asset}</span>
+        <span className="truncate">{item.name}</span>
       </span>
     </div>
-  );
-}
-
-// 两步删除：第一次点变成红色"确认?"，2.6 秒内再点才真删
-function ArmDeleteBtn({
-  armed,
-  onArm,
-  onConfirm,
-}: {
-  armed: boolean;
-  onArm: () => void;
-  onConfirm: () => void;
-}) {
-  const { t } = useSettings();
-  if (armed) {
-    return (
-      <button
-        className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] text-white"
-        title={t("confirmAgain")}
-        onClick={(e) => {
-          e.stopPropagation();
-          onConfirm();
-        }}
-      >
-        {t("delete")}?
-      </button>
-    );
-  }
-  return (
-    <IconBtn title={t("trash")} onClick={onArm}>
-      {I.trash}
-    </IconBtn>
   );
 }
 

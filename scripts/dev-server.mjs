@@ -4,14 +4,16 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const VAULT = path.resolve(process.env.VAULT_DIR || path.join(ROOT, "devvault"));
+const DEFAULT_VAULT = path.resolve(process.env.VAULT_DIR || path.join(ROOT, "devvault"));
+const REGISTRY_FILE = path.join(ROOT, ".dev-vaults.json");
 const PORT = Number(process.env.PORT || 8787);
 
 const ASSET_EXTS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".excalidraw", ".mp4", ".webm", ".pdf",
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".excalidraw", ".canvas", ".mp4", ".webm", ".pdf",
 ]);
 const MIME = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
@@ -82,8 +84,85 @@ function* walkNotes(dir, rel) {
   }
 }
 
+// web 模式多仓库：注册表持久化到 ROOT/.dev-vaults.json，当前仓库可切换
+// （与桌面端语义对齐：清单 .noteshare/vault.json 随文件夹走，注册表只记身份与最近打开）
+let VAULT = DEFAULT_VAULT;
+
+const readRegistry = () => {
+  try {
+    return JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8"));
+  } catch {
+    return null;
+  }
+};
+const writeRegistry = (reg) => fs.writeFileSync(REGISTRY_FILE, JSON.stringify(reg, null, 2), "utf8");
+
+/** 注册表全量（含默认 devvault；按最近打开倒序，与桌面端 list_vaults 一致） */
+function listVaults() {
+  const out = new Map();
+  const put = (v) => out.set(path.resolve(v.path), { ...v, exists: fs.existsSync(v.path) });
+  put({ id: "web-vault", name: path.basename(DEFAULT_VAULT), path: toPosix(DEFAULT_VAULT), lastOpenedAt: 0 });
+  for (const v of readRegistry()?.vaults ?? []) put(v);
+  return [...out.values()].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
+}
+
+/** 注册（或刷新）一条仓库并激活：身份优先 vault 清单，其次注册表旧值，最后新建 */
+function upsertAndActivate(p, fallbackName) {
+  const abs = path.resolve(p);
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) throw new Error("文件夹不存在");
+  let manifest = null;
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(abs, ".noteshare", "vault.json"), "utf8"));
+  } catch {
+    /* 无清单：下面补写 */
+  }
+  const reg = readRegistry() ?? { vaults: [] };
+  const old = reg.vaults.find((v) => path.resolve(v.path) === abs);
+  const id = manifest?.id ?? old?.id ?? `wv-${crypto.randomBytes(6).toString("hex")}`;
+  const name = manifest?.name ?? fallbackName ?? old?.name ?? path.basename(abs);
+  fs.mkdirSync(path.join(abs, ".noteshare"), { recursive: true });
+  fs.writeFileSync(path.join(abs, ".noteshare", "vault.json"), JSON.stringify({ id, name }), "utf8");
+  const now = Math.floor(Date.now() / 1000);
+  reg.vaults = reg.vaults.filter((v) => path.resolve(v.path) !== abs);
+  reg.vaults.push({ id, name, path: toPosix(abs), lastOpenedAt: now });
+  writeRegistry(reg);
+  VAULT = abs;
+  return { id, name, path: toPosix(abs), lastOpenedAt: now, exists: true };
+}
+
+// 启动时回到最近打开的仓库（与前端 lastOpened 引导一致，重启 dev-server 不丢上下文）
+{
+  const last = listVaults().find((v) => v.exists);
+  if (last && path.resolve(last.path) !== DEFAULT_VAULT) VAULT = path.resolve(last.path);
+}
+
 const handlers = {
-  "vault-name": async () => path.basename(VAULT),
+  "vault-list": async () => ({ vaults: listVaults(), active: toPosix(VAULT) }),
+  "vault-open": async ({ path: p }) => {
+    if (!p || typeof p !== "string") throw new Error("缺少路径");
+    return upsertAndActivate(p);
+  },
+  "vault-create": async ({ parent, name }) => {
+    const n = sanitizeName(name, { keepExt: false });
+    if (!n) throw new Error("仓库名称不能为空");
+    const parentP = path.resolve(String(parent || "."));
+    if (!fs.existsSync(parentP) || !fs.statSync(parentP).isDirectory()) {
+      throw new Error("位置不是有效文件夹");
+    }
+    // 父目录下已有同名文件夹时自动加序号（不覆盖用户数据），与桌面端一致
+    let dir = path.join(parentP, n);
+    for (let i = 2; fs.existsSync(dir); i++) dir = path.join(parentP, `${n}-${i}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return upsertAndActivate(dir, n);
+  },
+  "vault-remove": async ({ path: p }) => {
+    // 仅从注册表移除，不碰磁盘（与桌面端 remove_vault 一致）
+    const abs = path.resolve(String(p || ""));
+    const reg = readRegistry() ?? { vaults: [] };
+    reg.vaults = reg.vaults.filter((v) => path.resolve(v.path) !== abs);
+    writeRegistry(reg);
+    return null;
+  },
   "tree": async () => buildTree(VAULT, ""),
   "note": async ({ path: rel }) => {
     const abs = resolveInside(rel);
@@ -205,6 +284,22 @@ const handlers = {
       pngPath = toPosix(path.relative(VAULT, pngAbs));
     }
     return { scenePath: toPosix(path.relative(VAULT, sceneAbs)), pngPath };
+  },
+  // 新建空白白板（Obsidian 式 canvas JSON）；folder 为空 = vault 根；name 可选
+  "canvas-create": async ({ folder, name }) => {
+    const dir = folder ? resolveInside(folder) : VAULT;
+    fs.mkdirSync(dir, { recursive: true });
+    const sanitize = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "").trim();
+    let fileName;
+    if (name && sanitize(name)) {
+      fileName = sanitize(name);
+      if (!fileName.toLowerCase().endsWith(".canvas")) fileName += ".canvas";
+    } else {
+      fileName = `canvas-${Date.now().toString(36)}.canvas`;
+    }
+    const abs = uniqueAbs(path.join(dir, fileName));
+    fs.writeFileSync(abs, '{"nodes":[],"edges":[]}', "utf8");
+    return toPosix(path.relative(VAULT, abs));
   },
   "asset-save": async ({ name, base64 }) => {
     const dir = path.join(VAULT, "attachments");

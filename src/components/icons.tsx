@@ -1,6 +1,5 @@
 // 少量手绘 16px 线框图标，避免引入图标库
-export const I = {
-  chevron: (
+export const I = {  chevron: (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
       <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -60,6 +59,14 @@ export const I = {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
       <path d="M2.5 13.5s.5-3 2-4.5l5-5 2.5 2.5-5 5c-1.5 1.5-4.5 2-4.5 2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
       <path d="M9 4l2.5 2.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  ),
+  canvas: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect x="2.25" y="2.25" width="4.7" height="4.7" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9.05" y="2.25" width="4.7" height="4.7" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="2.25" y="9.05" width="4.7" height="4.7" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9.05" y="9.05" width="4.7" height="4.7" rx="1" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   ),
   image: (
@@ -133,3 +140,50 @@ export const I = {
     </svg>
   ),
 };
+
+/** 个人 logo：线条皮卡丘（单色描边，跟随主题色；眼睛高光用底色挖空） */
+export function PikachuLogo({ size = 110, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 140 130"
+      fill="none"
+      className={className}
+      stroke="currentColor"
+      strokeWidth="3.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-label="Pikachu"
+    >
+      {/* 左耳（外缘 / 内缘都落在头廓上，黑色耳尖） */}
+      <path d="M42 54 Q21 34 14 8" />
+      <path d="M14 8 Q30 21 54 47" />
+      <path d="M15 9 Q20 23 29 34 L35 29 Q26 19 22 6 Z" fill="currentColor" stroke="none" />
+      {/* 右耳 */}
+      <path d="M98 54 Q119 34 126 8" />
+      <path d="M126 8 Q110 21 86 47" />
+      <path d="M125 9 Q120 23 111 34 L105 29 Q114 19 118 6 Z" fill="currentColor" stroke="none" />
+      {/* 脸 */}
+      <path d="M70 44 C46 44 30 58 30 78 C30 99 48 112 70 112 C92 112 110 99 110 78 C110 58 94 44 70 44 Z" />
+      {/* 眼睛（瞳仁 + 高光） */}
+      <circle cx="55" cy="74" r="6.5" fill="currentColor" stroke="none" />
+      <circle cx="85" cy="74" r="6.5" fill="currentColor" stroke="none" />
+      <circle cx="57.4" cy="71.6" r="1.9" fill="var(--surface)" stroke="none" />
+      <circle cx="87.4" cy="71.6" r="1.9" fill="var(--surface)" stroke="none" />
+      {/* 鼻子 */}
+      <path d="M67.4 82 L72.6 82 L70 85.4 Z" fill="currentColor" stroke="none" />
+      {/* 嘴巴：人中 + 微笑 */}
+      <path d="M70 86 L70 90" />
+      <path d="M70 90 Q62 98 54 92" />
+      <path d="M70 90 Q78 98 86 92" />
+      {/* 腮红（电气纹） */}
+      <circle cx="39" cy="88" r="9.5" />
+      <circle cx="101" cy="88" r="9.5" />
+      <path d="M34 84 L40 92" strokeWidth="2.2" />
+      <path d="M38 82 L44 90" strokeWidth="2.2" />
+      <path d="M96 84 L102 92" strokeWidth="2.2" />
+      <path d="M100 82 L106 90" strokeWidth="2.2" />
+    </svg>
+  );
+}

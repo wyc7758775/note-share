@@ -15,8 +15,8 @@
         "title": "NoteShare 笔记",
         "width": 1280,
         "height": 820,
-        "minWidth": 920,
-        "minHeight": 600
+        "minWidth": 560,
+        "minHeight": 420
       }
     ],
     "security": {

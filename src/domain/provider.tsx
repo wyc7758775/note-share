@@ -14,6 +14,8 @@ export interface Domain {
   positions: ReadingPositions;
   sessions: SessionBook;
   workspace: Workspace;
+  /** 切换仓库时释放（退订事件）；容器本身随 session 丢弃 */
+  dispose(): void;
 }
 
 const Ctx = createContext<Domain>(null!);
@@ -25,13 +27,15 @@ let singleton: Domain | null = null;
 export function createDomain(): Domain {
   const bus = new EventBus();
   const positions = new ReadingPositions(bus);
+  const directory = new NoteDirectory(bus);
   singleton = {
     bus,
-    directory: new NoteDirectory(bus),
+    directory,
     notes: new NoteService(bus),
     positions,
     sessions: new SessionBook(bus, positions),
     workspace: new Workspace(bus),
+    dispose: () => directory.dispose(),
   };
   return singleton;
 }

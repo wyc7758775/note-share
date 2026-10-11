@@ -2,19 +2,14 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { SettingsProvider } from "./i18n";
-import { createDomain, DomainProvider } from "./domain/provider";
 import "./styles.css";
 
-// 组合根：领域容器在 React 之外创建一次（全局唯一），
-// StrictMode 双渲染不会产生第二个实例
-const domain = createDomain();
-
+// 领域容器由 App 按 session 创建（切仓库 = 重建容器 + remount），
+// 这里只保留设置上下文
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <SettingsProvider>
-      <DomainProvider domain={domain}>
-        <App />
-      </DomainProvider>
+      <App />
     </SettingsProvider>
   </React.StrictMode>
 );

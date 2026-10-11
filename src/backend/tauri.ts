@@ -7,17 +7,20 @@ import type {
   SavedScene,
   SearchHit,
   TreeNode,
+  VaultInfo,
+  VaultList,
 } from "./types";
 
 // 与 src-tauri/src/lib.rs 中的 command 一一对应
 export const tauriBackend: Backend = {
   mode: "tauri",
-  getVaultName: () => invoke<string>("vault_name"),
-  pickVault: async () => {
-    const dir = await open({ directory: true, title: "选择笔记库文件夹" });
-    if (typeof dir !== "string") return null;
-    await invoke("set_vault", { dir });
-    return dir;
+  listVaults: () => invoke<VaultList>("list_vaults"),
+  openVault: (path) => invoke<VaultInfo>("open_vault", { path }),
+  createVault: (parent, name) => invoke<VaultInfo>("create_vault", { parent, name }),
+  removeVault: (path) => invoke<void>("remove_vault", { path }),
+  pickFolder: async () => {
+    const dir = await open({ directory: true, title: "选择仓库文件夹" });
+    return typeof dir === "string" ? dir : null;
   },
   tree: () => invoke<TreeNode[]>("tree"),
   readNote: (path) => invoke<NoteRaw>("read_note", { path }),
@@ -31,6 +34,8 @@ export const tauriBackend: Backend = {
   readScene: (path) => invoke<string>("read_scene", { path }),
   saveScene: (name, sceneJson, pngBase64, folder?) =>
     invoke<SavedScene>("save_scene", { name, sceneJson, pngBase64 }),
+  createCanvas: (folder, name) =>
+    invoke<string>("create_canvas", { folder: folder ?? null, name: name ?? null }),
   saveAsset: (name, base64) => invoke<{ path: string }>("save_asset", { name, base64 }),
   readAssetBase64: (path) => invoke<AssetData>("read_asset", { path }),
   saveTextFile: async (defaultName, content) => {

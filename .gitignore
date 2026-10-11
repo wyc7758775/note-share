@@ -5,3 +5,4 @@ devvault/.trash/
 server/data/
 *.local
 .DS_Store
+.dev-vaults.json

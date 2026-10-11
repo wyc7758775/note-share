@@ -13,6 +13,7 @@ import EmptyState from "./EmptyState";
 import { emitViewImage } from "./ExcalidrawBlock";
 
 const ScenePanel = lazy(() => import("./ExcalidrawPanel"));
+const CanvasPanel = lazy(() => import("./canvas/CanvasPanel"));
 
 /** 标签可承载的图片附件 */
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -26,6 +27,10 @@ interface Props {
   vaultName: string | null;
   /** 欢迎页"新建笔记" */
   onNewNote: () => void;
+  /** 欢迎页"新建白板"（命名回车后） */
+  onNewCanvas: (name: string) => void;
+  /** 欢迎页"新建手绘" */
+  onNewScene: () => void;
   /** 画板保存后刷新文件树 */
   onSceneSaved: () => void;
   /** 阅读历史导航（悬浮在笔记左上角） */
@@ -66,6 +71,8 @@ export default function PaneView({
   active,
   vaultName,
   onNewNote,
+  onNewCanvas,
+  onNewScene,
   onSceneSaved,
   canBack,
   canForward,
@@ -79,6 +86,7 @@ export default function PaneView({
 
   const activeTab =
     pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? pane.tabs[pane.tabs.length - 1] ?? null;
+  const activeId = activeTab?.id ?? null;
 
   /** 事件目标在标签条内（那儿的插入逻辑由标签条自己处理，不进落区判定） */
   const inTabBar = (e: React.DragEvent) =>
@@ -132,41 +140,68 @@ export default function PaneView({
     >
       <PaneTabs pane={pane} active={active} />
 
-      {activeTab === null ? (
-        <div className="view-swap relative min-h-0 flex-1">
-          <EmptyState vaultName={vaultName ?? ""} onNewNote={onNewNote} />
-        </div>
-      ) : /\.excalidraw$/i.test(activeTab.path) ? (
-        <div className="view-swap min-h-0 flex-1">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-faint">
-                {t("sceneLoading")}
-              </div>
-            }
-          >
-            <ScenePanel
-              key={`${pane.id}:${activeTab.path}`}
-              src={activeTab.path}
-              onSaved={onSceneSaved}
-              onClose={() => workspace.closeTab(pane.id, activeTab.id)}
-            />
-          </Suspense>
-        </div>
-      ) : IMG_RE.test(activeTab.path) ? (
-        <div className="view-swap min-h-0 flex-1">
-          <ImagePane key={`${pane.id}:${activeTab.path}`} src={activeTab.path} />
+      {pane.tabs.length === 0 ? (
+        <div className="relative min-h-0 flex-1">
+          <EmptyState
+            vaultName={vaultName ?? ""}
+            onNewNote={onNewNote}
+            onNewCanvas={onNewCanvas}
+            onNewScene={onNewScene}
+          />
         </div>
       ) : (
-        <Editor
-          key={`${pane.id}:${activeTab.path}`}
-          initialPath={activeTab.path}
-          active={active}
-          canBack={canBack}
-          canForward={canForward}
-          onBack={onBack}
-          onForward={onForward}
-        />
+        /* 标签内容常驻：切标签只切显示、不卸载——编辑中的草稿、阅读位置、画板缩放
+           全部原地保留，杜绝"从顶部跳到底部"的重挂闪动（Obsidian 同款叶子保活） */
+        pane.tabs.map((tab) => {
+          const on = tab.id === activeId;
+          return (
+            <div key={tab.id} className={`min-h-0 flex-1 ${on ? "" : "hidden"}`}>
+              {/\.excalidraw$/i.test(tab.path) ? (
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-sm text-faint">
+                      {t("sceneLoading")}
+                    </div>
+                  }
+                >
+                  <ScenePanel
+                    src={tab.path}
+                    active={active && on}
+                    onSaved={onSceneSaved}
+                    onClose={() => workspace.closeTab(pane.id, tab.id)}
+                  />
+                </Suspense>
+              ) : /\.canvas$/i.test(tab.path) ? (
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-sm text-faint">
+                      {t("wbLoading")}
+                    </div>
+                  }
+                >
+                  <CanvasPanel
+                    src={tab.path}
+                    active={active && on}
+                    onClose={() => workspace.closeTab(pane.id, tab.id)}
+                  />
+                </Suspense>
+              ) : IMG_RE.test(tab.path) ? (
+                <ImagePane src={tab.path} />
+              ) : (
+                /* key 含路径：文件改名时重建（pathRef 语义），平时切标签不卸载 */
+                <Editor
+                  key={tab.path}
+                  initialPath={tab.path}
+                  active={active && on}
+                  canBack={canBack}
+                  canForward={canForward}
+                  onBack={onBack}
+                  onForward={onForward}
+                />
+              )}
+            </div>
+          );
+        })
       )}
 
       {/* 拖拽落区高亮（覆盖标签条下方的内容区，半透明色块不拦截事件） */}

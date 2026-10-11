@@ -1,14 +1,12 @@
 // 画板编辑面板：以标签页形态渲染在栏内（打开/关闭由 Workspace 标签管理）
 // 实时保存：改动后 ~1 秒自动存场景，~2.6 秒自动导出 PNG 预览（发 sceneSaved 事件刷新笔记内预览）
-// 支持插入"笔记卡片"：标题 + 前 10 行预览的文本元素，带 noteshare:// 链接可点击跳转
+// 笔记/白板卡片走 Obsidian 式 canvas（CanvasPanel），这里只做手绘
 import { useEffect, useRef, useState } from "react";
-import { Excalidraw, exportToBlob, convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import { backend } from "../backend";
 import { useSettings } from "../i18n";
 import { useDomain } from "../domain/provider";
-import { previewLines } from "../domain/note";
-import { parseNote } from "../lib/frontmatter";
 import { emitOpenNote } from "./WikiLink";
 
 /** 卡片链接协议：noteshare://<vault 相对路径> */
@@ -16,6 +14,8 @@ const NOTE_LINK = "noteshare://";
 
 interface Props {
   src: string;
+  /** 是否为活动标签（标签常驻后多个画板同时挂载，Esc 只响应活动者） */
+  active: boolean;
   /** PNG 落盘后回调（App 刷新文件树） */
   onSaved: () => void;
   /** 关闭当前标签（Esc / 兜底保存后调用） */
@@ -24,8 +24,9 @@ interface Props {
 
 type SaveState = "saved" | "saving" | "error";
 
-export default function ExcalidrawPanel({ src, onSaved, onClose }: Props) {
+export default function ExcalidrawPanel({ src, active, onSaved, onClose }: Props) {
   const { t, dark } = useSettings();
+  const { bus } = useDomain();
   const apiRef = useRef<any>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -132,8 +133,10 @@ export default function ExcalidrawPanel({ src, onSaved, onClose }: Props) {
   // Esc 关闭：捕获阶段先于 Excalidraw 自己的 Esc 处理读状态——
   // 有选中元素或正在编辑文本时，这一次 Esc 留给画板（取消选中/结束编辑），
   // 只有"空闲"状态下的 Esc 才关闭标签（先兜底保存）。
+  // 标签常驻后非活动面板不响应（否则会关掉别的标签）。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!active) return;
       if (e.key !== "Escape") return;
       const appState = apiRef.current?.getAppState?.();
       const busy =
@@ -149,7 +152,7 @@ export default function ExcalidrawPanel({ src, onSaved, onClose }: Props) {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
 
   useEffect(
     () => () => {
@@ -159,151 +162,30 @@ export default function ExcalidrawPanel({ src, onSaved, onClose }: Props) {
     []
   );
 
-  // ---- 插入笔记卡片：选择笔记 → 标题 + 前 10 行预览的文本元素（带跳转链接） ----
-  const { directory, bus } = useDomain();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickQuery, setPickQuery] = useState("");
-
-  const insertNoteCard = async (notePath: string) => {
-    setPickerOpen(false);
-    setPickQuery("");
-    const api = apiRef.current;
-    if (!api) return;
-    const name = notePath.split("/").pop()?.replace(/\.md$/i, "") ?? "";
-    let bodyLines: string[] = [];
-    try {
-      const { raw } = await backend.readNote(notePath);
-      const { body } = parseNote(raw);
-      bodyLines = previewLines(body, 10);
-    } catch {
-      /* 读不到就只放标题 */
-    }
-    const appState = api.getAppState();
-    // 画布可视中心（考虑滚动）
-    const cx = appState.scrollX + appState.width / 2 - 140;
-    const cy = appState.scrollY + appState.height / 2 - 80;
-    const link = NOTE_LINK + notePath;
-    // 官方工厂补全元素 schema（含尺寸测量），link 在转换后附加
-    const els = convertToExcalidrawElements([
-      {
-        type: "text",
-        x: cx,
-        y: cy,
-        text: name,
-        fontSize: 28,
-        strokeColor: dark ? "#e7e5e4" : "#1c1917",
-      },
-      {
-        type: "text",
-        x: cx,
-        y: cy + 44,
-        text: bodyLines.join("\n") || "…",
-        fontSize: 16,
-        strokeColor: dark ? "#a8a29e" : "#78716c",
-      },
-    ]).map((e: any) => ({ ...e, link }));
-    api.updateScene({ elements: [...api.getSceneElements(), ...els] });
-  };
-
-  const candidates = (() => {
-    const q = pickQuery.trim().toLowerCase();
-    return directory
-      .all()
-      .filter((n) => !q || n.name.toLowerCase().includes(q))
-      .slice(0, 8);
-  })();
-
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
-        <div className="flex min-w-0 items-center gap-2 text-sm text-soft">
-          <span className="text-faint">✏</span>
-          <span className="truncate">{src.split("/").pop()?.replace(/\.excalidraw$/i, "")}</span>
-          <span
-            className={`text-xs ${
-              saveState === "saving"
-                ? "text-amber-700"
-                : saveState === "error"
-                  ? "text-red-600"
-                  : "text-faint"
-            }`}
-          >
-            {saveState === "saving" ? t("autosaving") : saveState === "error" ? t("autosaveRetry") : t("autosaveOn")}
-          </span>
-          <button
-            className="btn-outline ml-2 shrink-0 !px-2.5 !py-0.5 text-xs"
-            onClick={() => setPickerOpen((v) => !v)}
-          >
-            📄 {t("insertNoteToScene")}
-          </button>
-          {pickerOpen && (
-            <span className="relative inline-flex">
-              <input
-                autoFocus
-                className="scene-note-picker"
-                placeholder={t("pickNotePh")}
-                value={pickQuery}
-                onChange={(e) => setPickQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && candidates[0]) void insertNoteCard(candidates[0].path);
-                  if (e.key === "Escape") {
-                    setPickerOpen(false);
-                    setPickQuery("");
-                  }
-                  e.stopPropagation();
-                }}
-                onBlur={() => window.setTimeout(() => setPickerOpen(false), 180)}
-              />
-              {candidates.length > 0 && (
-                <div className="scene-note-list">
-                  {candidates.map((n) => (
-                    <button
-                      key={n.path}
-                      className="slash-item"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        void insertNoteCard(n.path);
-                      }}
-                    >
-                      <span className="slash-icon">📄</span>
-                      <span className="slash-text">
-                        <span className="slash-title">{n.name}</span>
-                        <span className="slash-desc">{n.path}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </span>
-          )}
+    // 无顶栏设计（与笔记编辑器/白板一致）：文件名与关闭都在标签条上；Esc 空闲时兜底保存后关标签
+    <div className="h-full">
+      {initialData ? (
+        <Excalidraw
+          excalidrawAPI={(api: any) => (apiRef.current = api)}
+          initialData={initialData}
+          onChange={handleChange}
+          theme={dark ? "dark" : "light"}
+          // 点击笔记卡片（noteshare:// 链接）跳转：普通点击当前栏新标签（保留画板），Ctrl+点击新栏
+          onLinkOpen={(element: any, event: any) => {
+            const link = String(element?.link ?? "");
+            if (link.startsWith(NOTE_LINK)) {
+              event?.preventDefault?.();
+              const ctrl = event?.ctrlKey || event?.metaKey;
+              emitOpenNote(link.slice(NOTE_LINK.length), { newTab: !ctrl, newPane: ctrl });
+            }
+          }}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center text-sm text-faint">
+          {t("sceneLoading")}
         </div>
-        <button className="btn-ghost !py-1" onClick={() => void handleClose()}>
-          {t("close")}
-        </button>
-      </div>
-      <div className="min-h-0 flex-1">
-        {initialData ? (
-          <Excalidraw
-            excalidrawAPI={(api: any) => (apiRef.current = api)}
-            initialData={initialData}
-            onChange={handleChange}
-            theme={dark ? "dark" : "light"}
-            // 点击笔记卡片（noteshare:// 链接）跳转：普通点击当前栏新标签（保留画板），Ctrl+点击新栏
-            onLinkOpen={(element: any, event: any) => {
-              const link = String(element?.link ?? "");
-              if (link.startsWith(NOTE_LINK)) {
-                event?.preventDefault?.();
-                const ctrl = event?.ctrlKey || event?.metaKey;
-                emitOpenNote(link.slice(NOTE_LINK.length), { newTab: !ctrl, newPane: ctrl });
-              }
-            }}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-faint">
-            {t("sceneLoading")}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

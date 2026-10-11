@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { backend, type SearchHit, type TreeNode } from "../backend";
 import { useSettings } from "../i18n";
+import type { VaultRef } from "../domain/vault";
+import type { VaultService } from "../application/vault-service";
 import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
 import { useDomain } from "../domain/provider";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
+import VaultMenu from "./VaultMenu";
+
+/** 请求聚焦侧栏搜索（欢迎页"打开文件" / Ctrl+O） */
+export const FOCUS_SEARCH_EVENT = "noteshare:focus-search";
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
@@ -36,8 +42,11 @@ interface Props {
   onOpenNote: (path: string, opts?: { newTab?: boolean; newPane?: boolean }) => void;
   /** 文件夹级变化（新建文件夹等非笔记域操作）后刷新树 */
   onTreeChanged: () => Promise<void>;
-  onPickVault: () => void;
-  canPickVault: boolean;
+  /** 仓库切换（应用级服务与当前引用，左下角菜单用） */
+  vaultService: VaultService;
+  currentVault: VaultRef;
+  onSwitchVault: (path: string) => Promise<void>;
+  onManageVaults: () => void;
   onResize: (width: number) => void;
   onOpenSettings: () => void;
   onToggleSidebar: () => void;
@@ -46,15 +55,27 @@ interface Props {
 export default function Sidebar(props: Props) {
   const { vaultName, tree, currentPath, onOpenNote, width, onResize } = props;
   const { t } = useSettings();
-  const { notes: noteService } = useDomain();
+  const { notes: noteService, bus } = useDomain();
   const [tab, setTab] = useState<"files" | "search">("files");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const timer = useRef<number | undefined>(undefined);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // 行内重命名 / 新建文件夹 / 两步删除 / 图片阅览器 的状态
+  // 打开文件（欢迎页按钮 / Ctrl+O）：切到搜索页并聚焦输入框
+  useEffect(() => {
+    const onFocusSearch = () => {
+      setTab("search");
+      window.setTimeout(() => searchRef.current?.focus(), 30);
+    };
+    window.addEventListener(FOCUS_SEARCH_EVENT, onFocusSearch);
+    return () => window.removeEventListener(FOCUS_SEARCH_EVENT, onFocusSearch);
+  }, []);
+
+  // 行内重命名 / 新建文件夹 / 新建白板命名 / 两步删除 / 图片阅览器 的状态
   const [renaming, setRenaming] = useState<TreeNode | null>(null);
   const [newFolderMode, setNewFolderMode] = useState(false);
+  const [newCanvasIn, setNewCanvasIn] = useState<string | null>(null);
   const [confirmPath, setConfirmPath] = useState<string | null>(null);
   const armTimer = useRef<number | undefined>(undefined);
   const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
@@ -103,13 +124,31 @@ export default function Sidebar(props: Props) {
       setRenaming(null);
       const n = name.trim();
       if (!n) return;
-      const old = item.kind === "note" ? item.name.replace(/\.md$/i, "") : item.name;
-      if (n === old) return;
+      // 编辑时后缀已隐藏（见 FileTree 的 InlineInputRow），提交按原后缀拼回：
+      // 任何文件类型都改不了扩展名，避免误改后缀导致文件打不开
+      const ext = item.kind === "folder" ? "" : item.name.match(/\.([^.]+)$/)?.[1] ?? "";
+      const stem = ext ? item.name.slice(0, -ext.length - 1) : item.name;
+      if (n === stem) return;
       if (item.kind === "note") {
         const target = await noteService.rename(item.path, n);
         if (target && currentPath === item.path) onOpenNote(target);
+      } else if (ext) {
+        // 附件（白板/手绘/图片…）：扩展名保全；手绘的预览 PNG 成对跟随；
+        // 发 assetMoved 让文件树刷新、持有它的标签路径跟随
+        const base = n.replace(/\.[^.]+$/, ""); // 防御手敲后缀：剥掉，以原后缀为准
+        if (!base) return;
+        const to = await backend.renamePath(item.path, `${base}.${ext}`);
+        if (ext.toLowerCase() === "excalidraw") {
+          try {
+            await backend.renamePath(item.path.replace(/\.excalidraw$/i, ".png"), `${base}.png`);
+          } catch {
+            /* 没有预览 PNG 就跳过 */
+          }
+        }
+        bus.emit({ type: "assetMoved", from: item.path, to });
       } else {
         await backend.renamePath(item.path, n); // 文件夹重命名不属于笔记聚合，走 backend
+        await props.onTreeChanged();
       }
     },
     onDelete: async (path) => {
@@ -121,6 +160,7 @@ export default function Sidebar(props: Props) {
       }
     },
     onArmDelete: armDelete,
+    onNewCanvasIn: setNewCanvasIn,
     onViewAsset: async (item) => {
       const parent = item.path.split("/").slice(0, -1).join("/");
       const siblings = collectImageAssets(tree, parent);
@@ -219,7 +259,8 @@ export default function Sidebar(props: Props) {
               }
             }}
             onContextMenu={(e) => {
-              // 目录树空白处右键：新建笔记 / 新建文件夹（树内行有自己的菜单且不冒泡）
+              // 目录树空白处右键：新建笔记 / 新建文件夹 / 新建画板 / 新建白板
+              //（树内行有自己的菜单且不冒泡）
               e.preventDefault();
               showContextMenu(e.clientX, e.clientY, [
                 {
@@ -235,6 +276,10 @@ export default function Sidebar(props: Props) {
                   onClick: () => void noteService.createScene("").then((p) => {
                     if (p) window.dispatchEvent(new CustomEvent("noteshare:edit-scene", { detail: p }));
                   }),
+                },
+                {
+                  label: t("newCanvas"),
+                  onClick: () => setNewCanvasIn(""), // 根目录行内命名
                 },
               ]);
             }}
@@ -253,12 +298,27 @@ export default function Sidebar(props: Props) {
                 onCancel={() => setNewFolderMode(false)}
               />
             )}
+            {newCanvasIn === "" && (
+              <InlineInputRow
+                initial=""
+                placeholder={t("newCanvasPh")}
+                onCommit={async (v) => {
+                  setNewCanvasIn(null);
+                  const n = v.trim();
+                  if (!n) return;
+                  const p = await noteService.createCanvas("", n);
+                  if (p) handlers.onOpenNote(p, { newTab: true });
+                }}
+                onCancel={() => setNewCanvasIn(null)}
+              />
+            )}
             <FileTree
               items={tree.filter((t) => !HIDDEN.has(t.name))}
               depth={0}
               currentPath={currentPath}
               renamingPath={renaming?.path ?? null}
               confirmPath={confirmPath}
+              newCanvasIn={newCanvasIn}
               {...handlers}
             />
           </div>
@@ -266,10 +326,10 @@ export default function Sidebar(props: Props) {
       ) : (
         <div className="side-scroll">
           <input
+            ref={searchRef}
             className="side-search"
             placeholder={t("searchPlaceholder")}
             value={query}
-            autoFocus
             onChange={(e) => setQuery(e.target.value)}
           />
           {hits !== null && hits.length === 0 && (
@@ -296,17 +356,14 @@ export default function Sidebar(props: Props) {
         </div>
       )}
 
-      {/* 底部：笔记仓库切换 + 设置 */}
+      {/* 底部：仓库切换菜单 + 设置 */}
       <div className="vault-bar">
-        <button
-          className="min-w-0 flex-1 self-stretch text-left"
-          data-tip={props.canPickVault ? t("vaultSwitchTip") : t("vaultWebTip")}
-          onClick={() => props.canPickVault && props.onPickVault()}
-        >
-          {I.folder}
-          <span className="min-w-0 flex-1 truncate">{vaultName ?? "…"}</span>
-          {props.canPickVault && <span className="shrink-0 text-faint">{I.switchVault}</span>}
-        </button>
+        <VaultMenu
+          service={props.vaultService}
+          current={props.currentVault}
+          onSwitch={props.onSwitchVault}
+          onManage={props.onManageVaults}
+        />
         <button
           className="vault-setting-btn"
           data-tip={t("settings")}

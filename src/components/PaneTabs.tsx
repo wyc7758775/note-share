@@ -19,12 +19,12 @@ interface Props {
 }
 
 function tabLabel(path: string): string {
-  return path.split("/").pop()?.replace(/\.(md|excalidraw)$/i, "") ?? "";
+  return path.split("/").pop()?.replace(/\.(md|excalidraw|canvas)$/i, "") ?? "";
 }
 
 export default function PaneTabs({ pane, active }: Props) {
   const { t } = useSettings();
-  const { workspace, notes: noteService } = useDomain();
+  const { workspace } = useDomain();
   useWorkspaceVersion(); // 标签增删/切换/激活跟随工作台版本
 
   // 本栏内正被拖拽的标签 id（淡化显示）；dropHint = 落点指示线的插入位置
@@ -33,13 +33,6 @@ export default function PaneTabs({ pane, active }: Props) {
   const stripRef = useRef<HTMLDivElement>(null);
 
   const activeTab = pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? null;
-
-  const newNote = async () => {
-    const cur = activeTab;
-    const folder = cur ? cur.path.split("/").slice(0, -1).join("/") : "";
-    const path = await noteService.create(t("untitledNote"), folder);
-    if (path) workspace.open(path, "newTab");
-  };
 
   /** 根据鼠标位置算插入位置：经过标签左半插它前面，右半插后面 */
   const indexAt = (e: React.DragEvent, el: HTMLElement): number => {
@@ -92,10 +85,18 @@ export default function PaneTabs({ pane, active }: Props) {
           if (!stripRef.current?.contains(e.relatedTarget as Node)) setDropIndex(null);
         }}
         onDrop={handleDrop}
+        // 纵向滚轮转横向滚动（标签条只有横向溢出；触控板的 deltaX 也一并累计）
+        onWheel={(e) => {
+          const el = stripRef.current;
+          if (!el) return;
+          const delta = e.deltaY || e.deltaX;
+          if (delta && el.scrollWidth > el.clientWidth) el.scrollLeft += delta;
+        }}
       >
         {pane.tabs.map((tab) => {
           const on = tab.id === pane.activeTabId;
           const isScene = /\.excalidraw$/i.test(tab.path);
+          const isCanvas = /\.canvas$/i.test(tab.path);
           const i = pane.tabs.indexOf(tab);
           return (
             <div
@@ -130,14 +131,15 @@ export default function PaneTabs({ pane, active }: Props) {
               }}
               onDrop={handleDrop}
               onClick={() => workspace.activateTab(pane.id, tab.id)}
-              onAuxClick={(e) => {
-                if (e.button !== 1) return; // 中键关闭（Obsidian 同款）
+              onMouseDown={(e) => {
+                // 中键按下即关（preventDefault 压掉 Windows 自动滚动手势，auxclick 就不再来了）
+                if (e.button !== 1) return;
                 e.preventDefault();
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
-                {isScene ? I.pen : I.note}
+                {isScene ? I.pen : isCanvas ? I.canvas : I.note}
               </span>
               <span className="tab-label">{tabLabel(tab.path)}</span>
               <button
@@ -153,13 +155,6 @@ export default function PaneTabs({ pane, active }: Props) {
             </div>
           );
         })}
-        <button
-          className="tab-new"
-          data-tip={t("newTabNote")}
-          onClick={() => void newNote()}
-        >
-          {I.plus}
-        </button>
       </div>
     </div>
   );

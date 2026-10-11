@@ -289,7 +289,8 @@ body.resizing .side-anim {
 .top-icon-btn:active,
 .side-tab:active,
 .seg-item:active,
-.vault-bar > button:active {
+.vault-bar > button:active,
+.vault-menu-btn:active {
   transform: scale(0.97);
 }
 
@@ -593,10 +594,36 @@ body {
 
 /* ---------- 文件树动效 ---------- */
 .tree-row {
+  min-height: 30px;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 .tree-row:hover {
   background-color: var(--surface-hover);
+}
+/* 果冻弹跳给行首图标（整行缩放会连带文字变形，观感像故障——只动图标） */
+.tree-ico-jelly {
+  display: inline-flex;
+  transform-origin: center bottom;
+}
+.tree-row:hover .tree-ico-jelly {
+  animation: tree-ico-jelly 0.42s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+@keyframes tree-ico-jelly {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.32);
+  }
+  62% {
+    transform: scale(0.9);
+  }
+  82% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .tree-row-active {
   background-color: var(--active-bg);
@@ -604,6 +631,24 @@ body {
 }
 .tree-row-active:hover {
   background-color: var(--active-bg-hover);
+}
+/* 删除退出动画：淡出 + 收起（高度/内边距一起塌缩） */
+.tree-row-exiting {
+  overflow: hidden;
+  animation: tree-row-out 0.2s ease forwards;
+  pointer-events: none;
+}
+@keyframes tree-row-out {
+  from {
+    opacity: 1;
+    max-height: 40px;
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
 }
 /* 拖拽：源行半透明、目标文件夹高亮 */
 .tree-row-dragging {
@@ -926,31 +971,6 @@ body {
   cursor: pointer;
 }
 
-/* ---------- 画板内插入笔记的选择器 ---------- */
-.scene-note-picker {
-  width: 180px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  padding: 4px 8px;
-  font-size: 12.5px;
-  outline: none;
-}
-.scene-note-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
-  width: 240px;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 4px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  box-shadow: var(--shadow-card);
-}
-
 /* ---------- 多栏（布局树：row 左右并排 / col 上下堆叠，叶子是标签栏） ---------- */
 .layout-row {
   display: flex;
@@ -972,23 +992,37 @@ body {
   min-height: 0;
   overflow: hidden;
 }
-/* 栏间拖动分隔线：row 容器里是竖线（左右拖），col 容器里是横线（上下拖） */
+/* 栏间拖动分隔线：中央常驻 1px 微弱分割线，悬停整条高亮 */
 .layout-resizer {
   flex: none;
   z-index: 15;
-  background: transparent;
+  background-color: transparent;
   transition: background-color 0.15s ease;
 }
 .layout-resizer-col {
   width: 5px;
   cursor: col-resize;
+  background-image: linear-gradient(
+    to right,
+    transparent 2px,
+    var(--line) 2px,
+    var(--line) 3px,
+    transparent 3px
+  );
 }
 .layout-resizer-row {
   height: 5px;
   cursor: row-resize;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 2px,
+    var(--line) 2px,
+    var(--line) 3px,
+    transparent 3px
+  );
 }
 .layout-resizer:hover {
-  background: rgb(var(--accent-rgb) / 0.35);
+  background-color: rgb(var(--accent-rgb) / 0.35);
 }
 
 .pane-col {
@@ -1326,4 +1360,1074 @@ body {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+/* ---------- 默认界面（空栏快捷面板） ---------- */
+.empty-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  text-align: left;
+  transition: border-color 0.13s ease, color 0.13s ease, box-shadow 0.13s ease;
+}
+.empty-action:hover {
+  border-color: rgb(var(--accent-rgb) / 0.45);
+  color: var(--ink);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.06);
+}
+.empty-action-ico {
+  flex: none;
+  display: flex;
+  width: 20px;
+  justify-content: center;
+  color: var(--ink-faint);
+}
+.empty-action:hover .empty-action-ico {
+  color: rgb(var(--accent-rgb));
+}
+.empty-kbd {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--paper-side);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.empty-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.55);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 13.5px;
+  color: var(--ink);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.08);
+}
+
+/* ---------- 白板（Obsidian 式 canvas） ---------- */
+.cv-wrap {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+.cv-flow {
+  width: 100%;
+  height: 100%;
+  background: var(--paper);
+}
+/* 点阵背景与主题联动（覆盖 React Flow 默认色） */
+.cv-flow .react-flow__background circle {
+  fill: var(--line-strong);
+}
+/* 连线：灰线 + 箭头跟色，选中变主题色 */
+.cv-flow .react-flow__edge {
+  color: var(--ink-faint);
+}
+.cv-flow .react-flow__edge-path {
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.cv-flow .react-flow__edge.selected {
+  color: rgb(var(--accent-rgb));
+}
+.cv-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2.2;
+}
+/* v12 箭头 marker：defs 里 polyline.arrowclosed / polyline.arrow */
+.cv-flow .react-flow__arrowhead polyline {
+  fill: var(--ink-faint);
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+}
+.cv-flow .react-flow__connection-path {
+  stroke: rgb(var(--accent-rgb) / 0.7);
+  stroke-width: 1.8;
+}
+.cv-flow .react-flow__selection {
+  background: rgb(var(--accent-rgb) / 0.08);
+  border: 1px solid rgb(var(--accent-rgb) / 0.55);
+}
+
+/* 卡片 */
+.cv-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.07);
+  font-size: 13px;
+}
+.cv-flow .react-flow__node.selected .cv-card {
+  border-color: rgb(var(--accent-rgb) / 0.7);
+  box-shadow:
+    0 0 0 2px rgb(var(--accent-rgb) / 0.3),
+    0 4px 16px rgb(0 0 0 / 0.12);
+}
+.cv-card-head,
+.cv-card-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 8px 4px 10px;
+}
+.cv-card-head {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-side);
+  cursor: pointer;
+}
+.cv-card-head:hover .cv-card-title {
+  color: var(--ink);
+}
+.cv-card-foot {
+  border-top: 1px solid var(--line);
+  background: var(--paper-side);
+}
+.cv-card-ico {
+  flex: none;
+  display: flex;
+  color: var(--ink-faint);
+}
+.cv-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 悬停工具（打开 / 刷新 / 删除） */
+.cv-card-acts {
+  flex: none;
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+.cv-card:hover .cv-card-acts {
+  display: flex;
+}
+.cv-act {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.cv-act:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.cv-act-danger:hover {
+  color: #dc2626;
+}
+
+/* 卡内滚动正文 + 紧凑 markdown */
+.cv-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.cv-hint {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.cv-md h1,
+.cv-md h2,
+.cv-md h3,
+.cv-md h4 {
+  margin: 0.6em 0 0.35em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.cv-md h1 {
+  font-size: 1.3em;
+}
+.cv-md h2 {
+  font-size: 1.18em;
+}
+.cv-md h3 {
+  font-size: 1.08em;
+}
+.cv-md h4 {
+  font-size: 1em;
+}
+.cv-md p {
+  margin: 0.4em 0;
+}
+.cv-md ul,
+.cv-md ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.cv-md li {
+  margin: 0.15em 0;
+}
+.cv-md li.cv-task-item {
+  list-style: none;
+  margin-left: -1.2em;
+}
+.cv-md input.cv-task {
+  margin-right: 6px;
+  accent-color: rgb(var(--accent-rgb));
+}
+.cv-md blockquote {
+  margin: 0.5em 0;
+  padding: 2px 10px;
+  border-left: 3px solid rgb(var(--accent-rgb) / 0.5);
+  color: var(--ink-soft);
+}
+.cv-md code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-size: 0.88em;
+}
+.cv-md pre {
+  margin: 0.5em 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--code-block-bg);
+  overflow-x: auto;
+}
+.cv-md pre code {
+  padding: 0;
+  background: none;
+  color: #e7e5e4;
+  font-size: 12px;
+}
+.cv-md hr {
+  margin: 0.8em 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.cv-md table {
+  margin: 0.5em 0;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.cv-md th,
+.cv-md td {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+}
+.cv-md img.cv-img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.cv-md img.cv-img-missing {
+  min-height: 28px;
+  opacity: 0.35;
+}
+.cv-wikilink {
+  color: rgb(var(--accent-rgb));
+  border-bottom: 1px dashed rgb(var(--accent-rgb) / 0.45);
+  cursor: pointer;
+  text-decoration: none;
+}
+.cv-wikilink:hover {
+  border-bottom-style: solid;
+}
+
+/* 图片卡片 */
+.cv-img-box {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--paper-side);
+}
+.cv-img-box img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* 文本卡片 */
+.cv-textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: var(--surface);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.cv-text-empty {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.cv-text-empty:hover {
+  color: var(--ink-soft);
+}
+
+/* 连接点：悬停卡片时浮现 */
+.cv-flow .react-flow__handle.cv-handle {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease;
+}
+.cv-flow .react-flow__node:hover .react-flow__handle.cv-handle,
+.cv-flow .react-flow__handle.cv-handle.connectionindicator {
+  opacity: 1;
+}
+.cv-flow .react-flow__handle.cv-handle:hover,
+.cv-flow .react-flow__handle.cv-handle.connectionindicator {
+  border-color: rgb(var(--accent-rgb));
+  background: rgb(var(--accent-rgb) / 0.18);
+}
+
+/* 缩放手柄（选中时四边四角） */
+.cv-flow .react-flow__resize-control.line {
+  border-color: rgb(var(--accent-rgb) / 0.55);
+}
+.cv-flow .react-flow__resize-control.handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid rgb(var(--accent-rgb));
+}
+
+/* 底部工具栏 + 选择器 */
+.cv-toolbar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.cv-tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.cv-tool:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.cv-tool-on {
+  background: rgb(var(--accent-rgb) / 0.14);
+  color: rgb(var(--accent-rgb));
+}
+.cv-tool-t {
+  width: 15px;
+  text-align: center;
+  font-weight: 600;
+}
+.cv-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+}
+.cv-picker {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 300px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  animation: ctx-in 0.12s ease;
+}
+.cv-picker-input {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--paper-side);
+  padding: 6px 9px;
+  font-size: 12.5px;
+  outline: none;
+}
+.cv-picker-input:focus {
+  border-color: rgb(var(--accent-rgb) / 0.55);
+}
+.cv-picker-list {
+  margin-top: 4px;
+  max-height: 264px;
+  overflow-y: auto;
+}
+.cv-picker-empty {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* 文本卡片：纯文字（pre-wrap，所见即所得） */
+.cv-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  color: var(--ink);
+}
+
+/* 色块卡片：可调样式方块 + 居中文字（正文色由内联按亮度切换）
+   host 承载选中描边与属性面板（.cv-prop 浮在块外上方，块身不能裁剪）；
+   host 亦不设 overflow——面板是 host 的子元素，悬停链条才能维持 */
+.cv-block-host {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+.cv-block {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 22px;
+  border: 2px solid rgb(255 255 255 / 0.22); /* 无边框时的默认浅描边；设了 stroke 则被内联覆盖 */
+  border-radius: 22px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.16);
+}
+.cv-flow .react-flow__node.selected .cv-block-host {
+  outline: 2px solid rgb(var(--accent-rgb) / 0.75);
+  outline-offset: 3px;
+  border-radius: 24px;
+}
+.cv-block-text {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+}
+.cv-block-input {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+.cv-block-input::placeholder {
+  opacity: 0.55;
+}
+.cv-block-empty {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  opacity: 0.6;
+}
+.cv-block-empty:hover {
+  opacity: 0.9;
+}
+/* 色块属性面板（Excalidraw 式）：仅在色块被选中时浮出（悬停不触发，避免干扰） */
+.cv-prop {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 40;
+  display: none;
+  flex-direction: column;
+  gap: 7px;
+  width: 250px;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.cv-flow .react-flow__node.selected .cv-prop {
+  display: flex;
+}
+/* 块贴近画布顶部时面板翻到下方 */
+.cv-prop-below {
+  bottom: auto;
+  top: calc(100% + 10px);
+}
+.cv-prop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cv-prop-label {
+  flex: none;
+  width: 54px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.cv-prop-ctl {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+/* 图标分段按钮（边框宽度/样式、填充、边角、字号） */
+.cv-seg-btn {
+  display: flex;
+  width: 28px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.cv-seg-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.cv-seg-btn.on {
+  border-color: rgb(var(--accent-rgb) / 0.5);
+  background: rgb(var(--accent-rgb) / 0.12);
+  color: var(--ink);
+}
+.cv-seg-wide {
+  width: auto;
+  min-width: 24px;
+  padding: 0 5px;
+}
+/* 带文字的小按钮（图层/操作） */
+.cv-txt-btn {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  font-size: 11.5px;
+  color: var(--ink);
+}
+.cv-txt-btn:hover {
+  background: var(--surface-hover);
+}
+.cv-txt-danger:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+/* 不透明度滑杆 */
+.cv-range {
+  flex: 1;
+  min-width: 80px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.cv-range-val {
+  flex: none;
+  width: 34px;
+  font-size: 11px;
+  text-align: right;
+  color: var(--ink-faint);
+}
+/* 色板圆点（背景/边框两行共用） */
+.cv-swatch {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+.cv-swatch-on {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cv-swatch-none {
+  background: conic-gradient(#c4c4c4 0 25%, #ececec 0 50%, #c4c4c4 0 75%, #ececec 0) 0 0 / 8px 8px;
+}
+.cv-swatch-slash {
+  position: relative;
+  background: var(--surface);
+}
+.cv-swatch-slash::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 50%;
+  height: 1.6px;
+  border-radius: 2px;
+  background: #dc2626;
+  transform: rotate(-45deg);
+}
+.cv-swatch-rainbow {
+  background: conic-gradient(#e03131, #e8590c, #f08c00, #2f9e44, #0c8599, #1971c2, #9c36b5, #e03131);
+}
+.cv-color-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.cv-tool-block {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+/* 连线标签与编辑框 */
+.cv-edge-label {
+  position: absolute;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.cv-edge-input {
+  position: fixed;
+  z-index: 200;
+  width: 150px;
+  transform: translate(-50%, -130%);
+  padding: 4px 9px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.55);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  font-size: 12px;
+  outline: none;
+}
+
+/* 空白板提示 */
+.cv-empty-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 70px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* 保存失败浮动提示（无顶栏设计，错误态单独浮出） */
+.cv-save-error {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 4px 12px;
+  border: 1px solid rgb(220 38 38 / 0.4);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: #dc2626;
+  font-size: 12px;
+}
+.cv-save-error:hover {
+  background: rgb(220 38 38 / 0.12);
+}
+
+/* 缩放控件（右下角）与 React Flow 归属标记跟随主题 */
+.cv-flow .react-flow__controls {
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.cv-flow .react-flow__controls-button {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+.cv-flow .react-flow__controls-button:hover {
+  background: var(--surface-hover);
+}
+.cv-flow .react-flow__attribution {
+  background: transparent;
+  color: var(--ink-faint);
+  opacity: 0.55;
+}
+.cv-flow .react-flow__attribution a {
+  color: inherit;
+}
+.cv-flow .react-flow__node-text {
+  cursor: text;
+}
+
+/* ---------- 仓库：启动页（管理器） / 启动 splash ---------- */
+.vault-boot {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+/* Obsidian 式启动页：整页铺满窗口（桌面端此页即小窗），动作卡在上、仓库列表在下 */
+.vault-switcher {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: var(--paper);
+}
+.vs-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 0;
+}
+.vs-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-soft);
+  padding: 5px 9px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.vs-back:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.vs-body {
+  display: flex;
+  width: min(600px, calc(100vw - 40px));
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 26px 0 18px;
+}
+.vs-cards {
+  display: flex;
+  gap: 12px;
+}
+.vs-card {
+  display: flex;
+  flex: 1;
+  min-height: 172px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 16px 14px;
+  text-align: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.vs-card:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.vs-card-icon {
+  display: flex;
+  margin-bottom: 6px;
+  color: var(--ink-soft);
+}
+.vs-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.vs-card-hint {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+/* web 模式右卡：静态卡（手输路径），不可点击整卡 */
+.vs-card-static {
+  justify-content: flex-start;
+  cursor: default;
+}
+.vs-card-static .vs-loc {
+  width: 100%;
+  margin-top: 4px;
+}
+/* 新建卡展开后的表单（Obsidian：点击"新建仓库"卡原地变表单） */
+.vs-form {
+  display: flex;
+  flex: 1.35;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 16px;
+}
+.vs-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.vs-vaults {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.vs-title {
+  margin: 2px 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.vs-empty {
+  margin: 4px 8px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.vs-vault {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.vs-vault:hover {
+  background: var(--surface-hover);
+}
+.vs-vault.missing {
+  opacity: 0.55;
+  cursor: default;
+}
+.vs-remove {
+  display: inline-flex;
+  flex: none;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  padding: 4px;
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: pointer;
+}
+.vs-vault:hover .vs-remove {
+  opacity: 1;
+}
+.vs-remove:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.vs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.vs-field input {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.vs-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.vs-loc {
+  display: flex;
+  gap: 6px;
+}
+.vs-loc input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.vs-loc input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* 表单未满足/忙碌时的禁用态要有视觉反馈，避免"点了没反应"的错觉 */
+.vs-body button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.vs-webnote {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.vs-err {
+  max-width: min(340px, 100%);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: #b91c1c;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+/* ---------- 左下角仓库切换菜单 ---------- */
+.vault-menu {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+.vault-menu-btn {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  padding: 5px 7px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.vault-menu-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.vault-menu-pop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  display: flex;
+  max-height: min(50vh, 340px);
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  padding: 5px;
+  overflow-y: auto;
+  animation: pop-in 0.12s cubic-bezier(0.2, 0, 0, 1);
+}
+.vault-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.vault-menu-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.vault-menu-item.current {
+  background: var(--active-bg);
+}
+.vault-menu-item.missing {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.vm-check {
+  display: inline-flex;
+  width: 18px;
+  flex: none;
+  justify-content: center;
+  color: var(--accent);
+}
+.vault-menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
 }

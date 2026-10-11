@@ -1,21 +1,123 @@
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { backend } from "./backend";
 import { useSettings } from "./i18n";
-import { DomainProvider, useDomain, useWorkspaceVersion } from "./domain/provider";
+import {
+  createDomain,
+  DomainProvider,
+  useDomain,
+  useWorkspaceVersion,
+  type Domain,
+} from "./domain/provider";
+import { VaultRegistry, type VaultRef } from "./domain/vault";
+import { VaultService } from "./application/vault-service";
+import { setMainWindowSize } from "./backend/window-size";
 import type { LayoutNode } from "./domain/workspace";
-import Sidebar from "./components/Sidebar";
+import Sidebar, { FOCUS_SEARCH_EVENT } from "./components/Sidebar";
 import PaneView from "./components/PaneView";
 import SettingsModal from "./components/SettingsModal";
+import VaultSwitcher from "./components/VaultSwitcher";
 import { OPEN_NOTE_EVENT } from "./components/WikiLink";
-import { EDIT_SCENE_EVENT } from "./components/ExcalidrawBlock";
-import { I } from "./components/icons";
+import { EDIT_SCENE_EVENT, emitEditScene } from "./components/ExcalidrawBlock";
+import { PikachuLogo, I } from "./components/icons";
+
+/** 一次"打开的仓库"会话：领域容器 + 仓库引用。切换仓库 = 整个 session 换新 */
+interface VaultSession {
+  domain: Domain;
+  vault: VaultRef;
+}
 
 export default function App() {
+  const [registry] = useState(() => new VaultRegistry());
+  const [service] = useState(() => new VaultService(registry));
+  const [session, setSession] = useState<VaultSession | null>(null);
+  const [managing, setManaging] = useState(false);
+  const [booted, setBooted] = useState(false);
+  const sessionRef = useRef<VaultSession | null>(null);
+
+  // 启动：拉注册表，有"上次打开且目录仍在"的仓库直接进，否则落启动页
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        await service.refresh();
+        const last = registry.lastOpened();
+        if (last) {
+          const ref = await service.open(last.path);
+          if (!alive) return;
+          const next = { domain: createDomain(), vault: ref };
+          sessionRef.current = next;
+          setSession(next);
+        }
+      } catch {
+        /* 拉取/打开失败也进启动页，在那里能重试 */
+      } finally {
+        if (alive) setBooted(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 打开/切换仓库：重建领域容器，key remount 让布局/名录/历史等 vault 内状态全部归零
+  const openVault = useCallback(
+    async (path: string) => {
+      const ref = await service.open(path);
+      const next = { domain: createDomain(), vault: ref };
+      sessionRef.current?.domain.dispose();
+      sessionRef.current = next;
+      setSession(next);
+      setManaging(false);
+      void setMainWindowSize(); // 桌面端：从启动小窗回到工作区大窗（Obsidian 式）
+    },
+    [service]
+  );
+
+  if (!booted) {
+    return (
+      <div className="vault-boot">
+        <PikachuLogo size={72} className="text-ink" />
+      </div>
+    );
+  }
+  if (managing || !session) {
+    return (
+      <VaultSwitcher
+        service={service}
+        onOpen={openVault}
+        onBack={session ? () => setManaging(false) : undefined}
+      />
+    );
+  }
+  return (
+    <DomainProvider key={session.vault.id} domain={session.domain}>
+      <VaultApp
+        vault={session.vault}
+        vaultService={service}
+        onOpenVault={openVault}
+        onManageVaults={() => setManaging(true)}
+      />
+    </DomainProvider>
+  );
+}
+
+/** 主界面：一个已打开仓库的全部工作区 UI（随 session 整树 remount，不做跨仓库状态保留） */
+function VaultApp({
+  vault,
+  vaultService,
+  onOpenVault,
+  onManageVaults,
+}: {
+  vault: VaultRef;
+  vaultService: VaultService;
+  onOpenVault: (path: string) => Promise<void>;
+  onManageVaults: () => void;
+}) {
   const { t } = useSettings();
-  const { workspace, bus, directory } = useDomain();
+  const { workspace, bus, directory, notes: noteService } = useDomain();
   useWorkspaceVersion(); // 分栏/标签布局变化触发重渲染
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [vaultName, setVaultName] = useState<string | null>(null);
   const [tree, setTree] = useState<import("./backend").TreeNode[]>([]);
 
   // 侧栏宽度与收起（记忆到本地）
@@ -77,6 +179,8 @@ export default function App() {
         if (e.type === "noteRenamed" || e.type === "noteMoved") {
           workspace.relocate(e.from, e.to); // 所有栏的标签路径跟随
           setHistory((h) => ({ ...h, stack: h.stack.map((p) => (p === e.from ? e.to : p)) }));
+        } else if (e.type === "assetMoved") {
+          workspace.relocate(e.from, e.to); // 白板/手绘重命名或移动：标签路径跟随（面板按新 src 重载）
         } else if (e.type === "noteTrashed") {
           workspace.clearPath(e.path); // 持有它的标签关闭（相邻顶上）
         }
@@ -86,10 +190,7 @@ export default function App() {
   }, [bus, refreshTree, workspace]);
 
   useEffect(() => {
-    (async () => {
-      setVaultName(await backend.getVaultName());
-      await refreshTree();
-    })();
+    void refreshTree();
   }, [refreshTree]);
 
   // 屏蔽原生右键菜单（各区域用 showContextMenu 弹自绘菜单；Excalidraw 面板自带菜单，交给它）
@@ -142,13 +243,30 @@ export default function App() {
     };
   }, [jumpHistory]);
 
-  const pickVault = async () => {
-    const dir = await backend.pickVault();
-    if (dir) {
-      setVaultName(await backend.getVaultName());
-      await refreshTree();
-    }
-  };
+  // 全局快捷键：Ctrl+N 新建笔记（活动栏新标签）、Ctrl+O 打开文件（聚焦侧栏搜索）
+  // （Ctrl+N 在浏览器里是保留键拦不住，桌面端有效；面板上的提示以此为准）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "n") {
+        e.preventDefault();
+        void backend.createNote("", t("untitledNote")).then((p) => openNote(p, { newTab: true }));
+      } else if (k === "o") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent(FOCUS_SEARCH_EVENT));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openNote, t]);
+
+  // 侧栏收起时请求搜索：先展开再聚焦（Sidebar 自己监听同一事件切搜索页）
+  useEffect(() => {
+    const onFocusSearch = () => setSideCollapsed(false);
+    window.addEventListener(FOCUS_SEARCH_EVENT, onFocusSearch);
+    return () => window.removeEventListener(FOCUS_SEARCH_EVENT, onFocusSearch);
+  }, []);
 
   const canBack = history.index > 0;
   const canForward = history.index < history.stack.length - 1;
@@ -165,10 +283,18 @@ export default function App() {
           key={pane.id}
           pane={pane}
           active={pane.id === activePaneId}
-          vaultName={vaultName}
+          vaultName={vault.name}
           onNewNote={async () => {
-            const path = await backend.createNote("", t("untitledNote"));
-            openNote(path);
+            const path = await noteService.create(t("untitledNote"), "");
+            if (path) openNote(path);
+          }}
+          onNewCanvas={async (name) => {
+            const path = await noteService.createCanvas("", name);
+            if (path) openNote(path, { newTab: true });
+          }}
+          onNewScene={async () => {
+            const path = await noteService.createScene("");
+            if (path) emitEditScene(path); // 新标签打开新手绘
           }}
           onSceneSaved={() => void refreshTree()}
           canBack={canBack}
@@ -239,44 +365,34 @@ export default function App() {
           aria-hidden={sideCollapsed}
         >
           <Sidebar
-            vaultName={vaultName}
+            vaultName={vault.name}
             tree={tree}
             currentPath={workspace.activePath}
             width={sideWidth}
             onOpenNote={(path, opts) => openNote(path, opts)}
             onTreeChanged={refreshTree}
-            onPickVault={pickVault}
-            canPickVault={backend.mode === "tauri"}
+            vaultService={vaultService}
+            currentVault={vault}
+            onSwitchVault={onOpenVault}
+            onManageVaults={onManageVaults}
             onResize={setSideWidth}
             onOpenSettings={() => setSettingsOpen(true)}
             onToggleSidebar={() => setSideCollapsed((v) => !v)}
           />
         </div>
         <main className={`relative flex min-w-0 flex-1 overflow-hidden ${sideCollapsed ? "sidebar-collapsed" : ""}`}>
-          {vaultName === null ? (
-            <div className="view-swap flex h-full w-full flex-col items-center justify-center gap-4 text-soft">
-              <div className="serif text-2xl text-ink">NoteShare</div>
-              <p className="text-sm">{t("noVaultHint")}</p>
-              <button className="btn-primary" onClick={pickVault}>
-                {t("pickVaultBtn")}
-              </button>
-            </div>
-          ) : (
-            <>
-              {sideCollapsed && (
-                <button
-                  className="side-toggle-float"
-                  data-tip={t("expandSidebar")}
-                  onClick={() => setSideCollapsed(false)}
-                >
-                  {I.panelLeft}
-                </button>
-              )}
-              <div className="flex h-full min-h-0 w-full flex-1">
-                {renderLayout(workspace.layout)}
-              </div>
-            </>
+          {sideCollapsed && (
+            <button
+              className="side-toggle-float"
+              data-tip={t("expandSidebar")}
+              onClick={() => setSideCollapsed(false)}
+            >
+              {I.panelLeft}
+            </button>
           )}
+          <div className="flex h-full min-h-0 w-full flex-1">
+            {renderLayout(workspace.layout)}
+          </div>
         </main>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

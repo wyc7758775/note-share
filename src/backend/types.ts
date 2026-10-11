@@ -34,11 +34,32 @@ export interface AssetData {
   mime: string;
 }
 
+/** 注册表里的一个仓库（exists = 目录仍可访问，缺失的 UI 上标灰） */
+export interface VaultInfo {
+  id: string;
+  name: string;
+  path: string; // 绝对路径；web 模式为 VAULT_DIR
+  lastOpenedAt: number; // unix 秒
+  exists: boolean;
+}
+
+export interface VaultList {
+  vaults: VaultInfo[];
+  active: string | null; // 上次打开的仓库路径（列表按 lastOpenedAt 取最新）
+}
+
 export interface Backend {
   mode: "tauri" | "web";
-  getVaultName(): Promise<string>;
-  /** 弹出系统对话框选择 vault 文件夹（仅桌面模式；web 模式返回 null） */
-  pickVault(): Promise<string | null>;
+  /** 仓库注册表（桌面端权威在应用配置目录 vaults.json；web 模式恒为 VAULT_DIR 单条） */
+  listVaults(): Promise<VaultList>;
+  /** 打开（登记并激活）一个仓库文件夹，返回最新引用；目录不存在时报错 */
+  openVault(path: string): Promise<VaultInfo>;
+  /** 在 parent 下新建仓库文件夹（含 .noteshare 清单）并激活 */
+  createVault(parent: string, name: string): Promise<VaultInfo>;
+  /** 仅从注册表移除，不碰磁盘 */
+  removeVault(path: string): Promise<void>;
+  /** 弹系统对话框选一个文件夹（只选路径不打开；web 模式返回 null） */
+  pickFolder(): Promise<string | null>;
   tree(): Promise<TreeNode[]>;
   readNote(path: string): Promise<NoteRaw>;
   writeNote(path: string, raw: string): Promise<void>;
@@ -59,6 +80,8 @@ export interface Backend {
     pngBase64: string | null,
     folder?: string
   ): Promise<SavedScene>;
+  /** 新建空白白板（Obsidian 式 .canvas JSON），返回最终路径；folder 为空 = vault 根 */
+  createCanvas(folder?: string, name?: string): Promise<string>;
   saveAsset(name: string, base64: string): Promise<{ path: string }>;
   readAssetBase64(path: string): Promise<AssetData>;
   /** 保存导出文件到用户选择的位置（桌面模式弹对话框；web 模式返回 null 由前端自行下载） */

@@ -5,6 +5,8 @@ import type {
   SavedScene,
   SearchHit,
   TreeNode,
+  VaultInfo,
+  VaultList,
 } from "./types";
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -27,8 +29,11 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 export const webBackend: Backend = {
   mode: "web",
-  getVaultName: () => call<string>("vault-name"),
-  pickVault: async () => null,
+  listVaults: () => call<VaultList>("vault-list"),
+  openVault: (path) => call<VaultInfo>("vault-open", { path }),
+  createVault: (parent, name) => call<VaultInfo>("vault-create", { parent, name }),
+  removeVault: (path) => call<void>("vault-remove", { path }),
+  pickFolder: async () => null,
   tree: () => call<TreeNode[]>("tree"),
   readNote: (path) => call<NoteRaw>("note", { path }),
   writeNote: (path, raw) => call<void>("note-save", { path, raw }),
@@ -41,6 +46,7 @@ export const webBackend: Backend = {
   readScene: (path) => call<string>("scene", { path }),
   saveScene: (name, sceneJson, pngBase64, folder?) =>
     call<SavedScene>("scene-save", { name, sceneJson, pngBase64 }),
+  createCanvas: (folder, name) => call<string>("canvas-create", { folder, name }),
   saveAsset: (name, base64) => call<{ path: string }>("asset-save", { name, base64 }),
   readAssetBase64: (path) => call<AssetData>("asset", { path }),
   saveTextFile: async () => null,

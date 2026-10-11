@@ -1,14 +1,175 @@
 // NoteShare 桌面端命令：与 scripts/dev-server.mjs 的 /api 一一对应。
 // 所有 path 参数都是 vault 内相对路径（正斜杠），写入前统一做越界检查。
 use base64::Engine;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 
 struct AppState {
     vault: Mutex<Option<PathBuf>>,
+}
+
+// ---------- 仓库注册表（应用级配置，独立于任何 vault） ----------
+
+/// vaults.json 里的一条仓库记录（serde camelCase 与前端 VaultInfo 对齐）
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultEntry {
+    id: String,
+    name: String,
+    path: String,
+    last_opened_at: u64,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct VaultRegistryFile {
+    version: u8,
+    vaults: Vec<VaultEntry>,
+}
+
+/// 返回给前端的仓库信息（多一个 exists，缺失的目录在 UI 上标灰）
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VaultInfo {
+    id: String,
+    name: String,
+    path: String,
+    last_opened_at: u64,
+    exists: bool,
+}
+
+impl From<&VaultEntry> for VaultInfo {
+    fn from(e: &VaultEntry) -> Self {
+        VaultInfo {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            path: e.path.clone(),
+            last_opened_at: e.last_opened_at,
+            exists: Path::new(&e.path).is_dir(),
+        }
+    }
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// 生成仓库稳定 id：时间戳 + 路径的 FNV 哈希（无 uuid 依赖，碰撞概率可忽略）
+fn gen_vault_id(path: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in format!("{}{}", nanos, path).as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("v{:016x}", h)
+}
+
+/// 路径等价比较：统一分隔符、去尾斜杠、Windows 下不区分大小写
+fn same_path(a: &str, b: &str) -> bool {
+    #[cfg(windows)]
+    let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_lowercase();
+    #[cfg(not(windows))]
+    let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_string();
+    norm(a) == norm(b)
+}
+
+fn read_registry(app: &AppHandle) -> VaultRegistryFile {
+    let Ok(cfg) = app.path().app_config_dir() else {
+        return Default::default();
+    };
+    match fs::read_to_string(cfg.join("vaults.json")) {
+        Ok(txt) => serde_json::from_str(&txt).unwrap_or_default(),
+        Err(_) => Default::default(),
+    }
+}
+
+fn write_registry(app: &AppHandle, reg: &VaultRegistryFile) -> Result<(), String> {
+    let cfg = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&cfg).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec_pretty(reg).map_err(|e| e.to_string())?;
+    fs::write(cfg.join("vaults.json"), bytes).map_err(|e| e.to_string())
+}
+
+/// vault 内清单 .noteshare/vault.json：身份（id/name）随文件夹走，
+/// 同一文件夹在另一台机器打开仍解析到同一 id（为将来同步认亲预留）。
+fn read_manifest(vault: &Path) -> Option<Value> {
+    let txt = fs::read_to_string(vault.join(".noteshare").join("vault.json")).ok()?;
+    serde_json::from_str(&txt).ok()
+}
+
+fn write_manifest(vault: &Path, id: &str, name: &str) {
+    // 只读文件系统等失败静默忽略：清单缺失时退化用注册表里的身份
+    let _ = fs::create_dir_all(vault.join(".noteshare"));
+    if let Ok(bytes) = serde_json::to_vec(&json!({"id": id, "name": name})) {
+        let _ = fs::write(vault.join(".noteshare").join("vault.json"), bytes);
+    }
+}
+
+/// 注册（或刷新）一条仓库并激活：身份优先取 vault 清单，其次注册表旧值，最后新建
+fn upsert_and_activate(
+    app: &AppHandle,
+    state: &State<AppState>,
+    path: &str,
+    fallback_name: Option<String>,
+) -> Result<VaultInfo, String> {
+    let p = PathBuf::from(path);
+    if !p.is_dir() {
+        return Err("文件夹不存在".into());
+    }
+    let manifest = read_manifest(&p);
+    let mut reg = read_registry(app);
+    let old = reg.vaults.iter().find(|v| same_path(&v.path, path)).cloned();
+
+    let id = manifest
+        .as_ref()
+        .and_then(|m| m["id"].as_str().map(String::from))
+        .or_else(|| old.as_ref().map(|e| e.id.clone()))
+        .unwrap_or_else(|| gen_vault_id(path));
+    let name = manifest
+        .as_ref()
+        .and_then(|m| m["name"].as_str().map(String::from))
+        .or(fallback_name)
+        .or_else(|| old.as_ref().map(|e| e.name.clone()))
+        .or_else(|| {
+            p.file_name()
+                .and_then(|s| s.to_str())
+                .map(String::from)
+        })
+        .unwrap_or_else(|| "笔记库".to_string());
+
+    if manifest.is_none() {
+        write_manifest(&p, &id, &name);
+    }
+
+    let now = unix_now();
+    let entry = VaultEntry {
+        id,
+        name,
+        path: path.to_string(),
+        last_opened_at: now,
+    };
+    match reg.vaults.iter_mut().find(|v| same_path(&v.path, path)) {
+        Some(e) => *e = entry.clone(),
+        None => reg.vaults.push(entry.clone()),
+    }
+    write_registry(app, &reg)?;
+    *state.vault.lock().unwrap() = Some(p);
+    Ok(VaultInfo {
+        exists: true,
+        ..VaultInfo::from(&entry)
+    })
 }
 
 pub fn run() {
@@ -19,22 +180,62 @@ pub fn run() {
         })
         .setup(|app| {
             if let Ok(cfg) = app.path().app_config_dir() {
-                let file = cfg.join("vault.json");
-                if let Ok(txt) = fs::read_to_string(&file) {
-                    if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                        if let Some(dir) = v["vault"].as_str() {
-                            let st = app.state::<AppState>();
-                            *st.vault.lock().unwrap() = Some(PathBuf::from(dir));
+                let reg_file = cfg.join("vaults.json");
+                if !reg_file.exists() {
+                    // 旧版单 vault 配置（vault.json 存一个路径）迁移为注册表首条
+                    let old = cfg.join("vault.json");
+                    if let Ok(txt) = fs::read_to_string(&old) {
+                        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                            if let Some(dir) = v["vault"].as_str() {
+                                let p = PathBuf::from(dir);
+                                if p.is_dir() {
+                                    let mtime = fs::metadata(&old)
+                                        .and_then(|m| m.modified())
+                                        .ok()
+                                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                                        .map(|d| d.as_secs())
+                                        .unwrap_or(0);
+                                    let reg = VaultRegistryFile {
+                                        version: 1,
+                                        vaults: vec![VaultEntry {
+                                            id: gen_vault_id(dir),
+                                            name: p
+                                                .file_name()
+                                                .and_then(|s| s.to_str())
+                                                .unwrap_or("笔记库")
+                                                .to_string(),
+                                            path: dir.to_string(),
+                                            last_opened_at: mtime,
+                                        }],
+                                    };
+                                    let _ = fs::create_dir_all(&cfg);
+                                    let _ = fs::write(
+                                        &reg_file,
+                                        serde_json::to_vec_pretty(&reg).unwrap_or_default(),
+                                    );
+                                }
+                            }
                         }
                     }
+                }
+                // 启动恢复：上次打开（lastOpenedAt 最新）且目录仍存在的仓库
+                let reg = read_registry(app.handle());
+                if let Some(v) = reg
+                    .vaults
+                    .iter()
+                    .filter(|v| Path::new(&v.path).is_dir())
+                    .max_by_key(|v| v.last_opened_at)
+                {
+                    let st = app.state::<AppState>();
+                    *st.vault.lock().unwrap() = Some(PathBuf::from(&v.path));
                 }
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            vault_name, set_vault, tree, read_note, write_note, create_note, create_folder,
-            rename_path, move_path, delete_path, search, read_scene, save_scene, save_asset, read_asset,
-            save_text_file, save_binary_file
+            list_vaults, open_vault, create_vault, remove_vault, tree, read_note, write_note,
+            create_note, create_folder, rename_path, move_path, delete_path, search, read_scene,
+            save_scene, save_asset, read_asset, save_text_file, save_binary_file, create_canvas
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -109,7 +310,7 @@ fn kind_of(name: &str) -> &'static str {
         "note"
     } else if matches!(
         lower.rsplit('.').next(),
-        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "excalidraw" | "mp4" | "webm" | "pdf")
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "excalidraw" | "canvas" | "mp4" | "webm" | "pdf")
     ) {
         "asset"
     } else {
@@ -221,33 +422,58 @@ fn char_ceil(s: &str, i: usize) -> usize {
 // ---------- 命令 ----------
 
 #[tauri::command]
-fn vault_name(state: State<AppState>) -> Result<String, String> {
-    let v = vault_of(&state)?;
-    Ok(v
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("笔记库")
-        .to_string())
+fn list_vaults(app: AppHandle) -> Result<Value, String> {
+    let reg = read_registry(&app);
+    let vaults: Vec<VaultInfo> = reg.vaults.iter().map(VaultInfo::from).collect();
+    let active = reg
+        .vaults
+        .iter()
+        .max_by_key(|v| v.last_opened_at)
+        .map(|v| v.path.clone());
+    Ok(json!({ "vaults": vaults, "active": active }))
 }
 
 #[tauri::command]
-fn set_vault(app: AppHandle, dir: String) -> Result<(), String> {
-    let p = PathBuf::from(&dir);
-    if !p.is_dir() {
-        return Err("不是有效的文件夹".into());
+fn open_vault(
+    app: AppHandle,
+    state: State<AppState>,
+    path: String,
+) -> Result<Value, String> {
+    let info = upsert_and_activate(&app, &state, &path, None)?;
+    Ok(serde_json::to_value(info).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+fn create_vault(
+    app: AppHandle,
+    state: State<AppState>,
+    parent: String,
+    name: String,
+) -> Result<Value, String> {
+    let n = sanitize_name(&name, false);
+    if n.is_empty() {
+        return Err("仓库名称不能为空".into());
     }
-    let st = app.state::<AppState>();
-    *st.vault.lock().unwrap() = Some(p.clone());
-    let cfg = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?;
-    fs::create_dir_all(&cfg).map_err(|e| e.to_string())?;
-    fs::write(
-        cfg.join("vault.json"),
-        serde_json::to_vec(&json!({"vault": dir})).unwrap(),
-    )
-    .map_err(|e| e.to_string())
+    let parent_p = PathBuf::from(&parent);
+    if !parent_p.is_dir() {
+        return Err("位置不是有效文件夹".into());
+    }
+    // 父目录下已有同名文件夹时自动加序号（不覆盖用户数据）
+    let dir = unique_abs(&parent_p.join(&n));
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = to_posix(&dir);
+    let id = gen_vault_id(&path);
+    write_manifest(&dir, &id, &n);
+    let info = upsert_and_activate(&app, &state, &path, Some(n))?;
+    Ok(serde_json::to_value(info).map_err(|e| e.to_string())?)
+}
+
+/// 仅从注册表移除（列表里不再显示），绝不碰磁盘上的仓库文件夹
+#[tauri::command]
+fn remove_vault(app: AppHandle, path: String) -> Result<(), String> {
+    let mut reg = read_registry(&app);
+    reg.vaults.retain(|v| !same_path(&v.path, &path));
+    write_registry(&app, &reg)
 }
 
 #[tauri::command]
@@ -296,7 +522,6 @@ fn create_note(state: State<AppState>, folder: String, title: String) -> Result<
     Ok(to_posix(&abs.strip_prefix(&v).map_err(|e| e.to_string())?))
 }
 
-#[tauri::command]
 #[tauri::command]
 fn move_path(state: State<AppState>, from: String, to_folder: String) -> Result<String, String> {
     let v = vault_of(&state)?;
@@ -482,6 +707,39 @@ fn save_scene(
         "scenePath": to_posix(&scene_abs.strip_prefix(&v).map_err(|e| e.to_string())?),
         "pngPath": png_path,
     }))
+}
+
+/// 新建空白白板（Obsidian 式 canvas，JSON 存 nodes/edges），返回 vault 相对路径。
+/// folder 为空 = vault 根目录；name 可选（缺省 canvas-<时间戳>，自动补 .canvas 后缀）
+#[tauri::command]
+fn create_canvas(
+    state: State<AppState>,
+    folder: Option<String>,
+    name: Option<String>,
+) -> Result<String, String> {
+    let v = vault_of(&state)?;
+    let dir = match &folder {
+        Some(f) if !f.is_empty() => resolve_inside(&v, f)?,
+        _ => v.clone(),
+    };
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stamp = chrono::Utc::now().timestamp();
+    let file_name = match &name {
+        Some(n) => {
+            let mut s = sanitize_name(n, true);
+            if s.is_empty() {
+                s = format!("canvas-{stamp}");
+            }
+            if !s.to_lowercase().ends_with(".canvas") {
+                s.push_str(".canvas");
+            }
+            s
+        }
+        None => format!("canvas-{stamp}.canvas"),
+    };
+    let abs = unique_abs(&dir.join(file_name));
+    fs::write(&abs, r#"{"nodes":[],"edges":[]}"#).map_err(|e| e.to_string())?;
+    Ok(to_posix(&abs.strip_prefix(&v).map_err(|e| e.to_string())?))
 }
 
 // 参数名 base64 与前端 invoke 键一致；函数内用 ::base64 引用 crate 避免遮蔽
