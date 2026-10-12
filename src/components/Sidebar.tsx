@@ -5,7 +5,10 @@ import type { VaultRef } from "../domain/vault";
 import type { VaultService } from "../application/vault-service";
 import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
-import { useDomain } from "../domain/provider";
+import { useDomain, useOutlineVersion } from "../domain/provider";
+import { HOME_PATH, type OutlineSearchRow } from "../outline/store";
+import { requestOpenHome, requestZoomHome } from "../outline/home-bus";
+import { NODE_MIME } from "./home/outlineKit";
 import { I } from "./icons";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -32,7 +35,37 @@ function collectImageAssets(items: TreeNode[], folder: string): TreeNode[] {
   return out.sort((a, b) => a.name.localeCompare(b.name, "zh"));
 }
 
-const HIDDEN = new Set([".obsidian", ".trash"]);
+const HIDDEN = new Set([".obsidian", ".trash", "Home.md"]);
+
+/** 目录树展开状态持久化（默认收起，只记展开过的文件夹路径；按仓库隔离） */
+function treeExpandedKey(vaultId: string) {
+  return `noteshare.treeExpanded.${vaultId}`;
+}
+function loadExpanded(vaultId: string): Set<string> {
+  try {
+    const arr = JSON.parse(localStorage.getItem(treeExpandedKey(vaultId)) ?? "[]");
+    return new Set(Array.isArray(arr) ? arr.filter((p) => typeof p === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveExpanded(vaultId: string, set: Set<string>) {
+  try {
+    localStorage.setItem(treeExpandedKey(vaultId), JSON.stringify([...set]));
+  } catch {
+    /* 存储满等异常：静默放弃本次记忆 */
+  }
+}
+/** 收集树里全部文件夹路径（惰性清理展开集合用） */
+function folderPathsOf(items: TreeNode[], out: Set<string> = new Set()): Set<string> {
+  for (const it of items) {
+    if (it.kind === "folder") {
+      out.add(it.path);
+      folderPathsOf(it.children ?? [], out);
+    }
+  }
+  return out;
+}
 
 interface Props {
   tree: TreeNode[];
@@ -54,12 +87,61 @@ interface Props {
 export default function Sidebar(props: Props) {
   const { tree, currentPath, onOpenNote, width, onResize } = props;
   const { t } = useSettings();
-  const { notes: noteService, bus } = useDomain();
+  const { notes: noteService, bus, outline } = useDomain();
+  const outlineVersion = useOutlineVersion(); // Home 大纲变化刷新节点搜索
   const [tab, setTab] = useState<"files" | "search">("files");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [homeRows, setHomeRows] = useState<OutlineSearchRow[] | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // ---- 目录树展开状态（受控 + localStorage 记忆；默认收起） ----
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() =>
+    loadExpanded(props.currentVault.id)
+  );
+  const toggleFolder = (path: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      saveExpanded(props.currentVault.id, next);
+      return next;
+    });
+  };
+  // 树刷新时惰性清理：文件夹被删/改名后，展开集合里的失效路径顺手清掉。
+  // 树为空 = 尚未加载完成（directory.init 异步），此时不清理——否则刷新瞬间会把
+  // 全部展开记录当失效清空，记忆失效
+  useEffect(() => {
+    if (!tree.length) return;
+    setExpandedFolders((prev) => {
+      const valid = folderPathsOf(tree);
+      const next = new Set([...prev].filter((p) => valid.has(p)));
+      if (next.size === prev.size) return prev;
+      saveExpanded(props.currentVault.id, next);
+      return next;
+    });
+  }, [tree, props.currentVault.id]);
+  // 文件夹改名/移动：展开集合里的路径前缀跟随（assetMoved 由 Sidebar 自己的重命名提交发出）
+  useEffect(() => {
+    const relocate = (from: string, to: string) => {
+      setExpandedFolders((prev) => {
+        if (![...prev].some((p) => p === from || p.startsWith(from + "/"))) return prev;
+        const next = new Set<string>();
+        for (const p of prev) {
+          if (p === from) next.add(to);
+          else if (p.startsWith(from + "/")) next.add(to + p.slice(from.length));
+          else next.add(p);
+        }
+        saveExpanded(props.currentVault.id, next);
+        return next;
+      });
+    };
+    return bus.on(["assetMoved"], (e) => {
+      if (e.type !== "assetMoved") return;
+      relocate(e.from, e.to);
+    });
+  }, [bus, props.currentVault.id]);
 
   // 打开文件（欢迎页按钮 / Ctrl+O）：切到搜索页并聚焦输入框
   useEffect(() => {
@@ -84,8 +166,11 @@ export default function Sidebar(props: Props) {
     window.clearTimeout(timer.current);
     if (!query.trim()) {
       setHits(null);
+      setHomeRows(null);
       return;
     }
+    // Home 节点即时过滤（内存索引，无防抖）
+    setHomeRows(outline.search(query.trim()));
     timer.current = window.setTimeout(async () => {
       try {
         setHits(await backend.search(query.trim()));
@@ -94,7 +179,9 @@ export default function Sidebar(props: Props) {
       }
     }, 250);
     return () => window.clearTimeout(timer.current);
-  }, [query]);
+    // outlineVersion：Home 内容变化时重算节点分区
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, outlineVersion]);
 
   const armDelete = (path: string | null) => {
     window.clearTimeout(armTimer.current);
@@ -209,8 +296,15 @@ export default function Sidebar(props: Props) {
 
   return (
     <aside className="sidebar" style={{ width }}>
-      {/* 顶部：文件 / 搜索 双 Tab（Obsidian 式图标条，悬停有提示气泡） */}
+      {/* 顶部：Home 固定入口 + 文件 / 搜索 双 Tab（Obsidian 式图标条，悬停有提示气泡） */}
       <div className="side-tabs">
+        <button
+          className={`side-tab side-tab-home ${currentPath === HOME_PATH ? "active" : ""}`}
+          data-tip={t("homeOpenEntry")}
+          onClick={() => onOpenNote(HOME_PATH, { newTab: true })}
+        >
+          {I.home}
+        </button>
         <button
           className={`side-tab ${tab === "files" ? "active" : ""}`}
           data-tip={t("tabFiles")}
@@ -318,6 +412,8 @@ export default function Sidebar(props: Props) {
               renamingPath={renaming?.path ?? null}
               confirmPath={confirmPath}
               newCanvasIn={newCanvasIn}
+              expandedFolders={expandedFolders}
+              onToggleFolder={toggleFolder}
               {...handlers}
             />
           </div>
@@ -352,6 +448,38 @@ export default function Sidebar(props: Props) {
               <div className="truncate text-[11px] text-faint">{h.snippet}</div>
             </button>
           ))}
+          {homeRows && homeRows.length > 0 && (
+            <div className="mt-2">
+              <div className="px-2 py-1 text-[11px] font-medium text-faint">{t("homeNodes")}</div>
+              {homeRows.map((row) => (
+                <div
+                  key={row.node.address.join("/")}
+                  className="home-node-row"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      NODE_MIME,
+                      JSON.stringify({ source: "search", address: row.node.address })
+                    );
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  title={t("homeDragHint")}
+                  onClick={(e) => {
+                    const ctrl = e.ctrlKey || e.metaKey;
+                    requestOpenHome({ newTab: ctrl, newPane: ctrl && e.shiftKey });
+                    requestZoomHome({ address: row.node.address });
+                  }}
+                >
+                  <div className="truncate text-[13px] text-ink">
+                    {row.node.done ? <s className="text-faint">{row.node.text.split("\n")[0]}</s> : row.node.text.split("\n")[0]}
+                  </div>
+                  {row.path.length > 0 && (
+                    <div className="truncate text-[11px] text-faint">{row.path.join(" / ")}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

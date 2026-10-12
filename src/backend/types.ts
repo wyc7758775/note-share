@@ -84,6 +84,8 @@ export interface Backend {
   createCanvas(folder?: string, name?: string): Promise<string>;
   saveAsset(name: string, base64: string): Promise<{ path: string }>;
   readAssetBase64(path: string): Promise<AssetData>;
+  /** 导入外部文件（OS 拖放）：落 vault 指定文件夹、保留原扩展名、撞名加序号，返回最终路径 */
+  importFile(folder: string, name: string, base64: string): Promise<string>;
   /** 保存导出文件到用户选择的位置（桌面模式弹对话框；web 模式返回 null 由前端自行下载） */
   saveTextFile(defaultName: string, content: string): Promise<string | null>;
   /** 下载二进制（图片等）到本地：桌面模式弹保存对话框，web 模式由前端自行下载后返回 null */

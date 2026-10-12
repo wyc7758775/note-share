@@ -161,7 +161,8 @@ function WikiLinkView({ node }: any) {
   const { directory } = useDomain();
   useDirectoryVersion(); // 名录任何变化触发重渲染
   const name = String(node.attrs.name ?? "");
-  const missing = directory.resolve(name).kind === "dangling";
+  // Home 节点引用（Home#^id）不走名录解析，永远视为有效
+  const missing = !/^Home#\^/.test(name) && directory.resolve(name).kind === "dangling";
   return (
     <NodeViewWrapper
       as="span"

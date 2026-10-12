@@ -38,6 +38,8 @@ export const tauriBackend: Backend = {
     invoke<string>("create_canvas", { folder: folder ?? null, name: name ?? null }),
   saveAsset: (name, base64) => invoke<{ path: string }>("save_asset", { name, base64 }),
   readAssetBase64: (path) => invoke<AssetData>("read_asset", { path }),
+  importFile: (folder, name, base64) =>
+    invoke<string>("import_file", { folder: folder || null, name, base64 }),
   saveTextFile: async (defaultName, content) => {
     const target = await save({ defaultPath: defaultName });
     if (typeof target !== "string") return null;

@@ -3,8 +3,9 @@
 
 import { backend, type TreeNode } from "../backend";
 import type { EventBus } from "../domain/events";
-import { Note } from "../domain/note";
+import { Note, noteName } from "../domain/note";
 import { sanitizeFileName } from "../lib/files";
+import { HOME_PATH } from "../outline/store";
 
 export class NoteService {
   constructor(private bus: EventBus) {}
@@ -18,8 +19,32 @@ export class NoteService {
     return path;
   }
 
-  /** 重命名（标题即文件名），发 noteRenamed；返回新路径 */
+  /** 导入 Markdown 文本（PDF 转换等场景）：落在来源文件同级目录，撞名自动加序号，发 noteCreated */
+  async importMarkdown(fromPath: string, raw: string): Promise<string | null> {
+    const stem = sanitizeFileName(fromPath.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "");
+    if (!stem) return null;
+    const folder = fromPath.split("/").slice(0, -1).join("/");
+    const path = await backend.createNote(folder, stem); // createNote 负责撞名加序号
+    await backend.writeNote(path, raw);
+    this.bus.emit(Note.created(stem, path));
+    return path;
+  }
+
+  /** 导入外部文件（OS 拖放）：保留原扩展名落 vault 指定文件夹，md 发 noteCreated、其余发 assetCreated */
+  async importFile(folder: string, name: string, base64: string): Promise<string | null> {
+    if (!name.trim()) return null;
+    const path = await backend.importFile(folder, name, base64);
+    if (/\.md$/i.test(path)) {
+      this.bus.emit(Note.created(noteName(path), path));
+    } else {
+      this.bus.emit({ type: "assetCreated", path });
+    }
+    return path;
+  }
+
+  /** 重命名（标题即文件名），发 noteRenamed；返回新路径。Home.md 是固定入口，拒绝改名 */
   async rename(oldPath: string, newTitle: string): Promise<string | null> {
+    if (oldPath === HOME_PATH) return oldPath;
     const safe = sanitizeFileName(newTitle);
     if (!safe) return null;
     const newPath = await backend.renamePath(oldPath, `${safe}.md`);
@@ -32,8 +57,9 @@ export class NoteService {
     return newPath;
   }
 
-  /** 移入回收站，发 noteTrashed */
+  /** 移入回收站，发 noteTrashed。Home.md 是固定入口，拒绝回收 */
   async trash(path: string): Promise<void> {
+    if (path === HOME_PATH) return;
     await backend.deletePath(path);
     this.bus.emit({ type: "noteTrashed", path });
   }
@@ -60,8 +86,10 @@ export class NoteService {
     return path;
   }
 
-  /** 移动笔记到指定文件夹（目录树拖拽）；标题不变，发 noteMoved（名录/阅读位置自动迁移） */
+  /** 移动笔记到指定文件夹（目录树拖拽）；标题不变，发 noteMoved（名录/阅读位置自动迁移）。
+   *  Home.md 是固定入口，拒绝移动 */
   async moveNote(path: string, toFolder: string): Promise<string | null> {
+    if (path === HOME_PATH) return path;
     const name = path.split("/").pop()?.replace(/\.md$/i, "") ?? "";
     const to = await backend.movePath(path, toFolder);
     this.bus.emit({ type: "noteMoved", from: path, to, name });

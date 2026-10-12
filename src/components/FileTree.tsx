@@ -4,6 +4,7 @@ import { showContextMenu } from "./ContextMenu";
 import { useSettings } from "../i18n";
 import { useDomain } from "../domain/provider";
 import { emitEditScene } from "./ExcalidrawBlock";
+import { importDroppedFiles } from "../lib/dropImport";
 import { I } from "./icons";
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
@@ -61,6 +62,18 @@ export interface TreeHandlers {
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
+/** 文件名：主名靠左、后缀靠右的两端对齐（Obsidian 式，后缀极淡对齐成一列） */
+function TreeName({ name }: { name: string }) {
+  const i = name.lastIndexOf(".");
+  const hasExt = i > 0 && i < name.length - 1;
+  return (
+    <span className="flex h-full min-w-0 flex-1 items-center justify-between gap-2">
+      <span className="truncate">{hasExt ? name.slice(0, i) : name}</span>
+      {hasExt && <span className="shrink-0 text-faint opacity-50">{name.slice(i)}</span>}
+    </span>
+  );
+}
+
 interface Props extends TreeHandlers {
   items: TreeNode[];
   depth: number;
@@ -69,6 +82,9 @@ interface Props extends TreeHandlers {
   confirmPath: string | null;
   /** 正在命名的白板目标文件夹（"" = 根） */
   newCanvasIn: string | null;
+  /** 展开状态受控（由 Sidebar 持有并持久化）：不在集合 = 收起（默认收起） */
+  expandedFolders: ReadonlySet<string>;
+  onToggleFolder: (path: string) => void;
 }
 
 export default function FileTree(props: Props) {
@@ -82,13 +98,15 @@ function TreeRow({
   renamingPath,
   confirmPath,
   newCanvasIn,
+  expandedFolders,
+  onToggleFolder,
   items: _items,
   ...h
 }: Props & { item: TreeNode }) {
   void _items;
   const { t } = useSettings();
   const { notes: noteService } = useDomain();
-  const [open, setOpen] = useState(true);
+  const open = expandedFolders.has(item.path); // 受控：默认收起，展开的记录在 Sidebar（localStorage 持久化）
   const renaming = renamingPath === item.path;
   const [dropHint, setDropHint] = useState(false);
   const dragging = useRef(false);
@@ -127,26 +145,33 @@ function TreeRow({
   // 行高固定 30px，主按钮 h-full 撑满——整行高度都可点击
   const rowCls =
     "tree-row group flex h-[30px] w-full items-center gap-1.5 rounded-md pr-1 text-left text-[13px]";
-  const pad = { paddingLeft: 6 + depth * 14 };
+  const pad = { paddingLeft: 4 + depth * 9 };
   const exitCls = exiting ? "tree-row-exiting" : "";
 
   if (isFolder) {
     return (
       <div>
         <div
-          className={`${rowCls} ${exitCls} ${open ? "text-ink" : "text-soft"} ${dropHint ? "tree-row-drop" : ""}`}
+          className={`${rowCls} ${exitCls} text-ink ${dropHint ? "tree-row-drop" : ""}`}
           style={pad}
           title={item.name}
           onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes("application/x-noteshare-tree")) return;
+            const external = e.dataTransfer.types.includes("Files"); // OS 拖入的文件
+            if (!external && !e.dataTransfer.types.includes("application/x-noteshare-tree")) return;
             e.preventDefault(); // 允许放置
-            e.dataTransfer.dropEffect = "move";
+            e.dataTransfer.dropEffect = external ? "copy" : "move";
             setDropHint(true);
           }}
           onDragLeave={() => setDropHint(false)}
           onDrop={(e) => {
             e.preventDefault();
             setDropHint(false);
+            // OS 文件拖到文件夹行：定向导入到该文件夹（stopPropagation 免得全局再导一份）
+            if (e.dataTransfer.files?.length) {
+              e.stopPropagation();
+              void importDroppedFiles(e.dataTransfer.files, item.path, noteService);
+              return;
+            }
             const raw = e.dataTransfer.getData("application/x-noteshare-tree");
             if (!raw) return;
             try {
@@ -170,7 +195,7 @@ function TreeRow({
                 if (p) emitEditScene(p); // 新标签打开新画的画板
               }) },
               { label: t("newCanvas"), onClick: () => {
-                setOpen(true); // 保证输入行可见
+                if (!open) onToggleFolder(item.path); // 保证输入行可见（仅未展开时展开）
                 h.onNewCanvasIn(item.path);
               } },
               { separator: true },
@@ -191,12 +216,11 @@ function TreeRow({
         >
           <button
             className="flex h-full min-w-0 flex-1 items-center gap-1"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => onToggleFolder(item.path)}
           >
             <span className={`tree-chev text-faint ${open ? "tree-chev-open" : ""}`}>
               {I.chevron}
             </span>
-            <span className="text-soft tree-ico-jelly">{I.folder}</span>
             <span className="truncate">{item.name}</span>
           </button>
           <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
@@ -227,6 +251,8 @@ function TreeRow({
                   renamingPath={renamingPath}
                   confirmPath={confirmPath}
                   newCanvasIn={newCanvasIn}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={onToggleFolder}
                   {...h}
                 />
               </div>
@@ -243,7 +269,7 @@ function TreeRow({
       <div
         className={`${rowCls} ${exitCls} ${active ? "tree-row-active" : ""} ${dragging.current ? "tree-row-dragging" : ""}`}
         style={pad}
-        title={item.name.replace(/\.md$/i, "")}
+        title={item.name}
         draggable
         onDragStart={(e) => {
           e.dataTransfer.setData(
@@ -289,23 +315,23 @@ function TreeRow({
             })
           }
         >
-          <span className={`tree-ico-jelly ${active ? "text-amber-700" : "text-faint"}`}>{I.note}</span>
-          <span className="truncate">{item.name.replace(/\.md$/i, "")}</span>
+          <TreeName name={item.name} />
         </button>
       </div>
     );
   }
 
-  // 附件：图片可点击查看/右键下载；.excalidraw 手绘、.canvas 白板可点击编辑；其他只展示
+  // 附件：图片可点击查看/右键下载；.excalidraw 手绘、.canvas 白板可点击编辑；PDF 可点击阅读；其他只展示
   const isImg = IMG_RE.test(item.name);
   const isScene = /\.excalidraw$/i.test(item.name);
   const isCanvas = /\.canvas$/i.test(item.name);
-  const active = isImg || isScene || isCanvas;
+  const isPdf = /\.pdf$/i.test(item.name);
+  const active = isImg || isScene || isCanvas || isPdf;
   return (
     <div
       className={`${rowCls} ${exitCls} ${active ? "cursor-pointer hover:bg-hover" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
       style={pad}
-      title={isScene ? t("clickToEdit") : isCanvas ? t("clickToEditCanvas") : isImg ? t("clickToView") : item.path}
+      title={isScene ? t("clickToEdit") : isCanvas ? t("clickToEditCanvas") : isImg ? t("clickToView") : isPdf ? t("clickToReadPdf") : item.path}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(
@@ -319,7 +345,7 @@ function TreeRow({
       onClick={(e) => {
         if (isImg) h.onViewAsset(item);
         else if (isScene) emitEditScene(item.path, e.ctrlKey || e.metaKey); // 画板进标签（Ctrl=新标签）
-        else if (isCanvas) h.onOpenNote(item.path, { newTab: e.ctrlKey || e.metaKey }); // 白板进标签
+        else if (isCanvas || isPdf) h.onOpenNote(item.path, { newTab: e.ctrlKey || e.metaKey }); // 白板/PDF 进标签
       }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -331,6 +357,36 @@ function TreeRow({
             { separator: true },
             { label: t("viewAsset"), onClick: () => h.onViewAsset(item) },
             { label: t("downloadImage"), onClick: () => h.onDownloadAsset(item) },
+          ]);
+          return;
+        }
+        if (isPdf) {
+          showContextMenu(e.clientX, e.clientY, [
+            { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
+            { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+            { separator: true },
+            {
+              label: t("pdfConvert"),
+              onClick: () =>
+                void import("./PdfViewer")
+                  .then((m) => m.convertPdfToNote(item.path, noteService))
+                  .then((p) => {
+                    if (p) h.onOpenNote(p, { newTab: true }); // 转完直接弹出新笔记，即转换反馈
+                  })
+                  .catch((err) => console.error("PDF 转 Markdown 失败", err)),
+            },
+            { separator: true },
+            { label: t("rename"), onClick: () => h.onRequestRename(item) },
+            {
+              label: t("trashLabel"),
+              danger: true,
+              onClick: () => {
+                showContextMenu(e.clientX, e.clientY, [
+                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
+                  { label: t("cancel") },
+                ]);
+              },
+            },
           ]);
           return;
         }
@@ -373,10 +429,9 @@ function TreeRow({
         }
       }}
     >
-      <span className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1">
-        <span className="tree-ico-jelly">{isScene ? I.pen : isCanvas ? I.canvas : I.asset}</span>
-        <span className="truncate">{item.name}</span>
-      </span>
+        <span className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1">
+          <TreeName name={item.name} />
+        </span>
     </div>
   );
 }

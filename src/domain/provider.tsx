@@ -6,6 +6,7 @@ import { NoteDirectory } from "./directory";
 import { NoteService } from "../application/note-service";
 import { ReadingPositions, SessionBook } from "./session";
 import { Workspace } from "./workspace";
+import { OutlineStore } from "../outline/store";
 
 export interface Domain {
   bus: EventBus;
@@ -14,6 +15,8 @@ export interface Domain {
   positions: ReadingPositions;
   sessions: SessionBook;
   workspace: Workspace;
+  /** Home 大纲（Home.md 的内存权威/搜索索引） */
+  outline: OutlineStore;
   /** 切换仓库时释放（退订事件）；容器本身随 session 丢弃 */
   dispose(): void;
 }
@@ -28,6 +31,7 @@ export function createDomain(): Domain {
   const bus = new EventBus();
   const positions = new ReadingPositions(bus);
   const directory = new NoteDirectory(bus);
+  const outline = new OutlineStore();
   singleton = {
     bus,
     directory,
@@ -35,7 +39,11 @@ export function createDomain(): Domain {
     positions,
     sessions: new SessionBook(bus, positions),
     workspace: new Workspace(bus),
-    dispose: () => directory.dispose(),
+    outline,
+    dispose: () => {
+      directory.dispose();
+      outline.dispose();
+    },
   };
   return singleton;
 }
@@ -59,4 +67,10 @@ export function useDirectoryVersion(): number {
 export function useWorkspaceVersion(): number {
   const { workspace } = useDomain();
   return useSyncExternalStore(workspace.subscribe, workspace.getVersion, workspace.getVersion);
+}
+
+/** 订阅 Home 大纲版本（内容任何变化触发重渲染：搜索分区/嵌入卡片跟随） */
+export function useOutlineVersion(): number {
+  const { outline } = useDomain();
+  return useSyncExternalStore(outline.subscribe, outline.getVersion, outline.getVersion);
 }

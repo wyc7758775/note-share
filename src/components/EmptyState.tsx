@@ -7,13 +7,15 @@ import { PikachuLogo, I } from "./icons";
 interface Props {
   vaultName: string;
   onNewNote: () => void;
+  /** 打开 Home 大纲（固定入口） */
+  onOpenHome: () => void;
   /** 白板命名回车后创建（建在库根目录）并打开 */
   onNewCanvas: (name: string) => void;
   /** 新建手绘画板（自动命名）并打开 */
   onNewScene: () => void;
 }
 
-export default function EmptyState({ vaultName, onNewNote, onNewCanvas, onNewScene }: Props) {
+export default function EmptyState({ vaultName, onNewNote, onOpenHome, onNewCanvas, onNewScene }: Props) {
   const { t } = useSettings();
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -35,8 +37,14 @@ export default function EmptyState({ vaultName, onNewNote, onNewCanvas, onNewSce
       <PikachuLogo size={104} className="text-ink" />
       <div className="serif text-xl text-soft">{vaultName}</div>
 
-      {/* 三个入口等宽（Ctrl+N 角标只占右端，不撑宽差异） */}
+      {/* 四个入口等宽（Ctrl+N 角标只占右端，不撑宽差异） */}
       <div className="flex w-[248px] flex-col gap-2">
+        <button className="empty-action" onClick={onOpenHome}>
+          <span className="empty-action-ico">{I.home}</span>
+          <span>{t("homeOpenEntry")}</span>
+          <span className="empty-kbd">Ctrl+Shift+H</span>
+        </button>
+
         <button className="empty-action" onClick={onNewNote}>
           <span className="empty-action-ico">{I.note}</span>
           <span>{t("newNote")}</span>

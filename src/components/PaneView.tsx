@@ -7,6 +7,7 @@ import type { Pane, DropZone } from "../domain/workspace";
 import { useDomain } from "../domain/provider";
 import { useSettings } from "../i18n";
 import { backend } from "../backend";
+import { HOME_PATH } from "../outline/store";
 import PaneTabs, { TAB_MIME } from "./PaneTabs";
 import Editor from "./Editor";
 import EmptyState from "./EmptyState";
@@ -14,6 +15,8 @@ import { emitViewImage } from "./ExcalidrawBlock";
 
 const ScenePanel = lazy(() => import("./ExcalidrawPanel"));
 const CanvasPanel = lazy(() => import("./canvas/CanvasPanel"));
+const HomeView = lazy(() => import("./home/HomeView"));
+const PdfViewer = lazy(() => import("./PdfViewer"));
 
 /** 标签可承载的图片附件 */
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -27,6 +30,8 @@ interface Props {
   vaultName: string | null;
   /** 欢迎页"新建笔记" */
   onNewNote: () => void;
+  /** 欢迎页"打开 Home 大纲" */
+  onOpenHome: () => void;
   /** 欢迎页"新建白板"（命名回车后） */
   onNewCanvas: (name: string) => void;
   /** 欢迎页"新建手绘" */
@@ -71,6 +76,7 @@ export default function PaneView({
   active,
   vaultName,
   onNewNote,
+  onOpenHome,
   onNewCanvas,
   onNewScene,
   onSceneSaved,
@@ -108,12 +114,14 @@ export default function PaneView({
 
   const handleDropZone = (e: React.DragEvent) => {
     if (inTabBar(e)) return; // 标签条上的 drop 交给标签条（插入到指定位置）
+    if (!e.dataTransfer.types.includes(TAB_MIME)) return;
+    // 只有标签拖拽才截停：其他 drop（文件导入、Workflowy 节点放置）必须继续
+    // 传播，否则 PM/窗口层全收不到
     e.preventDefault();
     e.stopPropagation();
     const z = zone ?? "center";
     setZone(null);
     const raw = e.dataTransfer.getData(TAB_MIME);
-    if (!raw) return;
     try {
       const { paneId: fromPane, tabId } = JSON.parse(raw) as { paneId: number; tabId: number };
       if (z === "center") {
@@ -145,6 +153,7 @@ export default function PaneView({
           <EmptyState
             vaultName={vaultName ?? ""}
             onNewNote={onNewNote}
+            onOpenHome={onOpenHome}
             onNewCanvas={onNewCanvas}
             onNewScene={onNewScene}
           />
@@ -156,7 +165,10 @@ export default function PaneView({
           const on = tab.id === activeId;
           return (
             <div key={tab.id} className={`min-h-0 flex-1 ${on ? "" : "hidden"}`}>
-              {/\.excalidraw$/i.test(tab.path) ? (
+              {tab.path === HOME_PATH ? (
+                /* Home 大纲视图（固定入口；标签保活与其他视图一致） */
+                <HomeView active={active && on} />
+              ) : /\.excalidraw$/i.test(tab.path) ? (
                 <Suspense
                   fallback={
                     <div className="flex h-full items-center justify-center text-sm text-faint">
@@ -180,6 +192,21 @@ export default function PaneView({
                   }
                 >
                   <CanvasPanel
+                    src={tab.path}
+                    active={active && on}
+                    onClose={() => workspace.closeTab(pane.id, tab.id)}
+                  />
+                </Suspense>
+              ) : /\.pdf$/i.test(tab.path) ? (
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-sm text-faint">
+                      {t("pdfLoading")}
+                    </div>
+                  }
+                >
+                  <PdfViewer
+                    key={tab.path}
                     src={tab.path}
                     active={active && on}
                     onClose={() => workspace.closeTab(pane.id, tab.id)}

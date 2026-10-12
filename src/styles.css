@@ -27,6 +27,16 @@
   --tip-bg: #1c1917;
   --tip-fg: #fafaf9;
   --shadow-card: 0 8px 28px rgb(0 0 0 / 0.13);
+  /* Home 备注占位文案（组件按语言内联覆盖） */
+  --note-ph: "备注…";
+  /* Home 大纲配色与笔记区统一（结构/交互规格保留 Workflowy，色彩挂应用主题；
+     暗色由主题变量自带覆盖，无需单独定义） */
+  --wf-text: var(--ink);
+  --wf-sub: var(--ink-soft);
+  --wf-note: var(--ink-soft);
+  --wf-bg: var(--paper);
+  --wf-bg2: var(--surface-hover);
+  --wf-bg3: var(--line);
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
@@ -53,6 +63,7 @@ html[data-theme="dark"] {
   --tip-bg: #3f3a37;
   --tip-fg: #fafaf9;
   --shadow-card: 0 8px 28px rgb(0 0 0 / 0.45);
+  --note-ph: "备注…";
 }
 
 /* 全局：可点击的按钮用手型指针 */
@@ -569,6 +580,9 @@ body {
   background: var(--surface);
   position: relative;
   text-align: center;
+  /* 关键：img 前的空白文本节点会占一行正文行高（约 30px），
+     在图片上方挤出一条空行——看起来就是"灰色方块"。归零行高压掉它 */
+  line-height: 0;
 }
 .excalidraw-fig img {
   border-radius: 6px;
@@ -590,6 +604,7 @@ body {
   padding: 40px 16px;
   cursor: pointer;
   font-size: 14px;
+  line-height: 1.6; /* 恢复被容器归零的行高（空态提示文字） */
 }
 
 /* ---------- 文件树动效 ---------- */
@@ -599,31 +614,6 @@ body {
 }
 .tree-row:hover {
   background-color: var(--surface-hover);
-}
-/* 果冻弹跳给行首图标（整行缩放会连带文字变形，观感像故障——只动图标） */
-.tree-ico-jelly {
-  display: inline-flex;
-  transform-origin: center bottom;
-}
-.tree-row:hover .tree-ico-jelly {
-  animation: tree-ico-jelly 0.42s cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-@keyframes tree-ico-jelly {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(1.32);
-  }
-  62% {
-    transform: scale(0.9);
-  }
-  82% {
-    transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-  }
 }
 .tree-row-active {
   background-color: var(--active-bg);
@@ -742,6 +732,16 @@ body {
   flex: none;
   color: var(--accent);
   font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* keepOpen 项的未勾选态：空复选框（Workflowy tag 多选样式） */
+.ctx-box {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 3px;
 }
 
 /* ---------- 图片阅览器 ---------- */
@@ -1038,6 +1038,142 @@ body {
   background: var(--paper);
 }
 
+/* ---------- 笔记悬浮目录（自创样式：平时隐身、hover 点亮毛玻璃；可收起；窄区让位） ---------- */
+.note-toc {
+  position: absolute;
+  top: 56px;
+  right: 14px;
+  bottom: 36px;
+  z-index: 24;
+  width: 212px;
+  display: flex;
+}
+.note-toc-inner {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 9px 4px 9px 6px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+/* hover 整块点亮：毛玻璃底 + 细边 + 极淡投影 */
+.note-toc:hover .note-toc-inner {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(10px);
+  border-color: var(--line);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.07);
+}
+/* 收起钮：平时与目录一起隐身，hover 目录时浮现 */
+.note-toc-fold {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-faint);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.note-toc:hover .note-toc-fold {
+  opacity: 0.9;
+}
+.note-toc-fold:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+.note-toc-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+.note-toc-item {
+  border: none;
+  background: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-faint);
+  opacity: 0.72; /* 平时若有若无 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+/* hover 目录：整体浮出一档；单条 hover / 当前章：墨色实感 */
+.note-toc:hover .note-toc-item {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.note-toc-item:hover,
+.note-toc-item.on {
+  color: var(--ink) !important;
+  opacity: 1 !important;
+}
+.note-toc-item.on {
+  background: var(--surface-hover);
+}
+.note-toc-l1 {
+  font-weight: 600;
+}
+.note-toc-l2 {
+  padding-left: 20px;
+}
+.note-toc-l3 {
+  padding-left: 34px;
+  font-size: 12px;
+}
+/* 收起态：右缘小圆钮（同样平时低调、hover 加深） */
+.note-toc-collapsed {
+  top: 64px;
+  right: 10px;
+  bottom: auto;
+  width: auto;
+  display: block;
+}
+.note-toc-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-faint);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.note-toc-fab:hover {
+  opacity: 1;
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+
 /* ---------- 笔记左上角悬浮导航（返回/前进，阅读历史） ---------- */
 .editor-nav-float {
   position: absolute;
@@ -1074,6 +1210,200 @@ body {
   cursor: zoom-in;
 }
 
+/* ---------- PDF 阅读器（pdfjs 连续滚动 + 工具栏） ---------- */
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.pdf-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 40px;
+  padding: 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.pdf-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pdf-toolbar button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.pdf-toolbar button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.pdf-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pdf-tool-on {
+  color: var(--accent);
+}
+.pdf-zoom-pct {
+  min-width: 42px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.pdf-page-input {
+  width: 46px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: center;
+  font-size: 12px;
+  outline: none;
+}
+.pdf-page-input:focus {
+  border-color: var(--accent);
+}
+.pdf-page-total {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.pdf-toolbar-spacer {
+  flex: 1;
+}
+.pdf-convert-btn {
+  padding: 0 12px !important;
+  background: var(--btn-bg);
+  color: var(--btn-fg) !important;
+  font-weight: 500;
+}
+.pdf-convert-btn:hover:not(:disabled) {
+  background: var(--btn-bg-hover) !important;
+  color: var(--btn-fg) !important;
+}
+.pdf-convert-fail {
+  background: var(--danger-bg) !important;
+  color: #dc2626 !important;
+}
+.pdf-convert-ok {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--accent);
+}
+.pdf-close-btn {
+  font-size: 14px !important;
+}
+.pdf-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px 48px;
+  background: var(--paper-side);
+}
+.pdf-page {
+  position: relative;
+  margin: 0 auto 16px;
+  background: #ffffff; /* 页面成像区保持纸白（暗色模式下如浏览器 PDF 查看器） */
+  border-radius: 4px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.pdf-page canvas {
+  display: block;
+}
+.pdf-page-no {
+  position: absolute;
+  right: 0;
+  bottom: -18px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.pdf-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+.pdf-fallback-path {
+  font-size: 12px;
+  color: var(--ink-faint);
+  opacity: 0.7;
+  word-break: break-all;
+}
+
+/* ---------- OS 文件拖放导入覆盖层 ---------- */
+.drop-import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100; /* 盖过栏拖拽落区（999） */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(var(--accent-rgb) / 0.08);
+  backdrop-filter: blur(1px);
+  pointer-events: none; /* 事件穿透：drop 落到下层，全局 window 监听收口 */
+}
+.drop-import-overlay[data-phase="done"],
+.drop-import-overlay[data-phase="fail"],
+.drop-import-overlay[data-phase="busy"] {
+  background: rgb(0 0 0 / 0.18);
+}
+.drop-import-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 480px;
+  padding: 26px 40px;
+  border-radius: 14px;
+  border: 2px dashed rgb(var(--accent-rgb) / 0.65);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+  font-size: 15px;
+  text-align: center;
+}
+.drop-import-icon {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--accent);
+}
+.drop-import-sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drop-import-done {
+  border-style: solid;
+}
+.drop-import-fail {
+  border-style: solid;
+  border-color: rgb(220 38 38 / 0.55);
+  color: #dc2626;
+}
+
 /* ---------- 拖拽拆分落区（拖标签到栏的边缘/中央，与 Obsidian 一致） ---------- */
 .pane-drop-layer {
   position: absolute;
@@ -1107,6 +1437,7 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .tab-strip {
+  position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
   display: flex;
   align-items: flex-end;
   gap: 2px;
@@ -1154,21 +1485,23 @@ body {
 .tab-item-drag {
   opacity: 0.45;
 }
-/* 拖拽落点指示线 */
-.tab-item-drop::before {
-  content: "";
+/* 拖拽落点指示线：常驻单节点，显隐淡入淡出、位置切换平移滑动 */
+.tab-drop-line {
   position: absolute;
+  left: 0;
   top: 4px;
   bottom: 2px;
   width: 2px;
   border-radius: 2px;
   background: var(--accent);
+  opacity: 0;
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    opacity 100ms ease;
+  pointer-events: none;
 }
-.tab-item-drop-before::before {
-  left: -3px;
-}
-.tab-item-drop-after::before {
-  right: -3px;
+.tab-drop-line.on {
+  opacity: 1;
 }
 .tab-ico {
   display: flex;
@@ -1223,18 +1556,42 @@ body {
   background: var(--surface-hover);
 }
 
-/* 滚动条 */
+/* 滚动条（全局统一，Workflowy 式：极细、半透明、轨道透明、悬停加深；不写描边避免"白底"）。
+   注意：不能用 scrollbar-width/color 裸设在 html 上——新 Chromium 也认这组标准属性，
+   一旦生效整个页面放弃 ::-webkit 定制、回落系统滚动条（出现 ▲▼ 三角按钮） */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-button {
+  display: none; /* 显式禁掉上下步进三角 */
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 6px;
-  border: 2px solid var(--paper);
+  background: rgb(0 0 0 / 0.22);
+  border-radius: 2px;
 }
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 0.4);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.22);
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.4);
+}
+/* Firefox 同口径（@supports 隔离，避免波及 Chromium 的 ::-webkit 定制） */
+@supports not (-webkit-appearance: none) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 0.2) transparent;
+  }
+  html[data-theme="dark"] {
+    scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+  }
 }
 
 /* "[[" 笔记链接菜单（复用 slash-menu 外观） */
@@ -1548,7 +1905,6 @@ body {
   overflow-y: auto;
   padding: 10px 12px;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
 }
 .cv-hint {
   font-size: 12px;
@@ -1813,7 +2169,6 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-y: auto;
-  scrollbar-width: thin;
   color: var(--ink);
 }
 
@@ -1855,7 +2210,6 @@ body {
   text-align: center;
   white-space: pre-wrap;
   word-break: break-word;
-  scrollbar-width: thin;
 }
 .cv-block-input {
   width: 100%;
@@ -1895,7 +2249,6 @@ body {
   width: 250px;
   max-height: calc(100vh - 130px);
   overflow-y: auto;
-  scrollbar-width: thin;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -2430,4 +2783,527 @@ body {
   height: 1px;
   margin: 5px 4px;
   background: var(--line);
+}
+
+/* ---------- Home 大纲（像素级照抄 Workflowy：亮/暗两套硬编码，不挂应用主题变量） ----------
+   规格（workflowy.com 真实 DOM/CSS 抠取）：
+   文字 #2A3135 / bullet·箭头 #4B5155 / 备注 #868C90 / 完成态 line-through+opacity.37
+   选区 #C1E1F2 / 背景 #FFFFFF / 条目 16px·24px 行盒 28px / 备注 13px·17px
+   缩放标题 27px·34px·700 / 缩进 36px / 圆点 7px·18px 命中区·悬停淡入 0.2s */
+.home-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--wf-bg);
+}
+.home-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 6px;
+  color: var(--wf-note);
+}
+.home-crumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
+  font-size: 14px;
+}
+.home-crumb-item {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.home-crumb-sep {
+  color: var(--wf-note);
+  opacity: 0.6;
+  margin: 0 4px;
+  font-size: 12px;
+}
+.home-crumb-btn {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  padding: 2px 3px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--wf-note);
+}
+.home-crumb-home {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  color: var(--wf-note);
+}
+.home-crumb-btn:hover {
+  text-decoration: underline;
+  color: var(--wf-sub);
+}
+.home-crumb-item:last-child .home-crumb-btn {
+  color: var(--wf-text);
+}
+.home-search {
+  flex: none;
+  width: 180px;
+  border: none;
+  border-radius: 6px;
+  background: var(--wf-bg2);
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--wf-text);
+  outline: none;
+}
+.home-search::placeholder {
+  color: var(--wf-note);
+}
+.home-search:focus {
+  background: var(--wf-bg3);
+}
+.home-tool-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--wf-note);
+}
+.home-tool-btn:hover {
+  background: var(--wf-bg2);
+  color: var(--wf-sub);
+}
+.home-tool-btn.is-on {
+  color: var(--wf-text);
+  background: var(--wf-bg2);
+}
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.home-editor-wrap {
+  /* 铺满可用宽度（不居中留白）；底部只留少量呼吸（+ 紧贴最后条目） */
+  padding: 30px 44px 24px;
+}
+
+/* 大纲正文 */
+.outline-doc {
+  color: var(--wf-text);
+  font-size: 16px;
+  line-height: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  caret-color: var(--wf-text);
+  /* 推翻笔记编辑器的全局书写留白（min-height/padding-bottom）：
+     大纲的 + 按钮要紧贴最后一个条目 */
+  min-height: 0;
+  padding-bottom: 0;
+}
+/* 选区色与笔记编辑器一致（应用默认），不再单独配色 */
+.outline-doc ul[data-type="taskList"] {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"] {
+  padding-left: 6px; /* 层级差 = 26(行圆点区) + 6 ≈ 32px，紧凑 */
+  position: relative;
+}
+
+/* 列表末尾的 + 新建按钮（Workflowy）：与圆点同色系，悬停变亮 */
+.outline-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 26px;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--wf-sub);
+  opacity: 0.35;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.outline-add:hover {
+  opacity: 1;
+}
+/* 层级参考线（Workflowy 缩进竖线）：1px 极浅灰，x 对齐父条目圆点中心，
+   从父行下方延到最后一个子行的圆点中心；不随悬停变化 */
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"]::before {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: -6px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line);
+  opacity: 0.6; /* 主题线色降透明度，保持参考线的"若有若无" */
+  pointer-events: none;
+}
+.outline-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  /* 圆点绝对定位不占流：层级差只由嵌套列表 padding 叠加（紧凑，Workflowy 模式） */
+  padding-left: 26px;
+}
+
+/* 折叠箭头：叠在缩进空间（不占布局），25% 透明度，行悬停全亮，展开旋转 90° */
+.outline-arrow {
+  position: absolute;
+  left: -24px;
+  top: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--wf-sub);
+  opacity: 0.25;
+  transition: opacity 0.15s ease;
+  cursor: pointer;
+}
+.outline-arrow svg {
+  transition: transform 0.2s ease;
+  transform: rotate(90deg);
+}
+.outline-item:hover > .outline-arrow {
+  opacity: 1;
+}
+.outline-item.outline-collapsed-item > .outline-arrow svg {
+  transform: rotate(0deg);
+}
+
+/* 圆点：18px 命中区（halo 18px 圆）+ 7px 点；默认常显（真实应用默认即显示，
+   官网落地页的 show-controls-on-hover 是演示页模式）；折叠条目 halo 灰底。
+   绝对定位在 li 左缘（悬于本级的留白区），不占布局流 */
+.outline-bullet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 28px;
+  cursor: zoom-in;
+}
+.outline-bullet-halo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-top: 2px; /* 圆心对齐 28px 行盒内文字中心（4px padding + 12px 半行） */
+  transition: background 0.15s ease;
+}
+.outline-item.outline-collapsed-item > .outline-bullet > .outline-bullet-halo {
+  background: var(--wf-bg3);
+}
+.outline-bullet:hover > .outline-bullet-halo {
+  background: var(--wf-bg3);
+}
+.outline-bullet:active {
+  cursor: grabbing;
+}
+.outline-bullet-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--wf-sub);
+}
+/* 完成态（Workflowy 精确值）：仅本条圆点与首段文字 0.37 + 删除线，子级不受影响。
+   注意只取直属首段（NodeViewContent 会多包一层 div）：后代选择器会把子条目一起划掉 */
+.outline-item.is-done > .outline-bullet {
+  opacity: 0.37;
+}
+.outline-item.is-done > .outline-content > div > p:first-child {
+  opacity: 0.37;
+  text-decoration: line-through;
+}
+.outline-item.is-done:hover > .outline-bullet {
+  opacity: 1;
+}
+
+/* 正文：首段 = 条目文字；第 2+ 段 = 备注 */
+.outline-content {
+  flex: 1;
+  min-width: 0;
+}
+/* NodeViewContent 会多包一层 [data-node-view-content-react] div，选择器用后代/first-child 跨过它 */
+.outline-content p {
+  margin: 0;
+  min-height: 28px;
+  padding: 4px 12px 0 0;
+}
+.outline-content p + p {
+  font-size: 13px;
+  line-height: 17px;
+  min-height: 21px;
+  padding: 2px 12px 2px 0;
+  color: var(--wf-note);
+}
+.outline-content p + p.is-empty::before {
+  content: var(--note-ph, "备注…");
+  color: var(--wf-note);
+  opacity: 0.8;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.outline-item.outline-collapsed-item .outline-content ul {
+  display: none;
+}
+/* 展开/收起动效：展开时子列表淡入 + 轻微下移进场（收起瞬消、展开柔和，
+   与折叠箭头的旋转过渡衔接；折叠态类切换时本规则重新匹配触发重放） */
+@keyframes outline-expand-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.outline-item:not(.outline-collapsed-item) > .outline-content > div > ul {
+  animation: outline-expand-in 0.18s ease;
+}
+/* zoom / 搜索 / 祖先壳的可见性 */
+.outline-hidden {
+  display: none !important;
+}
+.outline-item.outline-ancestor > .outline-bullet,
+.outline-item.outline-ancestor > .outline-item-menu,
+.outline-item.outline-ancestor > .outline-arrow {
+  display: none;
+}
+/* 祖先壳：压缩成纯通道（自身无行高，只让嵌套子列表透传），首段已由插件装饰隐藏 */
+.outline-item.outline-ancestor {
+  min-height: 0;
+  padding-left: 0; /* 圆点已隐藏：不留白，zoom 大标题不被祖先链逐层推深 */
+}
+/* 缩放标题：只放大该条目自己的首段（跨过 NodeViewContent 的包装 div），
+   子条目保持 16px——后代选择器会让整个子树一起变大 */
+.outline-item.outline-zoom-root {
+  padding-left: 0; /* 大标题顶格（圆点已隐藏，不留行圆点区） */
+}
+.outline-item.outline-zoom-root > .outline-content > div > p:first-child {
+  font-size: 27px;
+  line-height: 34px;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 8px 12px 5px 0;
+}
+.outline-item.outline-zoom-root > .outline-bullet,
+.outline-item.outline-zoom-root > .outline-arrow {
+  display: none; /* Workflowy 缩放页大标题不带圆点/折叠箭头 */
+}
+/* 祖先壳通道不缩进、不画竖线：zoom 视图从大标题顶格开始 */
+.outline-item.outline-ancestor > .outline-content ul[data-type="taskList"] {
+  padding-left: 0;
+}
+.outline-item.outline-ancestor > .outline-content ul[data-type="taskList"]::before {
+  background: none;
+}
+.outline-doc p.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--wf-note);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.outline-tag {
+  color: var(--accent); /* 与笔记双链同色 */
+}
+
+/* 行首 ⋯ 菜单（Workflowy：叠在缩进空间、圆点左侧，比折叠箭头更靠外）；
+   实底小浮钮（缩进收紧后会与上层圆点区域交叠，底色保证视觉干净）；
+   悬停行淡入；菜单打开期间常显 */
+.outline-item-menu {
+  position: absolute;
+  left: -40px;
+  top: 3px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: var(--wf-bg);
+  border-radius: 5px;
+  color: var(--wf-note);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.outline-item-menu svg {
+  width: 12px;
+  height: 12px;
+}
+.outline-item:hover > .outline-item-menu,
+.outline-item.outline-menu-hl > .outline-item-menu {
+  opacity: 1;
+}
+.outline-item-menu:hover {
+  background: var(--wf-bg2);
+  color: var(--wf-sub);
+}
+/* ⋯ 菜单打开：目标条目 + 当前展开的子树整块高亮（li 盒子天然罩住嵌套子列表） */
+.outline-item.outline-menu-hl {
+  background: var(--surface-hover);
+  border-radius: 6px;
+}
+.outline-item.outline-zoom-root > .outline-item-menu {
+  top: 11px; /* 27px 大标题行中心对齐 */
+}
+
+/* 拖拽落点提示线：水平线 + 左端把手圆点（Workflowy 式） */
+.outline-drop-hint {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  background: var(--wf-sub);
+  border-radius: 2px;
+}
+.outline-drop-hint-before,
+.outline-drop-hint-after {
+  height: 2px;
+}
+.outline-drop-hint-before::before,
+.outline-drop-hint-after::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -2.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: inherit;
+}
+/* child 落点：目标条目整块（含展开的子树区域）高亮 */
+.outline-drop-child-target {
+  background: var(--wf-bg2);
+  box-shadow: inset 2px 0 0 var(--wf-sub);
+  border-radius: 6px;
+}
+
+/* 侧栏：Home 常驻按钮 + 节点搜索分区 */
+.side-tab-home {
+  margin-right: 2px;
+}
+.home-node-row {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.home-node-row:hover {
+  background: var(--surface-hover);
+}
+.home-node-row:active {
+  cursor: grabbing;
+}
+
+/* 笔记正文里的 Home 节点嵌入卡片 */
+.home-embed {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 10px 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+.home-embed.is-selected {
+  border-color: var(--accent);
+}
+/* 嵌入卡头部：不做灰底块（会像压在内容上的方块），只留一行极淡的路径小字 */
+.home-embed-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.home-embed-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-embed-open {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+.home-embed-open:hover {
+  text-decoration: underline;
+}
+.home-embed-body {
+  padding: 8px 12px 10px 26px;
+  font-size: 14px;
+  margin: 0;
+}
+.home-embed-body ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+}
+.home-embed-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+}
+.home-embed-line.is-done {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+.home-embed-box {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 3px;
+  align-self: center;
+}
+.home-embed-box.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.home-embed-more {
+  color: var(--ink-faint);
+}
+.home-embed.is-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-style: dashed;
+}
+.home-embed-ref {
+  font-size: 12px;
+  color: var(--ink-faint);
 }

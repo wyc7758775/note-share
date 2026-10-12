@@ -6,7 +6,10 @@
 const EMBED_RE = /!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]/g;
 const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const WIKILINK_RE = /\[\[([^\][\n]+?)\]\]/g;
+const HOME_EMBED_RE = /!\[\[Home#\^([A-Za-z0-9][A-Za-z0-9-]*)\]\]/g;
 export const WIKILINK_PREFIX = "noteshare-wikilink:";
+/** Home 节点嵌入在编辑器内的伪装 src 前缀（HomeEmbed 节点认它） */
+export const HOME_EMBED_PREFIX = "noteshare-homeembed:";
 
 /** markdown-it 会把中文等非 ASCII 路径百分号编码，读文件前先还原 */
 export function safeDecode(s: string): string {
@@ -21,6 +24,8 @@ export function forEditor(markdown: string): string {
   return markdown
     .replace(/\\\[\\\[/g, "[[")
     .replace(/\\\]\\\]/g, "]]")
+    // Home 节点嵌入：![[Home#^id]] → 伪装 img（HomeEmbed 节点解析），先于通用 EMBED_RE
+    .replace(HOME_EMBED_RE, (_m, id: string) => `![](${HOME_EMBED_PREFIX}${id})`)
     .replace(EMBED_RE, (_m, p: string) => {
       const src = safeDecode(p);
       return `![${src}](${src})`;
@@ -39,6 +44,10 @@ export function forSave(markdown: string): string {
   return (
     markdown
       .replace(IMG_RE, (m, alt: string, srcRaw: string) => {
+        // Home 节点嵌入：伪装 src → 还原为 ![[Home#^id]]
+        if (srcRaw.startsWith(HOME_EMBED_PREFIX)) {
+          return `![[Home#^${safeDecode(srcRaw.slice(HOME_EMBED_PREFIX.length))}]]`;
+        }
         const src = safeDecode(srcRaw);
         if (src.endsWith(".excalidraw")) {
           return `![[${src}]]`;
@@ -72,7 +81,7 @@ export function extractAssetPaths(markdown: string): string[] {
     if (!/^(https?:|data:|#)/.test(src)) out.add(src);
   }
   for (const m of markdown.matchAll(EMBED_RE)) {
-    out.add(m[1]);
+    if (!m[1].startsWith("Home#^")) out.add(m[1]); // Home 节点嵌入不是附件
   }
   return [...out];
 }

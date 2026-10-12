@@ -76,6 +76,13 @@ export const I = {  chevron: (
       <path d="M3 11.5l3.2-3 2.3 2.2 2-1.8 2.5 2.6" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   ),
+  pdf: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M3.25 2.25h6l3.5 3.5v8h-9.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M9 2.5v3.5h3.5" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M5.2 11.3c.5-.9.9-2.1 1.1-3M7 7.5c.8-.4 1.6-.5 1.8-.1.2.5-.7 1.3-1.2 1.6M7.6 9c.6.7 1.2 1.6 1.6 2.3" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
+    </svg>
+  ),
   check: (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
       <path d="M3 8.5l3.2 3L13 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -115,6 +122,20 @@ export const I = {  chevron: (
   switchVault: (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
       <path d="M2.5 5.5h9l-2.5-2.5M13.5 10.5h-9l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  home: (
+    // Workflowy 式大纲标识：三行圆点列表
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <circle cx="3" cy="4" r="1.2" fill="currentColor" />
+      <circle cx="3" cy="8" r="1.2" fill="currentColor" />
+      <circle cx="3" cy="12" r="1.2" fill="currentColor" />
+      <path
+        d="M6.5 4h7M6.5 8h7M6.5 12h7"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   ),
   more: (

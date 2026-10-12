@@ -14,11 +14,14 @@ import { setMainWindowSize } from "./backend/window-size";
 import type { LayoutNode } from "./domain/workspace";
 import Sidebar, { FOCUS_SEARCH_EVENT } from "./components/Sidebar";
 import PaneView from "./components/PaneView";
+import DropImport from "./components/DropImport";
 import SettingsModal from "./components/SettingsModal";
 import VaultSwitcher from "./components/VaultSwitcher";
 import { OPEN_NOTE_EVENT } from "./components/WikiLink";
 import { EDIT_SCENE_EVENT, emitEditScene } from "./components/ExcalidrawBlock";
 import { PikachuLogo, I } from "./components/icons";
+import { HOME_PATH } from "./outline/store";
+import { OPEN_HOME_EVENT } from "./outline/home-bus";
 
 /** 一次"打开的仓库"会话：领域容器 + 仓库引用。切换仓库 = 整个 session 换新 */
 interface VaultSession {
@@ -115,8 +118,8 @@ function VaultApp({
   onManageVaults: () => void;
 }) {
   const { t } = useSettings();
-  const { workspace, bus, directory, notes: noteService } = useDomain();
-  useWorkspaceVersion(); // 分栏/标签布局变化触发重渲染
+  const { workspace, bus, directory, notes: noteService, outline } = useDomain();
+  useWorkspaceVersion(); // 分栏/标签布局变化触发重渲染（版本号在下方"最后一篇"记忆 effect 里另取）
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tree, setTree] = useState<import("./backend").TreeNode[]>([]);
 
@@ -138,9 +141,19 @@ function VaultApp({
   // 笔记历史（MRU 去重栈）：双链跳转（阅读链路）进历史；树/搜索点击只切活动栏不动栈
   const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
 
-  // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击在右侧拆新栏
+  // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击在右侧拆新栏。
+  // Home 是固定入口且全局唯一：已开则激活所在栏（不再开第二个）
   const openNote = useCallback(
     (path: string, opts?: { viaHistory?: boolean; newTab?: boolean; newPane?: boolean }) => {
+      if (path === HOME_PATH) {
+        for (const pane of workspace.paneList) {
+          const hit = pane.tabs.find((tb) => tb.path === HOME_PATH);
+          if (hit) {
+            workspace.activateTab(pane.id, hit.id);
+            return;
+          }
+        }
+      }
       workspace.open(path, opts?.newPane ? "newPane" : opts?.newTab ? "newTab" : "replace");
       if (!opts?.viaHistory) return;
       setHistory((h) => {
@@ -167,10 +180,33 @@ function VaultApp({
     setTree(await backend.tree());
   }, []);
 
-  // 领域装配：名录初始化；文件树/分栏跟随领域事件自动更新
+  // 领域装配：名录初始化；文件树/分栏跟随领域事件自动更新。
+  // 固定入口：大纲索引装载 + 空工作台启动落地——优先恢复上次关闭前打开的最后一篇笔记
+  // （按仓库记忆；文件已删/改名则回退到 Workflowy 大纲）。
+  const lastNoteKey = `noteshare.lastNote.${vault.id}`;
   useEffect(() => {
     void directory.init();
-  }, [directory]);
+    void outline.init().then(async () => {
+      if (workspace.activePath) return;
+      const last = localStorage.getItem(lastNoteKey);
+      if (last) {
+        try {
+          await backend.readNote(last); // 校验还在（防删除/重命名后复活）
+          workspace.open(last);
+          return;
+        } catch {
+          /* 不在了：走默认入口 */
+        }
+      }
+      workspace.open(HOME_PATH);
+    });
+  }, [directory, outline, workspace, lastNoteKey]);
+  // "最后一篇"记忆：活动标签变化即记录（全部标签关闭的空档保留上一个值）
+  const wv = useWorkspaceVersion();
+  useEffect(() => {
+    const cur = workspace.activePath;
+    if (cur) localStorage.setItem(lastNoteKey, cur);
+  }, [workspace, lastNoteKey, wv]);
   useEffect(() => {
     const off = bus.on(
       ["noteCreated", "noteRenamed", "noteMoved", "assetMoved", "assetCreated", "noteTrashed"],
@@ -243,7 +279,8 @@ function VaultApp({
     };
   }, [jumpHistory]);
 
-  // 全局快捷键：Ctrl+N 新建笔记（活动栏新标签）、Ctrl+O 打开文件（聚焦侧栏搜索）
+  // 全局快捷键：Ctrl+N 新建笔记（活动栏新标签）、Ctrl+O 打开文件（聚焦侧栏搜索）、
+  // Ctrl+Shift+H 回 Home 大纲（固定入口）
   // （Ctrl+N 在浏览器里是保留键拦不住，桌面端有效；面板上的提示以此为准）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -255,11 +292,24 @@ function VaultApp({
       } else if (k === "o") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent(FOCUS_SEARCH_EVENT));
+      } else if (k === "h" && e.shiftKey) {
+        e.preventDefault();
+        openNote(HOME_PATH, { newTab: true });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openNote, t]);
+
+  // 打开 Home 请求（侧栏按钮之外的调用方：双链锚点/嵌入卡片/搜索行）
+  useEffect(() => {
+    const onOpenHome = (e: Event) => {
+      const d = (e as CustomEvent<{ newTab?: boolean; newPane?: boolean }>).detail;
+      openNote(HOME_PATH, { newTab: d?.newTab, newPane: d?.newPane });
+    };
+    window.addEventListener(OPEN_HOME_EVENT, onOpenHome);
+    return () => window.removeEventListener(OPEN_HOME_EVENT, onOpenHome);
+  }, [openNote]);
 
   // 侧栏收起时请求搜索：先展开再聚焦（Sidebar 自己监听同一事件切搜索页）
   useEffect(() => {
@@ -288,6 +338,7 @@ function VaultApp({
             const path = await noteService.create(t("untitledNote"), "");
             if (path) openNote(path);
           }}
+          onOpenHome={() => openNote(HOME_PATH)}
           onNewCanvas={async (name) => {
             const path = await noteService.createCanvas("", name);
             if (path) openNote(path, { newTab: true });
@@ -393,6 +444,9 @@ function VaultApp({
             {renderLayout(workspace.layout)}
           </div>
         </main>
+
+      {/* OS 文件拖放导入（覆盖层 + 全局 drop） */}
+      <DropImport />
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>

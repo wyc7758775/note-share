@@ -235,7 +235,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_vaults, open_vault, create_vault, remove_vault, tree, read_note, write_note,
             create_note, create_folder, rename_path, move_path, delete_path, search, read_scene,
-            save_scene, save_asset, read_asset, save_text_file, save_binary_file, create_canvas
+            save_scene, save_asset, import_file, read_asset, save_text_file, save_binary_file, create_canvas
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -771,6 +771,43 @@ fn save_asset(state: State<AppState>, name: String, base64: String) -> Result<Va
         .map_err(|e| e.to_string())?;
     fs::write(&abs, bytes).map_err(|e| e.to_string())?;
     Ok(json!({"path": to_posix(&abs.strip_prefix(&v).map_err(|e| e.to_string())?)}))
+}
+
+/// OS 拖放导入：落 vault 指定文件夹，保留原扩展名（白名单外的后缀也原样保留，
+/// 只过滤危险字符），撞名自动加序号——与 save_asset 的"强转 png"语义不同。
+#[tauri::command]
+fn import_file(state: State<AppState>, folder: Option<String>, name: String, base64: String) -> Result<String, String> {
+    let v = vault_of(&state)?;
+    let dir = match folder.as_deref() {
+        None | Some("") => v.clone(),
+        Some(f) => resolve_inside(&v, f)?,
+    };
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stem_raw = Path::new(&name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("导入文件");
+    let mut stem = sanitize_name(stem_raw, true);
+    if stem.is_empty() {
+        stem = "导入文件".to_string();
+    }
+    let stem: String = stem.chars().take(80).collect();
+    // 扩展名只放行字母数字（1-10 位），防路径注入；无扩展名就只写 stem
+    let ext: String = Path::new(&name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(10)
+        .collect();
+    let file_name = if ext.is_empty() { stem } else { format!("{stem}.{ext}") };
+    let abs = unique_abs(&dir.join(&file_name));
+    let bytes = ::base64::engine::general_purpose::STANDARD
+        .decode(&base64)
+        .map_err(|e| e.to_string())?;
+    fs::write(&abs, bytes).map_err(|e| e.to_string())?;
+    Ok(to_posix(&abs.strip_prefix(&v).map_err(|e| e.to_string())?))
 }
 
 #[tauri::command]

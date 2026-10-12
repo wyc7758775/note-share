@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import NoteToc from "./NoteToc";
+import { subtreeMarkdown } from "../outline/parse";
+import { DOMParser as PMDOMParser } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
@@ -23,6 +26,9 @@ import {
 } from "./ExcalidrawBlock";
 import { SmartTaskInput } from "./SmartTaskInput";
 import { Wikilink, WikiPreviewCard, emitOpenNote } from "./WikiLink";
+import { HomeEmbed } from "./HomeNodeEmbed";
+import { NODE_MIME } from "./home/outlineKit";
+import { requestOpenHome, requestZoomHome } from "../outline/home-bus";
 import { createWikiLinkMenu } from "./WikiLinkMenu";
 import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -61,7 +67,7 @@ export default function Editor({
   onForward,
 }: Props) {
   const { t } = useSettings();
-  const { directory, notes: noteService, positions, sessions, bus } = useDomain();
+  const { directory, notes: noteService, positions, sessions, bus, outline } = useDomain();
   useDirectoryVersion(); // 名录变化触发重渲染（双链存在性等）
 
   // 编辑会话：锁定模式 + 待落盘快照 + 阅读位置（领域登记簿按路径全局持有，
@@ -236,6 +242,7 @@ export default function Editor({
         defaultLanguage: "plaintext",
       }),
       CustomImage,
+      HomeEmbed,
       TaskList,
       TaskItem.configure({ nested: true }),
       // 占位符用函数式读取当前语言（切换语言后无需重建编辑器）
@@ -255,6 +262,13 @@ export default function Editor({
           if (!name) return false;
           const ctrl = (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey;
           const opts = { newTab: ctrl, newPane: ctrl && (event as MouseEvent).shiftKey };
+          // Home 节点引用：打开 Home 并缩放到该节点
+          const homeRef = /^Home#\^([\w-]+)$/.exec(name);
+          if (homeRef) {
+            requestOpenHome(opts);
+            requestZoomHome({ blockId: homeRef[1] });
+            return true;
+          }
           const hit = directory.resolve(name);
           if (hit.kind === "resolved") {
             emitOpenNote(hit.path, opts);
@@ -444,6 +458,74 @@ export default function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Workflowy 节点拖入（侧栏搜索行 / 大纲圆点跨视图）：**直接复制成正文**——
+  // 取节点子树的 markdown 经 tiptap-markdown 解析后插入落点（非嵌入引用）。
+  // drop 可能被 ProseMirror 在编辑器层截停（冒泡到不了 React onDrop），也可能被
+  // 注入类通道跳层派发——统一挂在 window 捕获层（所有 drop 必经的第一站），
+  // 按坐标判定落点归属本文档
+  useEffect(() => {
+    if (!editor) return;
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(NODE_MIME)) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      const dt = e.dataTransfer;
+      if (!dt?.types.includes(NODE_MIME) || locked) return;
+      const el = scrollRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const inside =
+        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) return; // 落点不在本文档滚动区：让别的实例/区域处理
+      e.preventDefault();
+      e.stopPropagation();
+      let payload: { source?: string; address?: number[] };
+      try {
+        payload = JSON.parse(dt.getData(NODE_MIME));
+      } catch {
+        return;
+      }
+      const known =
+        (payload.source === "search" || payload.source === "home") &&
+        Array.isArray(payload.address);
+      if (!known) return;
+      const coords = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+      void (async () => {
+        await outline.flush();
+        const sub = outline.subtreeAt(payload.address!);
+        if (!sub) return;
+        const md = subtreeMarkdown(sub)
+          // 插入的是正文内容而非待办：剥块引用锚、去掉 [] 复选框标记；
+          // 完成态降级为 ~~删除线~~ 文字（信息保留，不带方框）
+          .replace(/ \^[\w-]+$/gm, "")
+          .replace(/^(\s*)- \[ \] /gm, "$1- ")
+          .replace(/^(\s*)- \[x\] (.+)$/gm, "$1- ~~$2~~");
+        const parser = (
+          editor.storage as unknown as {
+            markdown?: { parser?: { parse: (content: string) => string } };
+          }
+        ).markdown?.parser;
+        const html = parser ? parser.parse(md) : md;
+        // 不能走 insertContentAt(字符串)：tiptap-markdown 会把字符串再当 markdown
+        // 转义成纯文本。解析成文档节点后直接插入事务
+        const host = document.createElement("div");
+        host.innerHTML = html;
+        const parsed = PMDOMParser.fromSchema(editor.state.schema).parse(host);
+        const at = coords?.pos ?? editor.state.selection.from;
+        editor.view.dispatch(editor.state.tr.insert(at, parsed.content));
+        editor.commands.focus();
+        scheduleSave();
+      })();
+    };
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("drop", onDrop, true);
+    return () => {
+      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("drop", onDrop, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, outline, locked]);
+
   // Ctrl/Cmd + S 立即保存；Ctrl/Cmd + E 锁定/解锁（与 Obsidian 一致）；
   // 锁定切换经 SessionBook 广播（下方镜像由 lockToggled 驱动，菜单/快捷键同一路径）
   useEffect(() => {
@@ -609,6 +691,10 @@ export default function Editor({
           </button>
         </div>
 
+        {/* 右缘悬浮目录（浅色隐身，hover 点亮；可收起；窄区自动隐藏） */}
+        <NoteToc editor={editor} scrollRef={scrollRef} />
+
+        {/* 正文滚动区 */}
         {/* 正文滚动区 */}
         <div
           ref={scrollRef}
@@ -668,8 +754,14 @@ export default function Editor({
           onDrop={(e) => {
             e.preventDefault();
             if (locked) return;
+            // 注：Workflowy 节点拖入走上方捕获阶段的原生监听（PM 会截停编辑器内的
+            // drop，React onDrop 收不到）；这里只处理图片文件
             for (const f of e.dataTransfer.files) {
-              if (f.type.startsWith("image/")) void insertImageFile(f);
+              if (f.type.startsWith("image/")) {
+                // 已被编辑器消费（插图）：阻断冒泡，免得全局拖放再导一份进 vault
+                e.stopPropagation();
+                void insertImageFile(f);
+              }
             }
           }}
         >

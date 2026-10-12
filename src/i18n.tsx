@@ -98,6 +98,27 @@ const zh: Record<string, string> = {
   editorPlaceholder: "开始写点什么…（# 标题 · 1. 列表 · - [ ] 待办 · ``` 代码）",
   tagsPlaceholder: "标签，用逗号分隔",
 
+  // ---- Home 大纲（Workflowy 式） ----
+  homeOpenEntry: "Workflowy 大纲（Ctrl+Shift+H）",
+  homeSearchPh: "筛选大纲…",
+  homeExpandAll: "全部展开",
+  homeCollapseAll: "全部折叠",
+  homeEmptyHint: "记下第一条想法…（Enter 新行 · Tab 缩进 · 拖圆点整理）",
+  homeToggleCollapse: "折叠 / 展开",
+  homeMarkDone: "标记完成",
+  homeMarkUndo: "取消完成",
+  homeZoomHere: "缩放至此",
+  homeCopyRef: "复制引用",
+  homeToNote: "转为笔记",
+  homeDeleteItem: "删除节点（含子级）",
+  homeAddItem: "新建条目",
+  homeNotePh: "备注…",
+  homeHideDone: "隐藏 / 显示已完成（Ctrl+O）",
+  homeNodes: "Workflowy 节点",
+  homeDragHint: "拖到笔记里嵌入此节点，点击在大纲中定位",
+  homeEmbedOpen: "在大纲中查看",
+  homeEmbedMissing: "大纲节点已被删除或改动",
+
   // ---- 正文右键菜单 ----
   cut: "剪切",
   copy: "复制",
@@ -222,6 +243,26 @@ const zh: Record<string, string> = {
   clickToView: "点击查看图片",
   clickToEdit: "点击在右侧编辑画板",
   clickCanvas: "点击查看画板",
+
+  // ---- PDF 阅读器 ----
+  pdfLoading: "PDF 加载中…",
+  pdfLoadFail: "PDF 加载失败",
+  clickToReadPdf: "点击阅读 PDF（可转为 Markdown）",
+  pdfZoomIn: "放大",
+  pdfZoomOut: "缩小",
+  pdfFitWidth: "适应宽度",
+  pdfGoPage: "跳到指定页（回车）",
+  pdfConvert: "转为 Markdown",
+  pdfConverting: "转换中…",
+  pdfConverted: "已生成 {name}",
+  pdfConvertFail: "转换失败",
+
+  // ---- OS 拖放导入 ----
+  dropImportHint: "松开导入到 {folder}",
+  dropImportFolderTip: "拖到左侧文件夹上可指定目录；.md 会作为笔记打开",
+  dropImporting: "导入中…",
+  dropImportDone: "已导入 {n} 个文件",
+  dropImportFail: "导入失败，请重试",
   wikilinkMissingCard: "笔记不存在 · 点击创建",
 
   // ---- 空状态 / 首启 ----
@@ -329,6 +370,27 @@ const en: Record<string, string> = {
   backToNote: "← Back to note",
   editorPlaceholder: "Start writing… (# heading · 1. list · - [ ] todo · ``` code)",
   tagsPlaceholder: "Tags, comma-separated",
+
+  // ---- Home outline (Workflowy-style) ----
+  homeOpenEntry: "Workflowy outline (Ctrl+Shift+H)",
+  homeSearchPh: "Filter outline…",
+  homeExpandAll: "Expand all",
+  homeCollapseAll: "Collapse all",
+  homeEmptyHint: "Capture a thought… (Enter new line · Tab indent · drag the dot)",
+  homeToggleCollapse: "Collapse / expand",
+  homeMarkDone: "Mark done",
+  homeMarkUndo: "Mark undone",
+  homeZoomHere: "Zoom here",
+  homeCopyRef: "Copy reference",
+  homeToNote: "Convert to note",
+  homeDeleteItem: "Delete node (with children)",
+  homeNotePh: "Note…",
+  homeAddItem: "Add item",
+  homeHideDone: "Hide / show completed (Ctrl+O)",
+  homeNodes: "Workflowy nodes",
+  homeDragHint: "Drag into a note to embed; click to locate in the outline",
+  homeEmbedOpen: "Open in the outline",
+  homeEmbedMissing: "Outline node was deleted or changed",
 
   cut: "Cut",
   copy: "Copy",
@@ -450,6 +512,26 @@ const en: Record<string, string> = {
   clickToView: "Click to view",
   clickToEdit: "Click to edit canvas",
   clickCanvas: "View canvas",
+
+  // ---- PDF viewer ----
+  pdfLoading: "Loading PDF…",
+  pdfLoadFail: "Failed to load PDF",
+  clickToReadPdf: "Click to read PDF (convertible to Markdown)",
+  pdfZoomIn: "Zoom in",
+  pdfZoomOut: "Zoom out",
+  pdfFitWidth: "Fit width",
+  pdfGoPage: "Go to page (Enter)",
+  pdfConvert: "Convert to Markdown",
+  pdfConverting: "Converting…",
+  pdfConverted: "Created {name}",
+  pdfConvertFail: "Conversion failed",
+
+  // ---- OS drag & drop import ----
+  dropImportHint: "Drop to import into {folder}",
+  dropImportFolderTip: "Drop onto a folder in the sidebar to choose a target; .md opens as a note",
+  dropImporting: "Importing…",
+  dropImportDone: "Imported {n} file(s)",
+  dropImportFail: "Import failed, please retry",
   wikilinkMissingCard: "Note doesn't exist · Click to create",
 
   emptyHint: "Pick a note on the left, or",

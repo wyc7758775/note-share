@@ -58,8 +58,17 @@ function parseBlocks(css) {
         j++;
       }
       const body = css.slice(i + 1, j - 1);
-      const vars = new Set([...body.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
-      blocks.push({ selector: buf.replace(/\s+/g, " ").trim(), vars });
+      // 变量分两档：实值定义（算主题色，要求暗色覆盖）与 var() 引用别名
+      // （如 --wf-bg: var(--paper)，暗色由被引用变量自带覆盖，无需重复定义，
+      //   但仍算"已定义"，供 var() 引用悬空检查使用）
+      const defs = [...body.matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)];
+      const vars = new Set(
+        defs.filter((m) => !/^\s*var\(/.test(m[2])).map((m) => m[1])
+      );
+      const aliases = new Set(
+        defs.filter((m) => /^\s*var\(/.test(m[2])).map((m) => m[1])
+      );
+      blocks.push({ selector: buf.replace(/\s+/g, " ").trim(), vars, aliases });
       buf = "";
       i = j;
       continue;
@@ -100,12 +109,19 @@ if (darkBlocks.length === 0) errors.push(`styles.css 中没有 ${DARK_SEL} 暗�
 for (const v of dark) {
   if (!lightAll.has(v)) errors.push(`暗色定义了亮色没有的变量 ${v}`);
 }
+// 暗色侧的 var() 引用别名也算"已有覆盖"（如 --code-block-border: var(--line)）
+const darkAliases = new Set(darkBlocks.flatMap((b) => [...b.aliases]));
 for (const v of palette) {
-  if (!dark.has(v)) errors.push(`主题色 ${v} 缺少暗色覆盖（切换暗色时会残留亮色值）`);
+  if (!dark.has(v) && !darkAliases.has(v))
+    errors.push(`主题色 ${v} 缺少暗色覆盖（切换暗色时会残留亮色值）`);
 }
 
-// var(--x) 引用检查：CSS 自身 + 前端代码（含 tailwind 任意值 bg-[var(--x)] 等）
-const defined = new Set([...lightAll, ...dark]);
+// var(--x) 引用检查：CSS 自身 + 前端代码（含 tailwind 任意值 bg-[var(--x)] 等）；
+// 引用别名（值为 var() 的定义）也算已定义
+const defined = new Set([
+  ...rootBlocks.flatMap((b) => [...b.vars, ...b.aliases]),
+  ...darkBlocks.flatMap((b) => [...b.vars, ...b.aliases]),
+]);
 const checkRefs = (text, where) => {
   for (const m of text.matchAll(/var\(\s*(--[\w-]+)/g)) {
     if (!defined.has(m[1])) errors.push(`${where} 引用了未定义的变量 ${m[1]}`);

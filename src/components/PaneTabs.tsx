@@ -6,6 +6,8 @@
 import { useRef, useState } from "react";
 import { useDomain, useWorkspaceVersion } from "../domain/provider";
 import { useSettings } from "../i18n";
+import { HOME_PATH } from "../outline/store";
+import { NODE_MIME } from "./home/outlineKit";
 import type { Pane } from "../domain/workspace";
 import { I } from "./icons";
 
@@ -19,6 +21,7 @@ interface Props {
 }
 
 function tabLabel(path: string): string {
+  if (path === HOME_PATH) return "Workflowy"; // 固定入口显示名（存储路径仍是 Home.md）
   return path.split("/").pop()?.replace(/\.(md|excalidraw|canvas)$/i, "") ?? "";
 }
 
@@ -27,10 +30,33 @@ export default function PaneTabs({ pane, active }: Props) {
   const { workspace } = useDomain();
   useWorkspaceVersion(); // 标签增删/切换/激活跟随工作台版本
 
-  // 本栏内正被拖拽的标签 id（淡化显示）；dropHint = 落点指示线的插入位置
+  // 本栏内正被拖拽的标签 id（淡化显示）；dropIndex = 落点指示线的插入位置
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  // 指示线横坐标（隐藏时保留原位，下次出现从原位滑入而不是从条首飞过来）
+  const [lineX, setLineX] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
+  // 外部拖拽（节点/文件）悬停标签时的自动切换计时（拖走即取消）
+  const hoverSwitchRef = useRef<{ tabId: number | null; timer: number }>({
+    tabId: null,
+    timer: 0,
+  });
+
+  /** 指示线 x：插到 index 前摆在它与前一标签的缝隙里，末尾追加摆在最后标签右侧；首端钳进条内，否则超出滚动原点被 overflow 裁掉看不见 */
+  const lineXAt = (index: number): number => {
+    const tabs = stripRef.current?.querySelectorAll<HTMLElement>(".tab-item") ?? [];
+    if (tabs.length === 0) return 2;
+    if (index >= tabs.length) {
+      const last = tabs[tabs.length - 1];
+      return last.offsetLeft + last.offsetWidth + 1;
+    }
+    return Math.max(tabs[index].offsetLeft - 1, 1);
+  };
+
+  const showDrop = (index: number) => {
+    setDropIndex(index);
+    setLineX(lineXAt(index));
+  };
 
   /** 根据鼠标位置算插入位置：经过标签左半插它前面，右半插后面 */
   const indexAt = (e: React.DragEvent, el: HTMLElement): number => {
@@ -77,7 +103,7 @@ export default function PaneTabs({ pane, active }: Props) {
           e.stopPropagation();
           e.dataTransfer.dropEffect = "move";
           // 经过标签条空白（非任何标签）= 追加到末尾
-          if (!(e.target as HTMLElement).closest(".tab-item")) setDropIndex(pane.tabs.length);
+          if (!(e.target as HTMLElement).closest(".tab-item")) showDrop(pane.tabs.length);
         }}
         onDragLeave={(e) => {
           if (!stripRef.current?.contains(e.relatedTarget as Node)) setDropIndex(null);
@@ -95,7 +121,8 @@ export default function PaneTabs({ pane, active }: Props) {
           const on = tab.id === pane.activeTabId;
           const isScene = /\.excalidraw$/i.test(tab.path);
           const isCanvas = /\.canvas$/i.test(tab.path);
-          const i = pane.tabs.indexOf(tab);
+          const isPdf = /\.pdf$/i.test(tab.path);
+          const isHome = tab.path === HOME_PATH;
           return (
             <div
               key={tab.id}
@@ -103,10 +130,6 @@ export default function PaneTabs({ pane, active }: Props) {
                 "tab-item",
                 on ? "tab-item-on" : "",
                 dragTabId === tab.id ? "tab-item-drag" : "",
-                dropIndex === i ? "tab-item-drop tab-item-drop-before" : "",
-                dropIndex === i + 1 && i === pane.tabs.length - 1
-                  ? "tab-item-drop tab-item-drop-after"
-                  : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -122,10 +145,36 @@ export default function PaneTabs({ pane, active }: Props) {
                 setDropIndex(null);
               }}
               onDragOver={(e) => {
-                if (!e.dataTransfer.types.includes(TAB_MIME)) return;
+                if (e.dataTransfer.types.includes(TAB_MIME)) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  showDrop(indexAt(e, e.currentTarget as HTMLElement));
+                  return;
+                }
+                // 拖着外部内容（Workflowy 节点 / 文件树条目）悬停标签：短暂停顿即切换过去，
+                // 否则单栏双标签时拖拽永远到不了另一个标签的内容区
+                if (
+                  !e.dataTransfer.types.includes(NODE_MIME) &&
+                  !e.dataTransfer.types.includes("application/x-noteshare-tree")
+                )
+                  return;
                 e.preventDefault();
-                e.stopPropagation();
-                setDropIndex(indexAt(e, e.currentTarget as HTMLElement));
+                if (on) return;
+                if (hoverSwitchRef.current.tabId === tab.id) return;
+                window.clearTimeout(hoverSwitchRef.current.timer);
+                hoverSwitchRef.current = {
+                  tabId: tab.id,
+                  timer: window.setTimeout(() => {
+                    hoverSwitchRef.current = { tabId: null, timer: 0 };
+                    workspace.activateTab(pane.id, tab.id);
+                  }, 320),
+                };
+              }}
+              onDragLeave={() => {
+                if (hoverSwitchRef.current.tabId === tab.id) {
+                  window.clearTimeout(hoverSwitchRef.current.timer);
+                  hoverSwitchRef.current = { tabId: null, timer: 0 };
+                }
               }}
               onDrop={handleDrop}
               onClick={() => workspace.activateTab(pane.id, tab.id)}
@@ -137,7 +186,15 @@ export default function PaneTabs({ pane, active }: Props) {
               }}
             >
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
-                {isScene ? I.pen : isCanvas ? I.canvas : I.note}
+                {isHome
+                  ? I.home
+                  : isScene
+                    ? I.pen
+                    : isCanvas
+                      ? I.canvas
+                      : isPdf
+                        ? I.pdf
+                        : I.note}
               </span>
               <span className="tab-label">{tabLabel(tab.path)}</span>
               <button
@@ -153,6 +210,11 @@ export default function PaneTabs({ pane, active }: Props) {
             </div>
           );
         })}
+        {/* 落点指示线：常驻单节点，显隐淡入淡出、换位平移滑动（挂在标签上的伪元素之间无法过渡） */}
+        <div
+          className={`tab-drop-line${dropIndex !== null ? " on" : ""}`}
+          style={{ transform: `translateX(${lineX}px)` }}
+        />
       </div>
     </div>
   );

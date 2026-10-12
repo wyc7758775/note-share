@@ -49,6 +49,7 @@ export const webBackend: Backend = {
   createCanvas: (folder, name) => call<string>("canvas-create", { folder, name }),
   saveAsset: (name, base64) => call<{ path: string }>("asset-save", { name, base64 }),
   readAssetBase64: (path) => call<AssetData>("asset", { path }),
+  importFile: (folder, name, base64) => call<string>("import-file", { folder, name, base64 }),
   saveTextFile: async () => null,
   saveBinaryFile: async () => null,
 };

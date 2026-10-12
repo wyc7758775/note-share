@@ -13,6 +13,8 @@ export interface CtxMenuItem {
   /** 前置图标（与勾选位互斥使用） */
   icon?: ReactNode;
   onClick?: () => void;
+  /** 点击后保持菜单打开（tag 多选等即时切换项）；勾选态在菜单内本地翻转 */
+  keepOpen?: boolean;
 }
 
 let current: { destroy: () => void } | null = null;
@@ -21,7 +23,13 @@ export function hideContextMenu() {
   current?.destroy();
 }
 
-export function showContextMenu(x: number, y: number, items: CtxMenuItem[]) {
+export function showContextMenu(
+  x: number,
+  y: number,
+  items: CtxMenuItem[],
+  /** 菜单关闭（点外部/Escape/选中项）后的回调，用于清理配套 UI 状态 */
+  onClose?: () => void
+) {
   current?.destroy();
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -34,7 +42,10 @@ export function showContextMenu(x: number, y: number, items: CtxMenuItem[]) {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") destroy();
   };
+  let closed = false;
   const destroy = () => {
+    if (closed) return;
+    closed = true;
     window.removeEventListener("mousedown", onDoc, true);
     window.removeEventListener("keydown", onKey, true);
     window.removeEventListener("scroll", onDoc, true);
@@ -42,6 +53,7 @@ export function showContextMenu(x: number, y: number, items: CtxMenuItem[]) {
     root.unmount();
     container.remove();
     if (current && current.destroy === destroy) current = null;
+    onClose?.();
   };
   window.addEventListener("mousedown", onDoc, true);
   window.addEventListener("keydown", onKey, true);
@@ -65,6 +77,8 @@ function Menu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
+  // keepOpen 项的本地勾选覆盖（点击即翻转，菜单不关）
+  const [overrides, setOverrides] = useState<Record<number, boolean>>({});
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -91,12 +105,22 @@ function Menu({
             className={`ctx-item ${it.danger ? "ctx-danger" : ""}`}
             disabled={it.disabled}
             onClick={() => {
+              if (it.keepOpen) {
+                const cur = i in overrides ? overrides[i] : it.checked;
+                setOverrides((o) => ({ ...o, [i]: !cur }));
+                it.onClick?.();
+                return; // 菜单保持打开（tag 多选场景）
+              }
               close();
               it.onClick?.();
             }}
           >
             <span className="ctx-check">
-              {it.checked ? "✓" : it.icon ?? ""}
+              {(i in overrides ? overrides[i] : it.checked) ? (
+                "✓"
+              ) : (
+                it.icon ?? (it.keepOpen ? <span className="ctx-box" /> : "")
+              )}
             </span>
             {it.label}
           </button>

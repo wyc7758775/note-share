@@ -310,6 +310,17 @@ const handlers = {
     fs.writeFileSync(abs, Buffer.from(base64, "base64"));
     return { path: toPosix(path.relative(VAULT, abs)) };
   },
+  // OS 拖放导入：落指定文件夹、保留原扩展名（与 asset-save 的"强转 png"语义不同）
+  "import-file": async ({ folder, name, base64 }) => {
+    const dir = folder ? resolveInside(folder) : VAULT;
+    fs.mkdirSync(dir, { recursive: true });
+    const extMatch = /\.([A-Za-z0-9]{1,10})$/.exec(String(name));
+    const ext = extMatch ? extMatch[1].toLowerCase() : "";
+    const stem = sanitizeName(path.basename(String(name), extMatch ? extMatch[0] : "")).slice(0, 80) || "导入文件";
+    const abs = uniqueAbs(path.join(dir, stem + (ext ? `.${ext}` : "")));
+    fs.writeFileSync(abs, Buffer.from(base64, "base64"));
+    return toPosix(path.relative(VAULT, abs));
+  },
   "asset": async ({ path: rel }) => {
     const abs = resolveInside(rel);
     const ext = path.extname(abs).toLowerCase();
