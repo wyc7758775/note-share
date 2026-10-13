@@ -110,11 +110,14 @@ function PdfPage({
   );
 }
 
-/** 视口内懒渲染：跟踪出现在滚动区里的页号集合 */
-function useVisiblePages(root: HTMLElement | null): Set<number> {
+/** 视口内懒渲染：跟踪出现在滚动区里的页号集合。
+ *  依赖 pageCount：root 挂载时 doc 多半还没就绪，容器里没有 .pdf-page，
+ *  只在 mount 扫一次会一个都 observe 不到（症状＝永远只渲染第一页）。
+ *  换文档时旧集合里的页号会残留，但 geos 已换新、渲染列表以它为准，多出的页号无副作用。 */
+function useVisiblePages(root: HTMLElement | null, pageCount: number): Set<number> {
   const [visible, setVisible] = useState<Set<number>>(new Set([1]));
   useEffect(() => {
-    if (!root) return;
+    if (!root || pageCount <= 0) return;
     const io = new IntersectionObserver(
       (entries) => {
         setVisible((prev) => {
@@ -142,7 +145,7 @@ function useVisiblePages(root: HTMLElement | null): Set<number> {
     );
     for (const el of root.querySelectorAll(".pdf-page")) io.observe(el);
     return () => io.disconnect();
-  }, [root]);
+  }, [root, pageCount]);
   return visible;
 }
 
@@ -157,7 +160,7 @@ export default function PdfViewer({ src, active, onClose }: Props) {
   const [page, setPage] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [root, setRoot] = useState<HTMLElement | null>(null);
-  const visiblePages = useVisiblePages(root);
+  const visiblePages = useVisiblePages(root, geos.length);
   const [convert, setConvert] = useState<"idle" | "busy" | "done" | "fail">("idle");
   const [convertedName, setConvertedName] = useState("");
 
