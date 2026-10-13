@@ -3,7 +3,7 @@
 [![Check](https://github.com/wyc7758775/note-share/actions/workflows/check.yml/badge.svg)](https://github.com/wyc7758775/note-share/actions/workflows/check.yml)
 [![Release](https://github.com/wyc7758775/note-share/actions/workflows/release.yml/badge.svg)](https://github.com/wyc7758775/note-share/actions/workflows/release.yml)
 
-一个本地优先的笔记应用：像 Obsidian 一样用**文件夹管理 Markdown 笔记**，用 **tiptap** 所见即所得地写作，随手画 **Excalidraw** 手绘板，然后**把某一篇笔记发布出去给人看**——导出单文件 HTML，或一键推到你自己的服务器生成分享链接。
+一个本地优先的笔记应用：像 Obsidian 一样用**文件夹管理 Markdown 笔记**，用 **tiptap** 所见即所得地写作，随手画 **Excalidraw** 手绘板，然后**把某一篇笔记发布出去给人看**——导出单文件 HTML / A4 排版 PDF，或一键推到你自己的服务器生成分享链接。
 
 ```
 ┌─────────────┬──────────────────────────────┐
@@ -22,7 +22,7 @@
 - **Excalidraw 画板**：插入画板直接画，保存为标准 `.excalidraw` 场景文件 + 自动导出 PNG 预览；Obsidian 的 Excalidraw 插件可直接编辑同一文件
 - **PDF 阅读与转换**：vault 里的 `.pdf` 点击即读（pdfjs 连续滚动渲染、缩放/适宽/页码跳转），一键"转为 Markdown"——本地提取文本层并推断标题层级/列表/段落，生成带 frontmatter 的同名笔记
 - **拖放导入**：从桌面/资源管理器（或其他笔记软件）把文件直接拖进窗口即导入当前仓库——`.md` 作为笔记自动打开，PDF/图片等入文件树；拖到左侧文件夹行可指定目录
-- **单篇发布**：① 导出单文件 HTML（图片全部内嵌，微信发文件双击就看）② 推送到自己的发布服务器生成链接（`/p/你的slug`）
+- **单篇发布**：① 导出单文件 HTML（图片全部内嵌，微信发文件双击就看）② 导出 PDF（与 HTML 导出同一套阅读排版，A4 分页、中文/emoji 无字体问题，适合打印或存档） ③ 推送到自己的发布服务器生成链接（`/p/你的slug`）
 - **自动保存**：停笔约 1 秒自动落盘，`Ctrl+S` 立即保存；改标题 = 自动重命名文件
 - 全文搜索（标题 + 正文，中文无乱码）
 

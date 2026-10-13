@@ -22,6 +22,8 @@ export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: 
   const { notes: noteService } = useDomain();
   const [exportState, setExportState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [exportMsg, setExportMsg] = useState("");
+  const [pdfState, setPdfState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [pdfMsg, setPdfMsg] = useState("");
 
   const [serverUrl, setServerUrl] = useState("");
   const [token, setToken] = useState("");
@@ -72,6 +74,40 @@ export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: 
       console.error(e);
       setExportState("error");
       setExportMsg(t("exportFail"));
+    }
+  };
+
+  const doExportPdf = async () => {
+    setPdfState("busy");
+    setPdfMsg("");
+    try {
+      const html = await inlineAssets(editor.getHTML());
+      const titleText = title.current.trim() || t("untitled");
+      // 排版与 HTML 导出同源；jspdf/html-to-image 较重，动态 import 不进首屏包
+      const doc = await composeArticleHtml(titleText, html, {
+        tags: tagsOf(fmRef.current),
+        date: date(),
+      });
+      const { articleHtmlToPdf, bytesToBase64 } = await import("../lib/mdToPdf");
+      const fileName = `${titleText.replace(/[\\/:*?"<>|]/g, "_")}.pdf`;
+      const bytes = await articleHtmlToPdf(doc);
+      const saved = await backend.saveBinaryFile(fileName, bytesToBase64(bytes));
+      if (saved === null) {
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        setPdfMsg(t("exportedPdfDownload", { name: fileName }));
+      } else {
+        setPdfMsg(t("exportedTo", { path: saved }));
+      }
+      setPdfState("done");
+    } catch (e) {
+      console.error(e);
+      setPdfState("error");
+      setPdfMsg(t("exportFail"));
     }
   };
 
@@ -149,7 +185,27 @@ export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: 
             )}
           </section>
 
-          {/* 方式二：发布到服务器 */}
+          {/* 方式二：导出 PDF */}
+          <section className="mt-4 rounded-lg border border-line p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium text-ink">{t("exportPdfTitle")}</div>
+                <div className="mt-1 text-xs leading-relaxed text-soft">
+                  {t("exportPdfDesc")}
+                </div>
+              </div>
+              <button className="btn-outline shrink-0" disabled={pdfState === "busy"} onClick={doExportPdf}>
+                {pdfState === "busy" ? t("exporting") : t("exportNow")}
+              </button>
+            </div>
+            {pdfMsg && (
+              <div className={`mt-2 text-xs ${pdfState === "error" ? "text-red-600" : "text-green-700"}`}>
+                {pdfMsg}
+              </div>
+            )}
+          </section>
+
+          {/* 方式三：发布到服务器 */}
           <section className="mt-4 rounded-lg border border-line p-5">
             <div className="text-sm font-medium text-ink">{t("pubServerTitle")}</div>
             <div className="mt-1 text-xs leading-relaxed text-soft">
