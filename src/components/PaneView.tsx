@@ -261,11 +261,15 @@ function ImagePane({ src }: { src: string }) {
   return (
     <div className="img-tab">
       {url ? (
-        <img
-          src={url}
-          alt={src.split("/").pop() ?? ""}
-          onClick={() => emitViewImage(url)}
-        />
+        /\.(webm|mp3|m4a|ogg|wav|aac|flac)$/i.test(src) ? (
+          <audio controls src={url} style={{ width: "min(480px, 90vw)" }} />
+        ) : (
+          <img
+            src={url}
+            alt={src.split("/").pop() ?? ""}
+            onClick={() => emitViewImage(url)}
+          />
+        )
       ) : (
         <span className="text-sm text-faint">…</span>
       )}

@@ -84,6 +84,12 @@ article { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
 .doc-meta { color: #a8a29e; font-size: .82em; margin-bottom: 36px; display: flex; gap: 16px; }
 .doc-meta .tags { color: #b45309; }
 .doc-body img, .doc-body video { max-width: 100%; height: auto; border-radius: 8px; }
+.doc-body audio { width: 100%; height: 40px; margin: .4em 0; }
+.doc-body .voice-pdf {
+  display: flex; align-items: center; gap: 10px; margin: 1em 0; padding: 10px 16px;
+  border: 1px solid #e7e5e4; border-radius: 10px; background: #f5f4f2;
+  color: #78716c; font-size: .88em;
+}
 .doc-body .excalidraw-fig { margin: 1.5em 0; text-align: center; }
 .doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 {
   font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;

@@ -108,7 +108,11 @@ export function flattenOutline(roots: OutlineNode[]): FlatRow[] {
 }
 
 export function firstLine(text: string): string {
-  return text.split("\n")[0] ?? "";
+  // 语音嵌入显示为 🎙 图标而非原始 ![[…]] 语法（面包屑/看板/今天视图共用）
+  return (text.split("\n")[0] ?? "").replace(
+    /!\[\[[^\]]*\.(?:webm|mp3|m4a|ogg|wav|aac|flac)\]\]/gi,
+    "🎙"
+  );
 }
 
 /** 按地址取节点 */

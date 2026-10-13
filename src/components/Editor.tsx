@@ -27,6 +27,7 @@ import {
 import { SmartTaskInput } from "./SmartTaskInput";
 import { Wikilink, WikiPreviewCard, emitOpenNote } from "./WikiLink";
 import { HomeEmbed } from "./HomeNodeEmbed";
+import { AudioBlock } from "./AudioBlock";
 import { NODE_MIME } from "./home/outlineKit";
 import { requestOpenHome, requestZoomHome } from "../outline/home-bus";
 import { createWikiLinkMenu } from "./WikiLinkMenu";
@@ -178,6 +179,19 @@ export default function Editor({
             },
           },
           {
+            title: s("slVoice"),
+            desc: s("slVoiceDesc"),
+            icon: "🎙",
+            keywords: "yuyin voice audio record luzhi mic luyin",
+            onSelect: ({ editor, range }) =>
+              editor
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent({ type: "audioBlock", attrs: { src: null } })
+                .run(),
+          },
+          {
             title: s("slTask"),
             desc: s("slTaskDesc"),
             icon: "☑",
@@ -243,6 +257,7 @@ export default function Editor({
       }),
       CustomImage,
       HomeEmbed,
+      AudioBlock,
       TaskList,
       TaskItem.configure({ nested: true }),
       // 占位符用函数式读取当前语言（切换语言后无需重建编辑器）
@@ -465,6 +480,7 @@ export default function Editor({
   // 按坐标判定落点归属本文档
   useEffect(() => {
     if (!editor) return;
+    (window as unknown as { __ne?: unknown }).__ne = editor; // 调试：E2E 断言用，发布无影响
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes(NODE_MIME)) e.preventDefault();
     };

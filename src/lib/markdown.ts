@@ -10,6 +10,16 @@ const HOME_EMBED_RE = /!\[\[Home#\^([A-Za-z0-9][A-Za-z0-9-]*)\]\]/g;
 export const WIKILINK_PREFIX = "noteshare-wikilink:";
 /** Home 节点嵌入在编辑器内的伪装 src 前缀（HomeEmbed 节点认它） */
 export const HOME_EMBED_PREFIX = "noteshare-homeembed:";
+/** 语音块在编辑器内的伪装 src 前缀（AudioBlock/InlineAudio 节点认它），磁盘仍是 ![[路径]] */
+export const AUDIO_PREFIX = "noteshare-audio:";
+/** 语音文件后缀：嵌入语法指向这些后缀时按音频而非图片解析 */
+const AUDIO_EXT_RE = /\.(webm|mp3|m4a|ogg|wav|aac|flac)$/i;
+/** 剥掉语音 src 上已有的伪装前缀（幂等：历史脏数据可能带一层甚至多层） */
+export function stripAudioPrefix(src: string): string {
+  let s = src;
+  while (s.startsWith(AUDIO_PREFIX)) s = s.slice(AUDIO_PREFIX.length);
+  return s;
+}
 
 /** markdown-it 会把中文等非 ASCII 路径百分号编码，读文件前先还原 */
 export function safeDecode(s: string): string {
@@ -27,8 +37,15 @@ export function forEditor(markdown: string): string {
     // Home 节点嵌入：![[Home#^id]] → 伪装 img（HomeEmbed 节点解析），先于通用 EMBED_RE
     .replace(HOME_EMBED_RE, (_m, id: string) => `![](${HOME_EMBED_PREFIX}${id})`)
     .replace(EMBED_RE, (_m, p: string) => {
-      const src = safeDecode(p);
+      const src = stripAudioPrefix(safeDecode(p));
+      // 语音：伪装 src 交给 AudioBlock/InlineAudio（priority 高于 CustomImage）
+      if (AUDIO_EXT_RE.test(src)) return `![](${AUDIO_PREFIX}${src})`;
       return `![${src}](${src})`;
+    })
+    // 手写的标准图片语法若指向音频文件，同样伪装（产物 src 带前缀，不会匹配音频后缀二次替换）
+    .replace(IMG_RE, (m, _alt: string, srcRaw: string) => {
+      const src = stripAudioPrefix(safeDecode(srcRaw));
+      return AUDIO_EXT_RE.test(src) ? `![](${AUDIO_PREFIX}${src})` : m;
     })
     // [[笔记名]] 双链伪装成 markdown 链接（Wikilink 节点认这个 href 前缀），
     // 在 EMBED_RE 之后执行，![[x]] 已先转成图片，不会被误吃
@@ -43,10 +60,16 @@ export function forEditor(markdown: string): string {
 export function forSave(markdown: string): string {
   return (
     markdown
+      // 嵌入语法里残留的语音伪装前缀一律剥净（异常/HMR 脏数据自愈，避免前缀逐层加深）
+      .replace(/!\[\[noteshare-audio:([^\]]+)\]\]/g, (_m, p: string) => `![[${safeDecode(p)}]]`)
       .replace(IMG_RE, (m, alt: string, srcRaw: string) => {
         // Home 节点嵌入：伪装 src → 还原为 ![[Home#^id]]
         if (srcRaw.startsWith(HOME_EMBED_PREFIX)) {
           return `![[Home#^${safeDecode(srcRaw.slice(HOME_EMBED_PREFIX.length))}]]`;
+        }
+        // 语音：伪装 src → 还原嵌入写法（正常序列化直出 ![[…]]，这里是粘贴/异常路径的兜底）
+        if (srcRaw.startsWith(AUDIO_PREFIX)) {
+          return `![[${stripAudioPrefix(safeDecode(srcRaw))}]]`;
         }
         const src = safeDecode(srcRaw);
         if (src.endsWith(".excalidraw")) {
@@ -78,6 +101,10 @@ export function extractAssetPaths(markdown: string): string[] {
   const out = new Set<string>();
   for (const m of markdown.matchAll(IMG_RE)) {
     const src = m[2];
+    if (src.startsWith(AUDIO_PREFIX)) {
+      out.add(safeDecode(src.slice(AUDIO_PREFIX.length))); // 语音伪装 src → 真实路径
+      continue;
+    }
     if (!/^(https?:|data:|#)/.test(src)) out.add(src);
   }
   for (const m of markdown.matchAll(EMBED_RE)) {

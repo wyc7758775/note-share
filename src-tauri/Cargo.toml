@@ -19,6 +19,11 @@ serde_json = "1"
 base64 = "0.22"
 chrono = "0.4"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# 语音块的麦克风权限：WebView2 默认拒绝 getUserMedia，需手动放行（版本与 tauri 内部一致）
+webview2-com = "0.39"
+
+
 [profile.release]
 opt-level = "s"
 lto = true

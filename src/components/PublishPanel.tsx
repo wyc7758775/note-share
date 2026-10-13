@@ -81,7 +81,15 @@ export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: 
     setPdfState("busy");
     setPdfMsg("");
     try {
-      const html = await inlineAssets(editor.getHTML());
+      const html0 = await inlineAssets(editor.getHTML());
+      // PDF 里音频控件不可用（html-to-image 静态绘制）：换成占位条
+      const html = html0.replace(
+        /<audio[^>]*src="([^"]*)"[^>]*>[\s\S]*?<\/audio>/gi,
+        (_m, src: string) => {
+          const name = decodeURIComponent(src.split("/").pop() ?? "").replace(/\.[a-z0-9]+$/i, "");
+          return `<div class="voice-pdf">🎙 <span>Voice clip · ${name}</span></div>`;
+        }
+      );
       const titleText = title.current.trim() || t("untitled");
       // 排版与 HTML 导出同源；jspdf/html-to-image 较重，动态 import 不进首屏包
       const doc = await composeArticleHtml(titleText, html, {

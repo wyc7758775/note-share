@@ -14,6 +14,10 @@ import HomeBoard from "./HomeBoard";
 import HomeToday from "./HomeToday";
 import { forEditor, forSave } from "../../lib/markdown";
 import { Wikilink, emitOpenNote } from "../WikiLink";
+import { InlineAudio, insertVoiceAfterCurrentItem } from "../AudioBlock";
+import { createSlashMenu } from "../SlashMenu";
+import type { SlashItem } from "../SlashMenu";
+
 import { I } from "../icons";
 import {
   consumePendingZoom,
@@ -94,6 +98,17 @@ export default function HomeView({ active }: { active: boolean }) {
       OutlineDates,
       OutlineRibbonHost,
       Wikilink,
+      InlineAudio,
+      // 大纲斜杠菜单：目前只有语音（其余格式在大纲里就是文字/待办语义，不需要块）
+      createSlashMenu((): SlashItem[] => [
+        {
+          title: translate(currentLang(), "slVoice"),
+          desc: translate(currentLang(), "slVoiceDesc"),
+          icon: "🎙",
+          keywords: "yuyin voice audio record luzhi mic luyin",
+          onSelect: ({ editor, range }) => insertVoiceAfterCurrentItem(editor, range),
+        },
+      ]),
       Placeholder.configure({
         // 全文没有任何文字时才提示（每个空行都提示太吵；isEmpty 对列表文档不可靠）
         placeholder: ({ editor }: { editor: { state: { doc: { textContent: string } } } }) =>

@@ -9,9 +9,10 @@ export default defineConfig({
     proxy: {
       "/api": "http://127.0.0.1:8787",
     },
-    // 笔记库和发布服务的数据文件由应用自己读写，绝不能触发页面刷新
+    // 笔记库和发布服务的数据文件由应用自己读写，绝不能触发页面刷新；
+    // src-tauri 的构建产物（exe 被链接器锁定）会令 watcher 直接崩溃，一并排除
     watch: {
-      ignored: ["**/devvault/**", "**/server/**"],
+      ignored: ["**/devvault/**", "**/server/**", "**/src-tauri/**"],
     },
   },
   build: {

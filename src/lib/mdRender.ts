@@ -9,6 +9,7 @@ import MarkdownIt from "markdown-it";
 const md = new MarkdownIt({ html: false, linkify: false, breaks: false });
 
 const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+const AUDIO_EXT_RE = /\.(webm|mp3|m4a|ogg|wav|aac|flac)$/i;
 const esc = md.utils.escapeHtml;
 
 // ---- [[双链]]（inline 规则，先于 link；前面带 ! 的是嵌入，交给 cvEmbed） ----
@@ -54,7 +55,11 @@ function cvEmbed(state: any, silent: boolean): boolean {
   const p = p0.trim();
   if (!p) return false;
   if (!silent) {
-    if (IMG_EXT_RE.test(p) || /\.excalidraw$/i.test(p)) {
+    if (AUDIO_EXT_RE.test(p)) {
+      // 语音：原生 audio 占位（src 由 hydrateCardImages 异步填充）
+      const audio = state.push("html_inline", "", 0);
+      audio.content = `<audio controls preload="none" data-cv-audio="${esc(p)}"></audio>`;
+    } else if (IMG_EXT_RE.test(p) || /\.excalidraw$/i.test(p)) {
       const img = state.push("image", "", 0);
       img.attrSet("src", p);
       img.content = p;
@@ -126,17 +131,25 @@ async function readAssetUrl(path: string): Promise<string | null> {
   }
 }
 
-/** 容器内 <img data-cv-src="vault 路径"> 异步换真图（含 .excalidraw 的 PNG 预览） */
+/** 容器内 <img data-cv-src="vault 路径"> 异步换真图（含 .excalidraw 的 PNG 预览）；
+ *  音频占位 <audio data-cv-audio> 填 dataURL */
 export async function hydrateCardImages(el: HTMLElement): Promise<void> {
   const imgs = [...el.querySelectorAll<HTMLImageElement>("img[data-cv-src]")];
   await Promise.all(
     imgs.map(async (im) => {
       const raw = im.getAttribute("data-cv-src") ?? "";
       let p = raw;
-      if (/\.excalidraw$/i.test(raw)) p = raw.replace(/\.excalidraw$/i, ".png");
+      if (/\.excalidraw$/i.test(raw)) p = raw.replace(/\.excalidraw$/, ".png");
       const url = await readAssetUrl(p);
       if (url) im.src = url;
       else im.classList.add("cv-img-missing");
+    })
+  );
+  const audios = [...el.querySelectorAll<HTMLAudioElement>("audio[data-cv-audio]")];
+  await Promise.all(
+    audios.map(async (au) => {
+      const url = await readAssetUrl(au.getAttribute("data-cv-audio") ?? "");
+      if (url) au.src = url;
     })
   );
 }

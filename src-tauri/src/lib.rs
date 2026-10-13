@@ -172,6 +172,31 @@ fn upsert_and_activate(
     })
 }
 
+/// WebView2 对未处理的 PermissionRequested 事件一律拒绝，
+/// 语音块的 getUserMedia 需要在这里放行麦克风（仅 Windows 桌面端）。
+#[cfg(target_os = "windows")]
+fn grant_microphone_permission(app: &tauri::App) {
+    for (_, window) in app.webview_windows() {
+        let _ = window.with_webview(|webview| unsafe {
+            use webview2_com::{Microsoft::Web::WebView2::Win32::*, PermissionRequestedEventHandler};
+            let Ok(core) = webview.controller().CoreWebView2() else {
+                return;
+            };
+            let handler = PermissionRequestedEventHandler::create(Box::new(|_sender, args| {
+                let Some(args) = args else { return Ok(()) };
+                let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
+                args.PermissionKind(&mut kind)?;
+                if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
+                    args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
+                }
+                Ok(())
+            }));
+            let mut token = Default::default();
+            let _ = core.add_PermissionRequested(&handler, &mut token);
+        });
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -179,6 +204,9 @@ pub fn run() {
             vault: Mutex::new(None),
         })
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            grant_microphone_permission(app);
+
             if let Ok(cfg) = app.path().app_config_dir() {
                 let reg_file = cfg.join("vaults.json");
                 if !reg_file.exists() {
