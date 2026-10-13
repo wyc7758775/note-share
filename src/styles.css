@@ -1038,7 +1038,7 @@ body {
   background: var(--paper);
 }
 
-/* ---------- 笔记悬浮目录（自创样式：平时隐身、hover 点亮毛玻璃；可收起；窄区让位） ---------- */
+/* ---------- 笔记悬浮目录（自创样式：平时若有若无，hover 只提亮文字不加底色；可收起；窄区让位） ---------- */
 .note-toc {
   position: absolute;
   top: 56px;
@@ -1056,18 +1056,6 @@ body {
   flex-direction: column;
   padding: 9px 4px 9px 6px;
   border-radius: 11px;
-  border: 1px solid transparent;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-/* hover 整块点亮：毛玻璃底 + 细边 + 极淡投影 */
-.note-toc:hover .note-toc-inner {
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  backdrop-filter: blur(10px);
-  border-color: var(--line);
-  box-shadow: 0 6px 22px rgb(0 0 0 / 0.07);
 }
 /* 收起钮：平时与目录一起隐身，hover 目录时浮现 */
 .note-toc-fold {
