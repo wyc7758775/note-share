@@ -37,6 +37,9 @@
   --wf-bg: var(--paper);
   --wf-bg2: var(--surface-hover);
   --wf-bg3: var(--line);
+  /* Calendar chip 底色：当前打开日 = 浅底（官方 bg-secondary），今天 = 深底（官方 bg-tertiary） */
+  --wf-chip-cur: rgb(0 0 0 / 0.045);
+  --wf-chip-today: rgb(0 0 0 / 0.13);
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
@@ -58,6 +61,8 @@ html[data-theme="dark"] {
   --code-bg: rgb(255 255 255 / 0.08);
   --code-fg: #e0af68;
   --code-block-bg: #232020;
+  --wf-chip-cur: rgb(255 255 255 / 0.07);
+  --wf-chip-today: rgb(255 255 255 / 0.18);
   --code-block-border: var(--line);
   --danger-bg: rgb(220 38 38 / 0.15);
   --tip-bg: #3f3a37;
@@ -2990,7 +2995,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   justify-content: center;
   width: 18px;
   height: 28px;
-  cursor: zoom-in;
+  cursor: pointer;
 }
 .outline-bullet-halo {
   display: flex;
@@ -3120,6 +3125,38 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 .outline-tag {
   color: var(--accent); /* 与笔记双链同色 */
+  cursor: pointer;
+}
+.outline-tag:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* # 输入自动补全建议（官方同款：历史标签列表，↑↓ Enter Esc） */
+.outline-tag-suggest {
+  position: fixed;
+  z-index: 60;
+  min-width: 160px;
+  max-width: 240px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  display: none;
+}
+.outline-tag-suggest[data-show] {
+  display: block;
+}
+.outline-tag-item {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.outline-tag-item.is-on,
+.outline-tag-item:hover {
+  background: var(--surface-hover);
 }
 
 /* 行首 ⋯ 菜单（Workflowy：叠在缩进空间、圆点左侧，比折叠箭头更靠外）；
@@ -3163,35 +3200,510 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   top: 11px; /* 27px 大标题行中心对齐 */
 }
 
-/* 拖拽落点提示线：水平线 + 左端把手圆点（Workflowy 式） */
+/* 拖拽落点指示线（官方同款）：top=目标行上缘、bottom=下缘、child=下缘右移一级，2px */
 .outline-drop-hint {
   position: absolute;
   z-index: 6;
-  pointer-events: none;
-  background: var(--wf-sub);
-  border-radius: 2px;
-}
-.outline-drop-hint-before,
-.outline-drop-hint-after {
   height: 2px;
+  border-radius: 1px;
+  background: var(--wf-sub);
+  pointer-events: none;
 }
-.outline-drop-hint-before::before,
-.outline-drop-hint-after::before {
+/* 拖拽源：被拖条目及其子树整块高亮、圆点隐藏（被"拿起来了"），松手/取消即熄 */
+.outline-drag-src {
+  background: var(--wf-bg2);
+  border-radius: 6px;
+}
+.outline-drag-src > .outline-bullet .outline-bullet-dot,
+.outline-drag-src > .outline-bullet .outline-bullet-halo {
+  opacity: 0;
+}
+/* 跟随鼠标的拖拽影像：18px 小圆点（官方同款，替代默认整行半透明拖影） */
+.outline-drag-dot {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  width: 18px;
+  height: 18px;
+  background: var(--wf-bg3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 9999;
+}
+.outline-drag-dot::after {
   content: "";
-  position: absolute;
-  left: -2px;
-  top: -2.5px;
+  width: 8px;
+  height: 8px;
+  background: var(--wf-sub);
+  border-radius: 50%;
+}
+
+/* ---------- 视图切换器（大纲 / 看板 / 今天） ---------- */
+.home-view-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-right: 6px;
+}
+.home-view-switch button {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+}
+.home-view-switch button:hover {
+  background: var(--surface-hover);
+}
+.home-view-switch button.is-on {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+/* 看板态的返回开关（看板是节点级布局，不占全局切换器） */
+.home-view-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-right: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.home-view-back:hover {
+  background: var(--surface-hover);
+}
+
+/* ---------- 看板视图（官方 Boards：子级=列，孙级=卡片，灰底列、白底卡片、手柄在右） ---------- */
+.home-board {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  padding: 16px 44px 32px;
+  overflow-x: auto;
+  min-height: 100%;
+}
+.home-board-empty {
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: 24px 4px;
+  max-width: 480px;
+}
+.home-board-col {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 10px;
+  transition: background 0.12s ease;
+}
+.home-board-col.is-over {
+  background: var(--surface-hover);
+}
+.home-board-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 10px;
+  min-height: 26px;
+}
+.home-board-col-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-board-col-count {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.home-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.home-board-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 8px 6px 8px 10px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.home-board-card:hover {
+  border-color: var(--ink-soft);
+}
+.home-board-card.is-done .home-board-card-text {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+.home-board-card-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.home-board-card-sub {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+/* 官方：卡片 bullet 在右侧 = 拖拽手柄 */
+.home-board-card-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: grab;
+}
+.home-board-card-handle:hover {
+  background: var(--surface-hover);
+}
+.home-board-handle-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: inherit;
+  background: var(--wf-sub);
 }
-/* child 落点：目标条目整块（含展开的子树区域）高亮 */
-.outline-drop-child-target {
-  background: var(--wf-bg2);
-  box-shadow: inset 2px 0 0 var(--wf-sub);
+.home-board-add {
+  text-align: left;
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 6px 6px;
   border-radius: 6px;
 }
+.home-board-add:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.home-board-input {
+  border: none;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--accent);
+  outline: none;
+  font-size: 14px;
+  padding: 7px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* 列间分隔线：拖拽调宽 */
+.home-board-resize {
+  position: absolute;
+  top: 0;
+  right: -9px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+.home-board-newcol {
+  flex: 0 0 auto;
+  align-self: stretch;
+  min-width: 40px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  color: var(--ink-soft);
+  font-size: 18px;
+}
+.home-board-newcol:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+/* ---------- 官方 Calendar（[<][📅][>] 导航簇 + 横向日期带 + 月份行，zoom 到日期/月份条目时出现） ---------- */
+/* 宿主挂在缩放标题段落之后（PM widget），负边距让日期条从内容区左缘起排（官方同款） */
+.wf-ribbon-host {
+  margin: 10px -44px 8px 0;
+  user-select: none;
+}
+.wf-ribbon {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+/* 导航簇：前/后一天 + 日历弹层（官方 iconButton 组） */
+.wf-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 56px;
+  margin-right: 6px;
+  flex: none;
+}
+.wf-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+}
+.wf-nav-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.wf-ribbon-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  padding-left: 8px;
+  min-width: 0;
+  flex: 1;
+  cursor: grab;
+  scrollbar-width: none;
+}
+.wf-ribbon-inner::-webkit-scrollbar {
+  display: none;
+}
+.wf-ribbon-inner.is-dragging {
+  cursor: grabbing;
+}
+.wf-chip {
+  display: block;
+  flex: 0 0 auto;
+  width: 28px;
+}
+.wf-chip-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  height: 18px;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.wf-chip-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 28px;
+  height: 38px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  color: var(--ink-soft);
+}
+.wf-chip-box:hover {
+  background: var(--wf-chip-today);
+}
+.wf-chip-wd {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 300;
+}
+.wf-chip-num {
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--ink);
+}
+/* 今天 = 深底（官方 bg-tertiary）；当前打开日 = 浅底（官方 bg-secondary） */
+.wf-chip-box.is-today {
+  background: var(--wf-chip-today);
+}
+.wf-chip-box.is-cur {
+  background: var(--wf-chip-cur);
+}
+.wf-chip-box.is-cur .wf-chip-wd,
+.wf-chip-box.is-today .wf-chip-wd {
+  color: var(--ink);
+}
+/* Today chip 后的单根全高分隔线（官方 1px×56） */
+.wf-ribbon-div {
+  flex: none;
+  width: 1px;
+  height: 56px;
+  background: var(--line);
+}
+/* 月份行 chip：头行年份标签 + 月名（纯文本无底） */
+.wf-mchip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 28px;
+  padding: 0 5px;
+}
+.wf-mchip-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.wf-mchip:hover .wf-mchip-name {
+  color: var(--ink);
+}
+.wf-mchip-name.is-cur {
+  color: var(--ink);
+  font-weight: 500;
+}
+/* 有笔记的日期：块底部小圆点 */
+.wf-chip-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+}
+
+/* ---------- 日期选择器（官方 Choose date 弹层） ---------- */
+.wf-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  width: 252px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wf-picker-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.wf-picker-input:focus {
+  outline: none;
+  border-color: var(--ink-faint);
+}
+.wf-picker-quick {
+  display: flex;
+  gap: 4px;
+}
+.wf-picker-quick button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.wf-picker-quick button:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.wf-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.wf-picker-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+}
+.wf-picker-nav:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.wf-picker-title {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  padding: 3px 0;
+  border-radius: 6px;
+}
+.wf-picker-title:hover {
+  background: var(--surface-hover);
+}
+.wf-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.wf-picker-grid12 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.wf-picker-wd span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+.wf-picker-grid button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  font-size: 13px;
+  border-radius: 6px;
+  color: var(--ink);
+}
+.wf-picker-grid button:hover {
+  background: var(--surface-hover);
+}
+.wf-picker-grid button.is-out {
+  color: var(--ink-faint);
+}
+.wf-picker-grid button.is-today {
+  background: var(--wf-chip-today);
+}
+.wf-picker-grid12 button {
+  height: 38px;
+}
+.wf-picker-grid12 button.is-out {
+  color: inherit;
+}
+
+/* 相对日装饰前缀（Today, / Tomorrow, / Yesterday, ）——与正文同色同字号（官方一致） */
+.outline-date-prefix {
+  color: inherit;
+  font-weight: inherit;
+}
+
 
 /* 侧栏：Home 常驻按钮 + 节点搜索分区 */
 .side-tab-home {

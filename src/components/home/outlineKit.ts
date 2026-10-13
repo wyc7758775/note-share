@@ -9,11 +9,12 @@
 import { Extension, type Editor } from "@tiptap/core";
 import { TaskItem } from "@tiptap/extension-task-item";
 import { ReactNodeViewRenderer } from "@tiptap/react";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import type { Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { OutlineItemView } from "./OutlineItemView";
+import { isDateText, monthOfText } from "./homeViews";
 
 /** 大纲节点拖拽的 dataTransfer 类型（Home 内重排 / 侧栏搜索行共用） */
 export const NODE_MIME = "application/x-noteshare-home-node";
@@ -214,7 +215,7 @@ export interface OutlineController {
   zoomToAddress(address: number[]): boolean;
   zoomToBlockId(id: string): boolean;
   toggleCollapse(pos: number): void;
-  setQuery(q: string): void;
+  setQuery(q: string | null): void;
   collapseAll(): void;
   expandAll(): void;
   setHideCompleted(v: boolean): void;
@@ -276,7 +277,8 @@ export function createOutlineController(editor: Editor): OutlineController {
       });
     },
     setQuery(q) {
-      setMeta({ query: q.trim() ? q.trim().toLowerCase() : null });
+      const needle = q?.trim().toLowerCase() || "";
+      setMeta({ query: needle ? needle : null });
     },
     collapseAll() {
       const all: number[] = [];
@@ -502,7 +504,11 @@ function duplicateCommand(editor: Editor): boolean {
 /** 删除等结构性变化的"上移收缩"动效（FLIP）：dispatch 前记下可见条目位置，
  *  dispatch 后把被顶上来的条目做反向位移再过渡回 0，视觉上平滑收拢 */
 export function withFlip(editor: Editor, run: () => void) {
-  const root = editor.view.dom;
+  withFlipView(editor.view, run);
+}
+
+export function withFlipView(view: EditorView, run: () => void) {
+  const root = view.dom;
   const before = new Map<Element, number>();
   for (const li of root.querySelectorAll<HTMLElement>(".outline-item")) {
     if (li.offsetParent) before.set(li, li.getBoundingClientRect().top);
@@ -769,11 +775,526 @@ export const OutlineTags = Extension.create({
   },
 });
 
-// ---------------- ⋯ 菜单的 tag 选择区（Workflowy Turn into 的 tag 部分） ----------------
+// ---------------- 相对日装饰（官方 Friendly day names：Today, / Tomorrow, / Yesterday, 前缀） ----------------
+
+const REL_DAYS: { off: number; label: string }[] = [
+  { off: -1, label: "Yesterday, " },
+  { off: 0, label: "Today, " },
+  { off: 1, label: "Tomorrow, " },
+];
+
+function relativeDayDecos(doc: PMNode): DecorationSet {
+  const now = Date.now();
+  const sets = REL_DAYS.map((r) => ({
+    label: r.label,
+    texts: new Set(dayCandidates(new Date(now + r.off * 86400000))),
+  }));
+  const out: Decoration[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== "taskItem") return true;
+    const bare = bareOwnText(node);
+    const hit = sets.find((s) => s.texts.has(bare));
+    if (hit) {
+      const first = node.childCount ? node.child(0) : null;
+      if (first?.type.name === "paragraph") {
+        out.push(
+          Decoration.widget(
+            pos + 2,
+            () => {
+              const span = document.createElement("span");
+              span.className = "outline-date-prefix";
+              span.textContent = hit.label;
+              span.contentEditable = "false";
+              return span;
+            },
+            { side: -1, ignoreSelection: true }
+          )
+        );
+      }
+    }
+    return true;
+  });
+  return out.length ? DecorationSet.create(doc, out) : DecorationSet.empty;
+}
+
+export const OutlineDates = Extension.create({
+  name: "outlineDates",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("outlineDates"),
+        state: {
+          init: (_, { doc }) => relativeDayDecos(doc),
+          apply: (tr, old) => (tr.docChanged ? relativeDayDecos(tr.doc) : old),
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+// ---------------- Calendar ribbon 宿主（官方顺序：标题在下、日期条在标题下方、正文再下） ----------------
+
+let ribbonHostEl: HTMLDivElement | null = null;
+/** 当前挂载在文档流里的 ribbon 宿主（HomeToday portal 目标）；不在 DOM 返回 null */
+export function getRibbonHost(): HTMLDivElement | null {
+  return ribbonHostEl && ribbonHostEl.isConnected ? ribbonHostEl : null;
+}
+
+const RIBBON_HOST_KEY = new PluginKey<{ zoomPos: number | null; decos: DecorationSet }>(
+  "outlineRibbonHost"
+);
+
+function ribbonHostDecos(doc: PMNode, zoomPos: number | null): DecorationSet {
+  if (zoomPos == null) return DecorationSet.empty;
+  const item = doc.nodeAt(zoomPos);
+  if (!item || item.type.name !== "taskItem") return DecorationSet.empty;
+  const first = item.childCount ? item.child(0) : null;
+  if (first?.type.name !== "paragraph") return DecorationSet.empty;
+  const own = first.textContent.trim();
+  const today = new Date();
+  let hit = monthOfText(own) != null;
+  for (let off = 0; off < 800 && !hit; off++) {
+    for (const sign of off === 0 ? [0] : [-1, 1]) {
+      if (isDateText(own, new Date(today.getTime() + sign * off * 86400000))) {
+        hit = true;
+        break;
+      }
+    }
+  }
+  if (!hit) return DecorationSet.empty;
+  return DecorationSet.create(doc, [
+    Decoration.widget(zoomPos + 1 + first.nodeSize, () => {
+      if (!ribbonHostEl || !ribbonHostEl.isConnected) {
+        ribbonHostEl = document.createElement("div");
+        ribbonHostEl.className = "wf-ribbon-host";
+      }
+      return ribbonHostEl;
+    }),
+  ]);
+}
+
+export const OutlineRibbonHost = Extension.create({
+  name: "outlineRibbonHost",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: RIBBON_HOST_KEY,
+        state: {
+          init: (): { zoomPos: number | null; decos: DecorationSet } => ({
+            zoomPos: null,
+            decos: DecorationSet.empty,
+          }),
+          apply(tr, prev) {
+            const meta = tr.getMeta(OUTLINE_META) as { zoomPos?: number | null } | undefined;
+            let zoomPos = prev.zoomPos;
+            if (meta && "zoomPos" in meta) zoomPos = meta.zoomPos ?? null;
+            else if (tr.docChanged && zoomPos != null) zoomPos = mapItemPos(tr, zoomPos);
+            if (!meta && !tr.docChanged) return prev;
+            return { zoomPos, decos: ribbonHostDecos(tr.doc, zoomPos) };
+          },
+        },
+        props: {
+          decorations(state) {
+            return RIBBON_HOST_KEY.getState(state)?.decos ?? DecorationSet.empty;
+          },
+        },
+      }),
+    ];
+  },
+});
+
+// ---------------- #tag 自动补全（官方同款：输入 #/续打时弹历史标签建议） ----------------
+
+interface TagSuggestState {
+  /** 光标前已输入的 #xxx 起点（文档绝对位置）与文本 */
+  from: number;
+  typed: string;
+  items: string[];
+  active: number;
+}
+
+const TAG_SUGGEST_KEY = new PluginKey<TagSuggestState | null>("outlineTagSuggest");
+
+/** 光标前是否正输入 #tag（返回 # 起始位置与已打字） */
+function typingTagBefore($from: ResolvedPos): { from: number; typed: string } | null {
+  const parent = $from.parent;
+  const textBefore = parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
+  const m = /(^|\s)#([A-Za-z0-9\u4e00-\u9fff_-]*)$/.exec(textBefore);
+  if (!m) return null;
+  // # 起点的文档位置：parentOffset 减去匹配段长度
+  return { from: $from.pos - m[2].length - 1, typed: m[2] };
+}
+
+function updateSuggest(editor: Editor, tr: Transaction): TagSuggestState | null {
+  const { selection } = tr;
+  if (!selection.empty) return null;
+  const hit = typingTagBefore(tr.doc.resolve(selection.from));
+  if (!hit) return null;
+  const items = collectOutlineTags(editor)
+    .filter((t) => t.startsWith(hit.typed) && t !== hit.typed)
+    .slice(0, 8);
+  if (!items.length) return null;
+  return { from: hit.from, typed: hit.typed, items, active: 0 };
+}
+
+/** 浮层 DOM 单例（不走 React：跟手、随事务高频刷新） */
+let suggestEl: HTMLDivElement | null = null;
+function renderSuggest(view: EditorView, st: TagSuggestState | null) {
+  if (!st) {
+    suggestEl?.removeAttribute("data-show");
+    return;
+  }
+  if (!suggestEl || !suggestEl.isConnected) {
+    suggestEl = document.createElement("div");
+    suggestEl.className = "outline-tag-suggest";
+    suggestEl.setAttribute("contenteditable", "false");
+    document.body.appendChild(suggestEl);
+    suggestEl.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const idx = Number((e.target as HTMLElement).closest("[data-idx]")?.getAttribute("data-idx") ?? -1);
+      if (idx >= 0) insertSuggestion(view, idx);
+    });
+  }
+  suggestEl.innerHTML = st.items
+    .map((t, i) => `<div class="outline-tag-item${i === st.active ? " is-on" : ""}" data-idx="${i}">#${t}</div>`)
+    .join("");
+  suggestEl.setAttribute("data-show", "1");
+  const coords = view.coordsAtPos(st.from, -1);
+  const hostR = view.dom.getBoundingClientRect();
+  suggestEl.style.left = `${Math.min(coords.left, hostR.right - 180)}px`;
+  suggestEl.style.top = `${coords.bottom + 4}px`;
+}
+
+function insertSuggestion(view: EditorView, idx: number) {
+  const st = TAG_SUGGEST_KEY.getState(view.state);
+  if (!st) return;
+  const tag = st.items[idx];
+  if (!tag) return;
+  view.dispatch(
+    view.state.tr
+      .insertText(`#${tag} `, st.from, st.from + st.typed.length + 1)
+      .scrollIntoView()
+  );
+  view.focus();
+}
+
+export const OutlineTagSuggest = Extension.create({
+  name: "outlineTagSuggest",
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        key: TAG_SUGGEST_KEY,
+        view: () => ({
+          update: (view) => renderSuggest(view, TAG_SUGGEST_KEY.getState(view.state) ?? null),
+          destroy: () => suggestEl?.removeAttribute("data-show"),
+        }),
+        state: {
+          init: (): TagSuggestState | null => null,
+          apply(tr, old) {
+            // 键盘 ↑↓ 的选中项更新走 meta（无文档/选区变化）
+            const meta = tr.getMeta(TAG_SUGGEST_KEY) as TagSuggestState | null | undefined;
+            if (meta !== undefined) return meta;
+            if (tr.docChanged || tr.selectionSet) return updateSuggest(editor, tr);
+            return old;
+          },
+        },
+        props: {
+          handleKeyDown(view, event) {
+            const st = TAG_SUGGEST_KEY.getState(view.state);
+            if (!st) return false;
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              const dir = event.key === "ArrowDown" ? 1 : -1;
+              view.dispatch(
+                view.state.tr.setMeta(TAG_SUGGEST_KEY, {
+                  ...st,
+                  active: (st.active + dir + st.items.length) % st.items.length,
+                })
+              );
+              return true;
+            }
+            if (event.key === "Enter") {
+              insertSuggestion(view, st.active);
+              return true;
+            }
+            if (event.key === "Escape") {
+              view.dispatch(view.state.tr.setMeta(TAG_SUGGEST_KEY, null));
+              return true;
+            }
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+});
+
+// ---------------- 每日笔记 / 日历结构（官方 📆 Calendar/年/月/日 模板） ----------------
+
+const DAY_WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function bareOwnText(node: PMNode): string {
+  let own = "";
+  node.forEach((c) => {
+    if (c.type.name === "paragraph" && !own) own = c.textContent;
+  });
+  return own.replace(/^\ufeff+/, "").replace(/\ufeff+$/, "").trim();
+}
+
+/** 某天的候选标题集合（官方格式 + 常见手写变体） */
+export function dayCandidates(d: Date): string[] {
+  const wd = DAY_WD[d.getDay()];
+  const mon = DAY_MON[d.getMonth()];
+  const dd = d.getDate();
+  return [
+    `${wd}, ${mon} ${dd}`, // 官方模板格式（Sat, Oct 12）
+    `${mon} ${dd}`, // Oct 12
+    `${d.getMonth() + 1}月${dd}日`,
+    `${dd}日`,
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+  ];
+}
+
+/** 严格解析官方日期标题（"Tue, Oct 13"），失败返回 null（排序插入用） */
+function parseDayTitle(text: string): Date | null {
+  const m = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat), (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{1,2})$/.exec(text);
+  if (!m) return null;
+  return new Date(2026, DAY_MON.indexOf(m[2]), Number(m[3])); // 年份由父级决定，仅用于同月内排序
+}
+
+/** 在全文档找某天的日期条目，返回条目位置 */
+export function findDayAt(editor: Editor, d: Date): number | null {
+  const candidates = new Set(dayCandidates(d));
+  let hit: number | null = null;
+  editor.state.doc.descendants((n, p) => {
+    if (hit != null) return false;
+    if (n.type.name !== "taskItem") return true;
+    if (candidates.has(bareOwnText(n))) {
+      hit = p;
+      return false;
+    }
+    return true;
+  });
+  return hit;
+}
+
+export function findDayTarget(editor: Editor, offsetDays: number): number | null {
+  return findDayAt(editor, new Date(Date.now() + offsetDays * 86400000));
+}
+
+/** "今天"入口：在大纲里找今天的日期条目；找不到返回 null（回根视图）。 */
+export function findTodayTarget(editor: Editor): number | null {
+  return findDayTarget(editor, 0);
+}
+
+/** 在指定父条目（或其嵌套列表）末尾追加子条目，返回是否成功 */
+function appendChildItem(editor: Editor, parentPos: number | null, text: string): boolean {
+  const schema = editor.state.schema;
+  const item = schema.nodes.taskItem.create(null, schema.nodes.paragraph.create(null, schema.text(text)));
+  const tr = editor.state.tr;
+  if (parentPos == null) {
+    // 顶层列表末尾
+    let listEnd = editor.state.doc.content.size;
+    editor.state.doc.forEach((n, off) => {
+      if (n.type.name === "taskList") listEnd = Math.min(listEnd, off + n.nodeSize - 1);
+    });
+    tr.insert(listEnd, item);
+  } else {
+    const parent = editor.state.doc.nodeAt(parentPos);
+    if (!parent) return false;
+    const nested = nestedListOf(parent);
+    if (nested) {
+      tr.insert(parentPos + 1 + nested.off + nested.node.nodeSize - 1, item);
+    } else {
+      tr.insert(parentPos + parent.nodeSize - 1, schema.nodes.taskList.create(null, item));
+    }
+  }
+  editor.view.dispatch(tr);
+  return true;
+}
+
+/** 在父条目子级里按序插入子条目：cmp 比较"新条目应排在某子条目之前"，全部为否则末尾追加 */
+function insertChildSorted(
+  editor: Editor,
+  parentPos: number,
+  text: string,
+  childDate: (childText: string) => number | null,
+  newKey: number
+): void {
+  const parent = editor.state.doc.nodeAt(parentPos);
+  if (!parent) return;
+  const nested = nestedListOf(parent);
+  if (!nested) {
+    appendChildItem(editor, parentPos, text);
+    return;
+  }
+  const listAbs = parentPos + 1 + nested.off;
+  let off = 0;
+  let insertAt: number | null = null;
+  nested.node.forEach((child) => {
+    if (insertAt != null) return;
+    if (child.type.name === "taskItem") {
+      const key = childDate(bareOwnText(child));
+      if (key != null && key > newKey) insertAt = listAbs + 1 + off;
+    }
+    off += child.nodeSize;
+  });
+  if (insertAt == null) {
+    appendChildItem(editor, parentPos, text);
+    return;
+  }
+  const schema = editor.state.schema;
+  const item = schema.nodes.taskItem.create(null, schema.nodes.paragraph.create(null, schema.text(text)));
+  editor.view.dispatch(editor.state.tr.insert(insertAt, item));
+}
+
+/** 找 Own 文本命中集合的首个条目 */
+function findItemByOwnText(editor: Editor, texts: string[]): number | null {
+  const set = new Set(texts);
+  let hit: number | null = null;
+  editor.state.doc.descendants((n, p) => {
+    if (hit != null) return false;
+    if (n.type.name === "taskItem" && set.has(bareOwnText(n))) {
+      hit = p;
+      return false;
+    }
+    return true;
+  });
+  return hit;
+}
+
+/** 官方结构常量：根条目 "📆 Calendar" */
+export const CALENDAR_ITEM_TEXT = "📆 Calendar";
+
+/** 年份条目下的月份条目标题（Oct） */
+function monthItemText(month: number): string {
+  return DAY_MON[month];
+}
+
+/** 找月份条目：优先在年份条目子级，其次全文档（兼容旧结构）。 */
+export function findMonthTarget(editor: Editor, year: number, month: number): number | null {
+  const yearPos = findItemByOwnText(editor, [`${year}`, `${year}年`]);
+  const want = monthItemText(month);
+  if (yearPos != null) {
+    const yearNode = editor.state.doc.nodeAt(yearPos);
+    const nested = yearNode ? nestedListOf(yearNode) : null;
+    if (nested) {
+      // 子条目绝对位置 = 列表起点 + 1（open token）+ 内容偏移
+      const listAbs = yearPos + 1 + nested.off;
+      let hit: number | null = null;
+      let off = 0;
+      nested.node.forEach((child) => {
+        if (hit != null) return;
+        if (child.type.name === "taskItem" && bareOwnText(child) === want) hit = listAbs + 1 + off;
+        off += child.nodeSize;
+      });
+      if (hit != null) return hit;
+    }
+  }
+  return findItemByOwnText(editor, [want]);
+}
+
+/** 确保 📆 Calendar > 年 > 月 链存在（已存在的不动），返回月份条目位置。 */
+export function ensureMonthTarget(editor: Editor, year: number, month: number): number | null {
+  const found = findMonthTarget(editor, year, month);
+  if (found != null && editor.state.doc.nodeAt(found)) return found;
+  // 逐级补链：Calendar → 年 → 月
+  let calPos = findItemByOwnText(editor, [CALENDAR_ITEM_TEXT]);
+  if (calPos == null || !editor.state.doc.nodeAt(calPos)) {
+    appendChildItem(editor, null, CALENDAR_ITEM_TEXT);
+    calPos = findItemByOwnText(editor, [CALENDAR_ITEM_TEXT]);
+  }
+  if (calPos == null) return null;
+  let yearPos = findItemByOwnText(editor, [`${year}`, `${year}年`]);
+  if (yearPos == null || !editor.state.doc.nodeAt(yearPos)) {
+    // 年份升序插入到 Calendar 子级
+    insertChildSorted(editor, calPos, `${year}`, (t) => {
+      const m = /^(\d{4})年?$/.exec(t);
+      return m ? Number(m[1]) : null;
+    }, year);
+    yearPos = findItemByOwnText(editor, [`${year}`, `${year}年`]);
+  }
+  if (yearPos == null) return null;
+  insertChildSorted(editor, yearPos, monthItemText(month), (t) => {
+    const i = DAY_MON.indexOf(t);
+    return i >= 0 ? i : null;
+  }, month);
+  return findMonthTarget(editor, year, month);
+}
+
+/** 某天的每日笔记条目：没有就按官方结构（Calendar/年/月/日）创建并按日期顺序插入。
+ *  已存在于别处的日期条目（旧文档顶层等）直接复用，不重复建。 */
+export function ensureDayAt(editor: Editor, d: Date): number | null {
+  const found = findDayAt(editor, d);
+  if (found != null && editor.state.doc.nodeAt(found)) return found;
+  const monthPos = ensureMonthTarget(editor, d.getFullYear(), d.getMonth());
+  const title = `${DAY_WD[d.getDay()]}, ${DAY_MON[d.getMonth()]} ${d.getDate()}`;
+  if (monthPos == null) {
+    appendChildItem(editor, null, title);
+  } else {
+    // 同月内按日期升序（解析不了的子条目原地不动，新条目插到首个更晚日期之前）
+    insertChildSorted(editor, monthPos, title, (t) => {
+      const p = parseDayTitle(t);
+      if (!p) return null;
+      // parseDayTitle 的年份占位是 2026；跨月比较用 (月, 日) 组合键
+      return p.getMonth() * 100 + p.getDate();
+    }, d.getMonth() * 100 + d.getDate());
+  }
+  return findDayAt(editor, d);
+}
+
+export function ensureDayTarget(editor: Editor, offsetDays: number): number | null {
+  return ensureDayAt(editor, new Date(Date.now() + offsetDays * 86400000));
+}
+
+/** 今天的每日笔记条目：没有就自动创建（官方"每天自动生成当日笔记"语义）。 */
+export function ensureTodayTarget(editor: Editor): number | null {
+  return ensureDayTarget(editor, 0);
+}
+
+/** 当前 zoom 的节点是否以看板布局打开（看板是节点属性，非全局状态；根视图恒列表） */
+export function zoomIsBoard(editor: Editor): boolean {
+  const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos ?? null;
+  if (zoomPos == null) return false;
+  return !!editor.state.doc.nodeAt(zoomPos)?.attrs.board;
+}
+
+/** 设置节点的看板布局属性（写入文档 → Home.md 持久化，刷新不丢） */
+export function setNodeBoard(editor: Editor, pos: number, on: boolean) {
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== "taskItem") return;
+  editor.view.dispatch(
+    editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, board: on })
+  );
+}
+
+/** 把条目整体移动为某父条目的末位子级（看板换列 / Move to today 共用） */
+export function moveItemUnder(editor: Editor, fromPos: number, parentPos: number): boolean {
+  const doc = editor.state.doc;
+  const node = doc.nodeAt(fromPos);
+  const parent = doc.nodeAt(parentPos);
+  if (!node || node.type.name !== "taskItem" || !parent || parent.type.name !== "taskItem") return false;
+  if (fromPos >= parentPos && fromPos < parentPos + parent.nodeSize) return false; // 已在其内
+  const nested = nestedListOf(parent);
+  const schema = editor.state.schema;
+  const tr = editor.state.tr;
+  tr.delete(fromPos, fromPos + node.nodeSize);
+  const insertAt = nested
+    ? tr.mapping.map(parentPos + 1 + nested.off + nested.node.nodeSize - 1)
+    : tr.mapping.map(parentPos + parent.nodeSize - 1);
+  tr.insert(insertAt, nested ? node : schema.nodes.taskList.create(null, node));
+  withFlip(editor, () => editor.view.dispatch(tr));
+  return true;
+}
 
 /** 大纲里已使用的全部 #tag（去重排序；用于 ⋯ 菜单勾选） */
-export function collectOutlineTags(editor: Editor): string[] {
-  const seen = new Set<string>();
+export function collectOutlineTags(editor: Editor): string[] {  const seen = new Set<string>();
   const re = /(^|\s)(#[A-Za-z0-9\u4e00-\u9fff_-]+)/g;
   editor.state.doc.descendants((node) => {
     if (!node.isText || !node.text) return;
@@ -838,12 +1359,44 @@ export interface HomeDropResult {
   ok: boolean;
 }
 
-/** 拖放落点判定（dragover 提示与 drop 执行共用同一函数，所见即所落）：
- *  - 行上/下边界附近（吸附半径内）→ before/after（画插入线）
- *  - 行身体内部 → child（成为该条目子级，整块子树高亮）
- *  - 远离所有可见行 → null（不落） */
+// 拖拽源高亮：挂在源条目 li 上（盒子天然罩住其子树 = "拖的这个节点和它的子节点"）；
+// resolveOutlineDropTarget 同时用它过滤落点——拖到自己或自己的子节点里没有意义，
+// 过程中就不给落点提示（松手也不会动）
+let dragSrcEl: HTMLElement | null = null;
+export function markDragSrcHl(li: Element | null) {
+  clearDragSrcHl();
+  if (li instanceof HTMLElement) {
+    li.classList.add("outline-drag-src");
+    dragSrcEl = li;
+  }
+}
+export function clearDragSrcHl() {
+  dragSrcEl?.classList.remove("outline-drag-src");
+  dragSrcEl = null;
+}
+
+/** 拖拽跟随影像：官方同款 18px 小圆点（替代浏览器默认的整行半透明拖影，
+ *  默认拖影遮挡视线且跟随卡顿，是"不好拖"的主要来源之一）。惰性建屏外单例。 */
+let dragPreviewEl: HTMLElement | null = null;
+export function applyDragPreview(dt: DataTransfer) {
+  try {
+    if (!dragPreviewEl || !dragPreviewEl.isConnected) {
+      dragPreviewEl = document.createElement("div");
+      dragPreviewEl.className = "outline-drag-dot";
+      document.body.appendChild(dragPreviewEl);
+    }
+    dt.setDragImage(dragPreviewEl, 9, 9);
+  } catch {
+    /* 旧浏览器无 setDragImage 时用默认拖影 */
+  }
+}
+
+/** 拖放落点判定（dragover 提示与 drop 执行共用同一函数，所见即所落）。
+ *  与 Workflowy 官方 demo 同款：目标行 = 事件命中的 outline-item（closest 取最深行），
+ *  行高 25%/50%/25% 三分——上带插到目标前、下带插到目标后、中间成为目标的第一个子级。
+ *  自适应增强：鼠标按在自己（或自己子树）区域内不给任何落点（demo 只在 drop 时防，体验差） */
 export interface OutlineDropTarget {
-  mode: "before" | "after" | "child";
+  mode: "top" | "bottom" | "child";
   pos: number;
   row: HTMLElement;
   rect: DOMRect;
@@ -851,52 +1404,31 @@ export interface OutlineDropTarget {
 
 export function resolveOutlineDropTarget(
   view: EditorView,
-  clientX: number,
-  clientY: number
+  event: { target: EventTarget | null; clientY: number }
 ): OutlineDropTarget | null {
+  // 鼠标还按在自己（或自己的子树）区域内：任何落点都没有意义，直接不提示
+  if (dragSrcEl) {
+    const sr = dragSrcEl.getBoundingClientRect();
+    if (event.clientY >= sr.top && event.clientY <= sr.bottom) return null;
+  }
+  const itemEl = (event.target as HTMLElement | null)?.closest?.(".outline-item") as
+    | HTMLElement
+    | null;
+  if (!itemEl || itemEl === dragSrcEl || dragSrcEl?.contains(itemEl)) return null;
+  // zoom 隐藏行/祖先壳/折叠子树（display:none）都不作为落点
+  if (itemEl.classList.contains("outline-hidden") || itemEl.classList.contains("outline-ancestor")) return null;
+  if (!itemEl.offsetParent) return null;
   const doc = view.state.doc;
-  const rows: { li: HTMLElement; pos: number; rect: DOMRect }[] = [];
-  view.dom.querySelectorAll<HTMLElement>("li.outline-item").forEach((li) => {
-    // zoom 隐藏行/祖先壳/折叠子树（display:none）都不作为落点
-    if (li.classList.contains("outline-hidden") || li.classList.contains("outline-ancestor")) return;
-    if (!li.offsetParent) return;
-    const pos = itemPosAround(doc, view.posAtDOM(li, 0));
-    if (pos == null) return;
-    rows.push({ li, pos, rect: li.getBoundingClientRect() });
-  });
-  if (!rows.length) return null;
-  // 1) child：鼠标落在某行首段文字带内 → 成为该条目子级（取最深命中行；
-  //    父行与第一子行的边界几乎重合，先判文字带才保得住父行的 child 空间）。
-  //    空条目不做 child 目标（子级塞进空壳 = 制造嵌套空层）
-  let deepest: (typeof rows)[number] | null = null;
-  for (const row of rows) {
-    const p = row.li.querySelector(":scope > .outline-content > div > p");
-    if (!p || !p.textContent.trim()) continue;
-    const pr = p.getBoundingClientRect();
-    if (clientY >= pr.top && clientY <= pr.bottom && clientX >= pr.left - 12) {
-      if (!deepest || row.rect.top > deepest.rect.top) deepest = row;
-    }
-  }
-  if (deepest) return { mode: "child", pos: deepest.pos, row: deepest.li, rect: deepest.rect };
-  // 2) 边界吸附：行间空隙里离鼠标 Y 最近的上/下边界（插入线）
-  let best: { row: (typeof rows)[number]; mode: "before" | "after"; dist: number } | null = null;
-  for (const row of rows) {
-    const dTop = Math.abs(clientY - row.rect.top);
-    const dBot = Math.abs(clientY - row.rect.bottom);
-    const cand =
-      dTop <= dBot
-        ? { row, mode: "before" as const, dist: dTop }
-        : { row, mode: "after" as const, dist: dBot };
-    if (!best || cand.dist < best.dist) best = cand;
-  }
-  const h = best!.row.rect.height || 24;
-  // 吸附尺度按"单行视觉高度"（~28px）而非行总高：父行总高含整个子树，
-  // 按总高算半径会把首行文字带全吞成上边界，child 模式就永远出不来了
-  const snap = Math.max(10, Math.min(h, 28) * 0.5);
-  if (best!.dist <= snap) {
-    return { mode: best!.mode, pos: best!.row.pos, row: best!.row.li, rect: best!.row.rect };
-  }
-  return null;
+  const pos = itemPosAround(doc, view.posAtDOM(itemEl, 0));
+  if (pos == null) return null;
+  const rect = itemEl.getBoundingClientRect();
+  const y = event.clientY - rect.top;
+  const threshold = rect.height * 0.25;
+  // 中带 = 成为目标的第一个子级；空条目不做子级容器，降级为后插
+  const firstP = itemEl.querySelector(":scope > .outline-content > div > p");
+  const mode: OutlineDropTarget["mode"] =
+    y < threshold ? "top" : y > rect.height - threshold ? "bottom" : firstP && firstP.textContent.trim() ? "child" : "bottom";
+  return { mode, pos, row: itemEl, rect };
 }
 
 /** Home 编辑器内放下被拖动的条目（target 来自 resolveOutlineDropTarget） */
@@ -929,21 +1461,26 @@ export function applyHomeNodeDrop(
   const schema = state.schema;
   let insertAt: number;
   let insertNode: PMNode = node;
-  if (target.mode === "before") {
+  if (target.mode === "top") {
+    // 插到目标条目之前（同级）
     insertAt = targetPos;
-  } else if (target.mode === "after") {
+  } else if (target.mode === "bottom") {
+    // 插到目标条目（整棵子树）之后（同级）
     const targetNode = doc.nodeAt(targetPos);
     if (!targetNode) return true;
     insertAt = targetPos + targetNode.nodeSize;
   } else {
-    // child：有嵌套列表接到其内容末尾；没有则新建一层列表
+    // child：成为目标的第一个子级（官方 demo 语义：unshift 到子列表头部；
+    // 没有子列表就在 item 内容开头新建一层）
     const targetNode = doc.nodeAt(targetPos);
     if (!targetNode) return true;
     const nested = nestedListOf(targetNode);
     if (nested) {
-      // +1 越过 item open token 进内容区；列表 nodeSize-1 = 内容末尾（close 前）
-      insertAt = targetPos + 1 + nested.off + nested.node.nodeSize - 1;
+      // item open(+1) + 列表偏移 + 列表 open(+1) = 子列表内容起点（第一个子级之前）
+      insertAt = targetPos + 1 + nested.off + 1;
     } else {
+      // 无子列表：新建一层，列表节点必须放在段落之后（item 内容末尾），
+      // 放段落前会把子级渲染到父文字上方
       insertAt = targetPos + targetNode.nodeSize - 1;
       insertNode = schema.nodes.taskList.create(null, node);
     }
@@ -959,7 +1496,8 @@ export function applyHomeNodeDrop(
   tr.insert(at, insertNode);
   const sel = TextSelection.near(tr.doc.resolve(tr.mapping.map(fromPos + 2)));
   tr.setSelection(sel);
-  view.dispatch(tr.scrollIntoView());
+  // FLIP 动效：行从旧位置平滑滑动到新位置
+  withFlipView(view, () => view.dispatch(tr.scrollIntoView()));
   if (expandTarget != null) {
     // meta 单独一炮（docChanged 的基线映射会先把 collapsed 搬到新位置，这里再摘掉目标）
     const mapped = tr.mapping.map(expandTarget);
@@ -1047,6 +1585,13 @@ export const OutlineItem = TaskItem.extend({
         renderHTML: (attributes: Record<string, unknown>) =>
           attributes.blockId ? { "data-block-id": attributes.blockId as string } : {},
       },
+      // 该节点以看板布局打开（官方：Board 是节点自己的属性，存盘不丢）
+      board: {
+        default: false,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-board") === "1",
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.board ? { "data-board": "1" } : {},
+      },
     };
   },
   addNodeView() {
@@ -1066,6 +1611,7 @@ export const OutlineItem = TaskItem.extend({
             if (first.type.name === "paragraph") {
               state.renderInline(first);
               if (node.attrs.blockId) state.write(` ^${node.attrs.blockId}`);
+              if (node.attrs.board) state.write(" ^board");
               state.ensureNewLine();
               for (let i = 1; i < node.childCount; i++) {
                 const child = node.child(i);
@@ -1120,6 +1666,12 @@ export const OutlineItem = TaskItem.extend({
               let n: Node | null;
               while ((n = walker.nextNode())) last = n as Text;
               if (!last?.textContent) return;
+              // 先剥行尾 ^board（序列化顺序：text ^id ^board）
+              const mb = /\s*\^board\s*$/.exec(last.textContent);
+              if (mb) {
+                last.textContent = last.textContent.slice(0, mb.index);
+                li.setAttribute("data-board", "1");
+              }
               const m = /\s*\^([A-Za-z0-9][A-Za-z0-9-]*)\s*$/.exec(last.textContent);
               if (m) {
                 last.textContent = last.textContent.slice(0, m.index);

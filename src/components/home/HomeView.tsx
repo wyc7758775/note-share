@@ -10,6 +10,8 @@ import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { useDomain } from "../../domain/provider";
 import { useSettings, currentLang, translate } from "../../i18n";
+import HomeBoard from "./HomeBoard";
+import HomeToday from "./HomeToday";
 import { forEditor, forSave } from "../../lib/markdown";
 import { Wikilink, emitOpenNote } from "../WikiLink";
 import { I } from "../icons";
@@ -24,15 +26,23 @@ import {
   OutlineItem,
   OutlineKeys,
   OutlineConflictKeys,
+  OutlineDates,
   OutlineNormalize,
+  OutlineRibbonHost,
   OutlineStructure,
+  OutlineTagSuggest,
   OutlineTags,
   NODE_MIME,
   appendItemCommand,
   applyHomeNodeDrop,
+  clearDragSrcHl,
   createOutlineController,
+  ensureTodayTarget,
+  outlineStructureKey,
   resolveOutlineDropTarget,
   setActiveOutlineController,
+  setNodeBoard,
+  zoomIsBoard,
   type OutlineController,
   type OutlineCrumb,
 } from "./outlineKit";
@@ -41,15 +51,6 @@ interface DropHint {
   top: number;
   left: number;
   width: number;
-  mode: "before" | "after";
-}
-
-// child 落点高亮直接操作行 class（li 盒子罩住整块子树 = 高亮子节点区域），
-// 不走 React state——dragover 高频触发，state 渲染会抖
-let childRow: HTMLElement | null = null;
-function clearChildHl() {
-  childRow?.classList.remove("outline-drop-child-target");
-  childRow = null;
 }
 
 export default function HomeView({ active }: { active: boolean }) {
@@ -59,6 +60,8 @@ export default function HomeView({ active }: { active: boolean }) {
   const [query, setQuery] = useState("");
   const [hint, setHint] = useState<DropHint | null>(null);
   const [hideDone, setHideDone] = useState(false);
+  /** 视图模式：由当前 zoom 节点的 board 属性驱动（看板是节点属性，非全局） */
+  const [viewTick, setViewTick] = useState(0);
   const hostRef = useRef<HTMLDivElement>(null);
   const ctlRef = useRef<OutlineController | null>(null);
   const loadingRef = useRef(false);
@@ -87,6 +90,9 @@ export default function HomeView({ active }: { active: boolean }) {
         onToggleHideCompleted: () => ctlRef.current?.toggleHideCompleted(),
       }),
       OutlineTags,
+      OutlineTagSuggest,
+      OutlineDates,
+      OutlineRibbonHost,
       Wikilink,
       Placeholder.configure({
         // 全文没有任何文字时才提示（每个空行都提示太吵；isEmpty 对列表文档不可靠）
@@ -102,6 +108,17 @@ export default function HomeView({ active }: { active: boolean }) {
       attributes: { class: "outline-doc focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
         click: (_view, event) => {
+          // 点击 #tag（官方语义：按该标签过滤，再点同一标签退出过滤）
+          const tagEl = (event.target as HTMLElement).closest?.(".outline-tag");
+          if (tagEl) {
+            // 装饰文本自带 #，剥掉再拼，避免 ## 重复
+            const tag = (tagEl.textContent ?? "").replace(/^#/, "").trim();
+            const cur = (outlineStructureKey.getState(_view.state)?.query ?? "").replace(/^#/, "");
+            const next = cur === tag ? "" : `#${tag}`;
+            setQuery(next);
+            ctlRef.current?.setQuery(next || null);
+            return true;
+          }
           const el = (event.target as HTMLElement).closest?.(".wikilink");
           const name = el?.getAttribute("data-name");
           if (!name) return false;
@@ -121,44 +138,29 @@ export default function HomeView({ active }: { active: boolean }) {
           if (!event.dataTransfer?.types.includes(NODE_MIME)) return false;
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
-          const t = resolveOutlineDropTarget(view, event.clientX, event.clientY);
-          // child 高亮挂在目标行上（li 盒子天然罩住整块子树）；行切换时清旧
-          if (childRow && childRow !== t?.row) {
-            childRow.classList.remove("outline-drop-child-target");
-            childRow = null;
-          }
-          if (!t) {
+          const t = resolveOutlineDropTarget(view, event);
+          const host = hostRef.current;
+          if (!t || !host) {
             setHint(null);
             return false;
           }
-          if (t.mode === "child") {
-            childRow = t.row;
-            t.row.classList.add("outline-drop-child-target");
-            setHint(null);
-          } else {
-            const host = hostRef.current;
-            if (!host) return false;
-            const hostR = host.getBoundingClientRect();
-            childRow = null;
-            setHint({
-              top: (t.mode === "after" ? t.rect.bottom : t.rect.top) - hostR.top,
-              left: t.rect.left - hostR.left,
-              width: hostR.right - t.rect.left,
-              mode: t.mode,
-            });
-          }
+          const hostR = host.getBoundingClientRect();
+          // 官方同款三态线：top=目标行上缘、bottom=目标行下缘、child=下缘右移一级(36px)
+          const lineTop = t.mode === "top" ? t.rect.top : t.rect.bottom;
+          const lineLeft = t.mode === "child" ? t.rect.left + 36 : t.rect.left + 4;
+          setHint({
+            top: lineTop - hostR.top,
+            left: lineLeft - hostR.left,
+            width: hostR.right - lineLeft,
+          });
           return false;
         },
         dragleave: (view, event) => {
-          if (!hostRef.current?.contains(event.relatedTarget as Node)) {
-            setHint(null);
-            clearChildHl();
-          }
+          if (!hostRef.current?.contains(event.relatedTarget as Node)) setHint(null);
           return false;
         },
         dragend: () => {
           setHint(null); // 拖拽取消/结束都要熄掉提示线
-          clearChildHl();
           return false;
         },
       },
@@ -166,14 +168,13 @@ export default function HomeView({ active }: { active: boolean }) {
         if (!event.dataTransfer?.types.includes(NODE_MIME)) return false;
         event.preventDefault();
         setHint(null);
-        clearChildHl();
         const raw = event.dataTransfer.getData(NODE_MIME);
         if (!raw) return true;
         try {
           const payload = JSON.parse(raw) as { source?: string; pos?: number; address?: number[] };
           // 注意不能用 moved 短路：圆点拖拽发生在编辑器内，PM 必然把它当
           // 内部拖拽（moved=true），短路等于永远吞掉 drop——落点语义由这里全权决定
-          const t = resolveOutlineDropTarget(view, event.clientX, event.clientY);
+          const t = resolveOutlineDropTarget(view, event);
           if (!t) return true;
           if (payload.source === "home") {
             return applyHomeNodeDrop(view, payload, t);
@@ -193,16 +194,20 @@ export default function HomeView({ active }: { active: boolean }) {
       const md = (editor.storage as any).markdown.getMarkdown() as string;
       outline.edit(forSave(md));
       setCrumbs(ctlRef.current?.crumbs() ?? [{ pos: null, text: "Workflowy" }]);
+      setViewTick((x) => x + 1);
     },
   });
 
+  const view: "outline" | "board" = editor && zoomIsBoard(editor) ? "board" : "outline";
+  void viewTick;
+
   // 拖放提示兜底清理：drop 落在编辑器外（工具栏/+按钮/别的分栏）时 PM 的
-  // handleDrop 收不到事件，child 高亮会残留——挂 window 捕获层，落到哪都熄
+  // handleDrop 收不到事件，线与源高亮会残留——挂 window 捕获层，落到哪都熄
   useEffect(() => {
     const clear = (e: DragEvent) => {
       if (!e.dataTransfer?.types.includes(NODE_MIME)) return;
       setHint(null);
-      clearChildHl();
+      clearDragSrcHl();
     };
     window.addEventListener("drop", clear, true);
     window.addEventListener("dragend", clear, true);
@@ -211,6 +216,25 @@ export default function HomeView({ active }: { active: boolean }) {
       window.removeEventListener("dragend", clear, true);
     };
   }, []);
+
+  // Alt+T（官方快捷键）：打开今天的每日笔记
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        if (!editor) return;
+        const pos = ensureTodayTarget(editor);
+        ctlRef.current?.zoomTo(pos);
+        editor.commands.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, editor]);
 
   // ---- 载入 + 控制器装配 ----
   useEffect(() => {
@@ -243,6 +267,7 @@ export default function HomeView({ active }: { active: boolean }) {
     const onTr = () => {
       setCrumbs(ctl.crumbs());
       setHideDone(ctl.isHideCompleted());
+      setViewTick((x) => x + 1); // zoom/节点属性变化 → 视图（board/outline）跟随
     };
     editor.on("transaction", onTr);
     const onZoom = (e: Event) => applyZoom((e as CustomEvent<HomeZoomTarget>).detail);
@@ -273,7 +298,7 @@ export default function HomeView({ active }: { active: boolean }) {
       loadingRef.current = false;
     });
     return () => {
-      clearChildHl();
+      clearDragSrcHl();
       delete (window as unknown as { __oe?: unknown }).__oe;
       setActiveOutlineController(null);
       outline.registerSync(null);
@@ -317,6 +342,42 @@ export default function HomeView({ active }: { active: boolean }) {
           ))}
         </div>
         <span className="flex-1" />
+        {/* 看板是节点属性：看板态（=当前 zoom 节点开了 board）显示返回开关，
+            返回 = 关掉该节点的 board 属性（写盘持久化） */}
+        {view === "board" && editor ? (
+          <button
+            className="home-view-back"
+            contentEditable={false}
+            data-tip={t("homeViewOutline")}
+            onClick={() => {
+              const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos;
+              if (zoomPos != null) setNodeBoard(editor, zoomPos, false);
+              editor.commands.focus();
+            }}
+          >
+            <svg width="14" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3h10M3 8h10M3 13h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <span>{t("homeBackToList")}</span>
+          </button>
+        ) : null}
+        <button
+          className="home-tool-btn"
+          data-tip={t("homeToday")}
+          onClick={() => {
+            if (!editor) return;
+            // 官方：菜单栏日历图标 = 打开今天的每日笔记（自动生成），Alt+T 同
+            const pos = ensureTodayTarget(editor);
+            ctlRef.current?.zoomTo(pos);
+            editor.commands.focus();
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M2 6.5h12M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="8" cy="10" r="1.4" fill="currentColor" />
+          </svg>
+        </button>
         <button
           className={`home-tool-btn${hideDone ? " is-on" : ""}`}
           data-tip={t("homeHideDone")}
@@ -340,30 +401,49 @@ export default function HomeView({ active }: { active: boolean }) {
           }}
         />
       </div>
-      <div className="home-scroll">
-        <div className="home-editor-wrap">
-          <div className="outline-root">{editor ? <EditorContent editor={editor} /> : null}</div>
-          {/* 列表末尾的 + 快捷新建（Workflowy）：点击在当前视图层级末尾加条目 */}
-          <button
-            className="outline-add"
-            title={t("homeAddItem")}
-            style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
-            onMouseDown={(e) => e.preventDefault()} // 不抢编辑器焦点
-            onClick={() => {
-              if (!editor) return;
-              appendItemCommand(editor);
-              editor.commands.focus();
+      {view === "outline" ? (
+        <div className="home-scroll">
+          {/* 官方 Calendar ribbon：仅在 zoom 到日期条目（每日笔记）时出现在编辑区上方 */}
+          <HomeToday
+            editor={editor}
+            onLocate={(addr) => {
+              if (editor) ctlRef.current?.zoomToAddress(addr);
             }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          />
+          <div className="home-editor-wrap">
+            <div className="outline-root">{editor ? <EditorContent editor={editor} /> : null}</div>
+            {/* 列表末尾的 + 快捷新建（Workflowy）：点击在当前视图层级末尾加条目 */}
+            <button
+              className="outline-add"
+              title={t("homeAddItem")}
+              style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
+              onMouseDown={(e) => e.preventDefault()} // 不抢编辑器焦点
+              onClick={() => {
+                if (!editor) return;
+                appendItemCommand(editor);
+                editor.commands.focus();
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="home-scroll">
+          <HomeBoard
+            editor={editor}
+            onLocate={(addr) => {
+              // zoom 切换目标节点，视图由该节点 board 属性自动决定
+              if (editor) ctlRef.current?.zoomToAddress(addr);
+            }}
+          />
+        </div>
+      )}
       {hint && (
         <div
-          className={`outline-drop-hint outline-drop-hint-${hint.mode}`}
+          className="outline-drop-hint"
           style={{ top: hint.top, left: hint.left, width: hint.width }}
           contentEditable={false}
         />

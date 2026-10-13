@@ -16,11 +16,18 @@ import { emitOpenNote } from "../WikiLink";
 import {
   NODE_MIME,
   OUTLINE_META_KEY,
+  applyDragPreview,
+  clearDragSrcHl,
   collectOutlineTags,
+  ensureDayTarget,
+  ensureTodayTarget,
   getActiveOutlineController,
   itemAddressAt,
   itemHasTag,
+  markDragSrcHl,
+  moveItemUnder,
   outlineStructureKey,
+  setNodeBoard,
   toggleTagCommand,
   withFlip,
 } from "./outlineKit";
@@ -93,6 +100,36 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
         label: t("homeZoomHere"),
         disabled: pos == null,
         onClick: () => ctl?.zoomTo(pos ?? null),
+      },
+      {
+        // 官方 Boards：看板是节点自己的布局属性（写盘持久化，只有该节点是看板）
+        label: node.attrs.board ? t("homeTurnList") : t("homeTurnBoard"),
+        disabled: pos == null,
+        onClick: () => {
+          if (pos == null) return;
+          setNodeBoard(editor, pos, !node.attrs.board);
+          ctl?.zoomTo(pos);
+        },
+      },
+      { separator: true },
+      {
+        // 官方 /Move to today / tomorrow：把条目移到当日/次日每日笔记下
+        label: t("homeMoveToday"),
+        disabled: pos == null,
+        onClick: () => {
+          if (pos == null) return;
+          const to = ensureTodayTarget(editor);
+          if (to != null) moveItemUnder(editor, pos, to);
+        },
+      },
+      {
+        label: t("homeMoveTomorrow"),
+        disabled: pos == null,
+        onClick: () => {
+          if (pos == null) return;
+          const to = ensureDayTarget(editor, 1);
+          if (to != null) moveItemUnder(editor, pos, to);
+        },
       },
       { separator: true },
       {
@@ -197,6 +234,10 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
             e.preventDefault();
             return;
           }
+          // 源条目整块（含子树）高亮，直到松手/取消
+          markDragSrcHl((e.currentTarget as HTMLElement).closest("li.outline-item"));
+          // 跟随鼠标的拖影换成 18px 小圆点（官方同款），替代默认整行半透明截图
+          applyDragPreview(e.dataTransfer);
           // 同带树地址：除了大纲内部重排（pos），还能跨视图拖进笔记成嵌入（address）
           e.dataTransfer.setData(
             NODE_MIME,
@@ -204,6 +245,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
           );
           e.dataTransfer.effectAllowed = "move";
         }}
+        onDragEnd={() => clearDragSrcHl()}
         onClick={(e) => {
           e.preventDefault();
           if (pos != null) getActiveOutlineController()?.zoomTo(pos);
