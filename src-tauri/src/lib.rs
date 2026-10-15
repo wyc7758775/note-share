@@ -3,8 +3,10 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
@@ -172,6 +174,20 @@ fn upsert_and_activate(
     })
 }
 
+/// 启动路由到热更资源只做一次（setup 直接导航 / on_page_load 兜底，二者互斥）
+static HOTRES_NAVIGATED: AtomicBool = AtomicBool::new(false);
+
+fn navigate_to_hotres(win: &tauri::WebviewWindow) {
+    let url = hotres_index_url();
+    let ok = tauri::Url::parse(url)
+        .map_err(|e| e.to_string())
+        .and_then(|u| win.navigate(u).map_err(|e| e.to_string()));
+    if ok.is_err() {
+        // navigate 不可用时兜底：脚本跳转
+        let _ = win.eval(&format!("location.replace('{}')", url));
+    }
+}
+
 /// WebView2 对未处理的 PermissionRequested 事件一律拒绝，
 /// 语音块的 getUserMedia 需要在这里放行麦克风（仅 Windows 桌面端）。
 #[cfg(target_os = "windows")]
@@ -197,16 +213,286 @@ fn grant_microphone_permission(app: &tauri::App) {
     }
 }
 
+// ---------- 热更新（前端资源即时生效，不重装不重启） ----------
+
+/// 热更清单：服务器端 hotupdate.json 与本地 hotupdate/manifest.json 共用
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct HotManifest {
+    version: String,
+    #[serde(default)]
+    url: Option<String>,
+}
+
+/// 返回给前端的可用热更信息
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct HotUpdateInfo {
+    version: String,
+    url: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HotUpdateState {
+    installed: Option<String>,
+}
+
+/// 热更清单固定指向最新已发布 Release（草稿 Release 不可见 = 天然人工审核门）；
+/// 本地联调可用环境变量 NOTESHARE_HOTUPDATE_URL 指向自建服务
+fn hotupdate_manifest_url() -> String {
+    std::env::var("NOTESHARE_HOTUPDATE_URL").unwrap_or_else(|_| {
+        "https://github.com/wyc7758775/note-share/releases/latest/download/hotupdate.json".into()
+    })
+}
+
+/// 点分数字逐段比较版本（容忍 v 前缀；非数字段按字符串比较兜底）
+fn cmp_version(a: &str, b: &str) -> std::cmp::Ordering {
+    let seg = |s: &str| -> Vec<String> {
+        s.trim_start_matches('v')
+            .split('.')
+            .map(|p| p.to_string())
+            .collect()
+    };
+    let (pa, pb) = (seg(a), seg(b));
+    for i in 0..pa.len().max(pb.len()) {
+        let x = pa.get(i).cloned().unwrap_or_else(|| "0".into());
+        let y = pb.get(i).cloned().unwrap_or_else(|| "0".into());
+        let ord = match (x.parse::<u64>(), y.parse::<u64>()) {
+            (Ok(m), Ok(n)) => m.cmp(&n),
+            _ => x.cmp(&y),
+        };
+        if ord != std::cmp::Ordering::Equal {
+            return ord;
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+/// 热更资源目录（app_config_dir/hotupdate）：由 hotres 协议优先返回
+fn hotupdate_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|c| c.join("hotupdate"))
+}
+
+/// 本地已安装热更的版本（无则 None）
+fn installed_hot_version(app: &AppHandle) -> Option<String> {
+    let txt = fs::read_to_string(hotupdate_dir(app)?.join("manifest.json")).ok()?;
+    serde_json::from_str::<HotManifest>(&txt)
+        .ok()
+        .map(|m| m.version)
+}
+
+/// 热更是否值得启用：已安装且比内置版本新（完整更新装到 ≥ 该版本后自动失效）
+fn hotupdate_effective(app: &AppHandle) -> bool {
+    let app_ver = app.package_info().version.to_string();
+    installed_hot_version(app)
+        .map(|v| cmp_version(&v, &app_ver) == std::cmp::Ordering::Greater)
+        .unwrap_or(false)
+}
+
+fn http_client(timeout_secs: u64) -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn check_hot_update(app: AppHandle) -> Result<Option<HotUpdateInfo>, String> {
+    let client = http_client(15)?;
+    let manifest: HotManifest = client
+        .get(hotupdate_manifest_url())
+        .send()
+        .and_then(|r| r.error_for_status())
+        .and_then(|r| r.json())
+        .map_err(|e| format!("获取热更清单失败: {e}"))?;
+    let url = manifest.url.clone().ok_or("热更清单缺少 url")?;
+    // 不比内置版本新：说明完整更新已覆盖（或清单未升版），无需热更
+    if cmp_version(&manifest.version, &app.package_info().version.to_string())
+        != std::cmp::Ordering::Greater
+    {
+        return Ok(None);
+    }
+    if installed_hot_version(&app).as_deref() == Some(manifest.version.as_str()) {
+        return Ok(None); // 已安装同版本
+    }
+    Ok(Some(HotUpdateInfo {
+        version: manifest.version,
+        url,
+    }))
+}
+
+#[tauri::command]
+fn apply_hot_update(app: AppHandle, url: String, version: String) -> Result<(), String> {
+    // 下载地址白名单：仅允许 https（dev 联调放行 127.0.0.1），防止被诱导覆盖前端资源
+    let is_local = url.starts_with("http://127.0.0.1") || url.starts_with("http://localhost");
+    if !url.starts_with("https://") && !(cfg!(debug_assertions) && is_local) {
+        return Err("非法的热更下载地址".into());
+    }
+    let client = http_client(120)?;
+    let bytes = client
+        .get(&url)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .and_then(|r| r.bytes())
+        .map_err(|e| format!("下载热更包失败: {e}"))?
+        .to_vec();
+
+    let cfg = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let dir = cfg.join("hotupdate");
+    let new_dir = cfg.join("hotupdate-new");
+    let old_dir = cfg.join("hotupdate-old");
+    let _ = fs::remove_dir_all(&new_dir);
+    fs::create_dir_all(&new_dir).map_err(|e| e.to_string())?;
+    let extract = (|| -> Result<(), String> {
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes[..]))
+            .map_err(|e| format!("热更包不是有效 zip: {e}"))?;
+        // zip 2.x 的 extract 拒绝含 .. 的条目（防 zip slip）
+        archive
+            .extract(&new_dir)
+            .map_err(|e| format!("解压热更包失败: {e}"))?;
+        if !new_dir.join("index.html").is_file() {
+            return Err("热更包缺少 index.html".into());
+        }
+        Ok(())
+    })();
+    if let Err(e) = extract {
+        let _ = fs::remove_dir_all(&new_dir);
+        return Err(e);
+    }
+    // 版本标记：manifest.json 是热更目录是否生效的判断依据
+    let manifest = HotManifest { version, url: None };
+    fs::write(
+        new_dir.join("manifest.json"),
+        serde_json::to_vec(&manifest).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    // 同卷换名近似原子：旧目录→hotupdate-old、新目录→hotupdate，最后清理
+    let _ = fs::remove_dir_all(&old_dir);
+    if dir.exists() {
+        fs::rename(&dir, &old_dir).map_err(|e| format!("切换热更目录失败: {e}"))?;
+    }
+    fs::rename(&new_dir, &dir).map_err(|e| format!("启用热更目录失败: {e}"))?;
+    let _ = fs::remove_dir_all(&old_dir);
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_hot_update(app: AppHandle) -> Result<(), String> {
+    if let Some(dir) = hotupdate_dir(&app) {
+        if dir.exists() {
+            fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hot_update_state(app: AppHandle) -> HotUpdateState {
+    HotUpdateState {
+        installed: installed_hot_version(&app),
+    }
+}
+
+/// 自定义协议 hotres 的静态资源 Content-Type（按扩展名）
+fn content_type(path: &str) -> &'static str {
+    let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript",
+        "css" => "text/css",
+        "json" | "map" => "application/json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "txt" => "text/plain; charset=utf-8",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
+    }
+}
+
+/// hotres 协议入口 URL：Windows(WebView2) 自定义协议映射为 http://<scheme>.localhost
+fn hotres_index_url() -> &'static str {
+    if cfg!(windows) {
+        "http://hotres.localhost/index.html"
+    } else {
+        "hotres://localhost/index.html"
+    }
+}
+
+/// hotres 协议：热更目录优先，未命中回退安装包内置资源（dev 未内嵌时 404，
+/// dev 本就不导航到 hotres）
+fn serve_hotres(app: &AppHandle, request_path: &str) -> tauri::http::Response<Cow<'static, [u8]>> {
+    let not_found = |msg: &str| {
+        tauri::http::Response::builder()
+            .status(404)
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .body(Cow::Owned(msg.as_bytes().to_vec()))
+            .unwrap()
+    };
+    let rel = request_path.split('?').next().unwrap_or("");
+    let rel = rel.trim_start_matches('/');
+    let rel = if rel.is_empty() { "index.html" } else { rel };
+    if rel
+        .split('/')
+        .any(|seg| seg == ".." || seg.contains('\\') || seg.is_empty())
+    {
+        return not_found("bad path");
+    }
+    // 1) 热更目录优先
+    if let Some(p) = hotupdate_dir(app).map(|d| d.join(rel)) {
+        if p.is_file() {
+            if let Ok(bytes) = fs::read(&p) {
+                return tauri::http::Response::builder()
+                    .header("Content-Type", content_type(rel))
+                    .body(Cow::Owned(bytes))
+                    .unwrap();
+            }
+        }
+    }
+    // 2) 回退内置资源
+    match app.asset_resolver().get(rel.to_string()) {
+        Some(asset) => {
+            let ct = if asset.mime_type.is_empty() {
+                content_type(rel).to_string()
+            } else {
+                asset.mime_type
+            };
+            tauri::http::Response::builder()
+                .header("Content-Type", ct)
+                .body(Cow::Owned(asset.bytes))
+                .unwrap()
+        }
+        None => not_found("not found"),
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // 客户端完整更新（安装包级）+ 装完重启
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        // 热更新资源协议：hotres://（Windows 为 http://hotres.localhost）
+        .register_uri_scheme_protocol("hotres", |ctx, request| {
+            serve_hotres(ctx.app_handle(), request.uri().path())
+        })
         .manage(AppState {
             vault: Mutex::new(None),
         })
         .setup(|app| {
             #[cfg(target_os = "windows")]
             grant_microphone_permission(app);
-
             if let Ok(cfg) = app.path().app_config_dir() {
                 let reg_file = cfg.join("vaults.json");
                 if !reg_file.exists() {
@@ -258,12 +544,37 @@ pub fn run() {
                     *st.vault.lock().unwrap() = Some(PathBuf::from(&v.path));
                 }
             }
+            // 热更资源有效 → 主窗口改由 hotres 协议加载（仅 release；dev 走 vite devUrl）。
+            // 若此时窗口尚未创建，由下方 on_page_load 的首次 Started 事件兜底导航。
+            if !cfg!(debug_assertions) && hotupdate_effective(app.handle()) {
+                if let Some(win) = app.get_webview_window("main") {
+                    HOTRES_NAVIGATED.store(true, Ordering::SeqCst);
+                    navigate_to_hotres(&win);
+                }
+            }
             Ok(())
+        })
+        // setup 与窗口创建的先后在不同版本有差异：首次页面加载 Started 时
+        // 若热更有效且尚未导航，立即切到 hotres（在内置页任何脚本执行前拦截）
+        .on_page_load(|webview, payload| {
+            if cfg!(debug_assertions)
+                || payload.event() != tauri::webview::PageLoadEvent::Started
+                || webview.label() != "main"
+                || HOTRES_NAVIGATED.swap(true, Ordering::SeqCst)
+                || !hotupdate_effective(webview.app_handle())
+            {
+                return;
+            }
+            if let Ok(u) = tauri::Url::parse(hotres_index_url()) {
+                let _ = webview.navigate(u);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_vaults, open_vault, create_vault, remove_vault, tree, read_note, write_note,
-            create_note, create_folder, rename_path, move_path, delete_path, search, read_scene,
-            save_scene, save_asset, import_file, read_asset, save_text_file, save_binary_file, create_canvas
+            create_note, create_folder, rename_path, move_path, delete_path, reveal_path, search,
+            read_scene, save_scene, save_asset, import_file, read_asset, save_text_file,
+            save_binary_file, create_canvas, check_hot_update, apply_hot_update, clear_hot_update,
+            hot_update_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -643,6 +954,44 @@ fn delete_path(state: State<AppState>, path: String) -> Result<(), String> {
     fs::rename(&abs, trash.join(format!("{stamp}-{base}"))).map_err(|e| e.to_string())
 }
 
+/// 在系统文件管理器中显示文件：Windows 资源管理器打开并选中，macOS Finder reveal
+#[tauri::command]
+fn reveal_path(state: State<AppState>, path: String) -> Result<(), String> {
+    let v = vault_of(&state)?;
+    let abs = resolve_inside(&v, &path)?;
+    if !abs.exists() {
+        return Err("文件不存在".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // explorer 的命令行不是标准解析：/select, 后的带引号路径要原样传（raw_arg），
+        // 常规 arg 会把整段含空格路径再包一层引号导致选中失败
+        std::process::Command::new("explorer")
+            .raw_arg(format!("/select,\"{}\"", abs.display()))
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&abs)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        // 其余平台退而求其次：打开所在文件夹
+        std::process::Command::new("xdg-open")
+            .arg(abs.parent().unwrap_or(&abs))
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn search(state: State<AppState>, q: String) -> Result<Value, String> {
     let v = vault_of(&state)?;
@@ -867,4 +1216,22 @@ fn save_binary_file(target: String, base64: String) -> Result<(), String> {
         .decode(&base64)
         .map_err(|e| e.to_string())?;
     fs::write(&target, bytes).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cmp_version;
+    use std::cmp::Ordering::*;
+
+    // 版本号约定为纯 x.y.z（来自 git tag），不含预发布段
+    #[test]
+    fn version_compare() {
+        assert_eq!(cmp_version("0.2.0", "0.1.0"), Greater);
+        assert_eq!(cmp_version("v0.2.0", "0.1.0"), Greater);
+        assert_eq!(cmp_version("0.10.0", "0.9.3"), Greater);
+        assert_eq!(cmp_version("0.1.0", "0.1.0"), Equal);
+        assert_eq!(cmp_version("0.1.0", "0.1"), Equal);
+        assert_eq!(cmp_version("0.1.1", "0.1"), Greater);
+        assert_eq!(cmp_version("0.1.0", "0.1.1"), Less);
+    }
 }

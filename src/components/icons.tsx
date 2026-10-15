@@ -160,6 +160,16 @@ export const I = {  chevron: (
       </g>
     </svg>
   ),
+  download: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        {/* 竖线 + 箭头两翼 */}
+        <path d="M8 2.4v7.4M4.9 6.9 8 10l3.1-3.1" strokeWidth="1.5" />
+        {/* 底盘 */}
+        <path d="M2.8 13h10.4" strokeWidth="1.5" />
+      </g>
+    </svg>
+  ),
 };
 
 /** 个人 logo：线条皮卡丘（单色描边，跟随主题色；眼睛高光用底色挖空） */

@@ -10,14 +10,12 @@ import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { useDomain } from "../../domain/provider";
 import { useSettings, currentLang, translate } from "../../i18n";
-import HomeBoard from "./HomeBoard";
 import HomeToday from "./HomeToday";
 import { forEditor, forSave } from "../../lib/markdown";
 import { Wikilink, emitOpenNote } from "../WikiLink";
 import { InlineAudio, insertVoiceAfterCurrentItem } from "../AudioBlock";
 import { createSlashMenu } from "../SlashMenu";
 import type { SlashItem } from "../SlashMenu";
-
 import { I } from "../icons";
 import {
   consumePendingZoom,
@@ -45,8 +43,6 @@ import {
   outlineStructureKey,
   resolveOutlineDropTarget,
   setActiveOutlineController,
-  setNodeBoard,
-  zoomIsBoard,
   type OutlineController,
   type OutlineCrumb,
 } from "./outlineKit";
@@ -64,8 +60,6 @@ export default function HomeView({ active }: { active: boolean }) {
   const [query, setQuery] = useState("");
   const [hint, setHint] = useState<DropHint | null>(null);
   const [hideDone, setHideDone] = useState(false);
-  /** 视图模式：由当前 zoom 节点的 board 属性驱动（看板是节点属性，非全局） */
-  const [viewTick, setViewTick] = useState(0);
   const hostRef = useRef<HTMLDivElement>(null);
   const ctlRef = useRef<OutlineController | null>(null);
   const loadingRef = useRef(false);
@@ -209,12 +203,8 @@ export default function HomeView({ active }: { active: boolean }) {
       const md = (editor.storage as any).markdown.getMarkdown() as string;
       outline.edit(forSave(md));
       setCrumbs(ctlRef.current?.crumbs() ?? [{ pos: null, text: "Workflowy" }]);
-      setViewTick((x) => x + 1);
     },
   });
-
-  const view: "outline" | "board" = editor && zoomIsBoard(editor) ? "board" : "outline";
-  void viewTick;
 
   // 拖放提示兜底清理：drop 落在编辑器外（工具栏/+按钮/别的分栏）时 PM 的
   // handleDrop 收不到事件，线与源高亮会残留——挂 window 捕获层，落到哪都熄
@@ -282,7 +272,6 @@ export default function HomeView({ active }: { active: boolean }) {
     const onTr = () => {
       setCrumbs(ctl.crumbs());
       setHideDone(ctl.isHideCompleted());
-      setViewTick((x) => x + 1); // zoom/节点属性变化 → 视图（board/outline）跟随
     };
     editor.on("transaction", onTr);
     const onZoom = (e: Event) => applyZoom((e as CustomEvent<HomeZoomTarget>).detail);
@@ -357,25 +346,35 @@ export default function HomeView({ active }: { active: boolean }) {
           ))}
         </div>
         <span className="flex-1" />
-        {/* 看板是节点属性：看板态（=当前 zoom 节点开了 board）显示返回开关，
-            返回 = 关掉该节点的 board 属性（写盘持久化） */}
-        {view === "board" && editor ? (
-          <button
-            className="home-view-back"
-            contentEditable={false}
-            data-tip={t("homeViewOutline")}
-            onClick={() => {
-              const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos;
-              if (zoomPos != null) setNodeBoard(editor, zoomPos, false);
-              editor.commands.focus();
+        {/* 搜索框（内嵌放大镜）→ 眼睛 → 日记：搜索与日记按用户要求换位 */}
+        <span className="home-search-box">
+          <svg className="home-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input
+            className="home-search"
+            placeholder={t("homeSearchPh")}
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                (e.target as HTMLInputElement).blur();
+                editor?.commands.focus();
+              }
             }}
-          >
-            <svg width="14" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 3h10M3 8h10M3 13h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            </svg>
-            <span>{t("homeBackToList")}</span>
-          </button>
-        ) : null}
+          />
+        </span>
+        <button
+          className={`home-tool-btn${hideDone ? " is-on" : ""}`}
+          data-tip={t("homeHideDone")}
+          onClick={() => ctlRef.current?.toggleHideCompleted()}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M2.5 8s2.2-3.8 5.5-3.8S13.5 8 13.5 8s-2.2 3.8-5.5 3.8S2.5 8 2.5 8z" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="8" cy="8" r="1.6" fill="currentColor" />
+          </svg>
+        </button>
         <button
           className="home-tool-btn"
           data-tip={t("homeToday")}
@@ -393,69 +392,35 @@ export default function HomeView({ active }: { active: boolean }) {
             <circle cx="8" cy="10" r="1.4" fill="currentColor" />
           </svg>
         </button>
-        <button
-          className={`home-tool-btn${hideDone ? " is-on" : ""}`}
-          data-tip={t("homeHideDone")}
-          onClick={() => ctlRef.current?.toggleHideCompleted()}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M2.5 8s2.2-3.8 5.5-3.8S13.5 8 13.5 8s-2.2 3.8-5.5 3.8S2.5 8 2.5 8z" stroke="currentColor" strokeWidth="1.3" />
-            <circle cx="8" cy="8" r="1.6" fill="currentColor" />
-          </svg>
-        </button>
-        <input
-          className="home-search"
-          placeholder={t("homeSearchPh")}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              (e.target as HTMLInputElement).blur();
-              editor?.commands.focus();
-            }
+      </div>
+      <div className="home-scroll">
+        {/* 官方 Calendar ribbon：仅在 zoom 到日期条目（每日笔记）时出现在编辑区上方 */}
+        <HomeToday
+          editor={editor}
+          onLocate={(addr) => {
+            if (editor) ctlRef.current?.zoomToAddress(addr);
           }}
         />
+        <div className="home-editor-wrap">
+          <div className="outline-root">{editor ? <EditorContent editor={editor} /> : null}</div>
+          {/* 列表末尾的 + 快捷新建（Workflowy）：点击在当前视图层级末尾加条目 */}
+          <button
+            className="outline-add"
+            title={t("homeAddItem")}
+            style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
+            onMouseDown={(e) => e.preventDefault()} // 不抢编辑器焦点
+            onClick={() => {
+              if (!editor) return;
+              appendItemCommand(editor);
+              editor.commands.focus();
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
-      {view === "outline" ? (
-        <div className="home-scroll">
-          {/* 官方 Calendar ribbon：仅在 zoom 到日期条目（每日笔记）时出现在编辑区上方 */}
-          <HomeToday
-            editor={editor}
-            onLocate={(addr) => {
-              if (editor) ctlRef.current?.zoomToAddress(addr);
-            }}
-          />
-          <div className="home-editor-wrap">
-            <div className="outline-root">{editor ? <EditorContent editor={editor} /> : null}</div>
-            {/* 列表末尾的 + 快捷新建（Workflowy）：点击在当前视图层级末尾加条目 */}
-            <button
-              className="outline-add"
-              title={t("homeAddItem")}
-              style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
-              onMouseDown={(e) => e.preventDefault()} // 不抢编辑器焦点
-              onClick={() => {
-                if (!editor) return;
-                appendItemCommand(editor);
-                editor.commands.focus();
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="home-scroll">
-          <HomeBoard
-            editor={editor}
-            onLocate={(addr) => {
-              // zoom 切换目标节点，视图由该节点 board 属性自动决定
-              if (editor) ctlRef.current?.zoomToAddress(addr);
-            }}
-          />
-        </div>
-      )}
       {hint && (
         <div
           className="outline-drop-hint"

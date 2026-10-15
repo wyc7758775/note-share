@@ -72,6 +72,8 @@ export interface Backend {
   movePath(from: string, toFolder: string): Promise<string>;
   /** 移入 vault 内 .trash/（Obsidian 同款回收站约定） */
   deletePath(path: string): Promise<void>;
+  /** 在系统文件管理器中显示该文件（Windows 资源管理器选中；macOS Finder reveal） */
+  revealPath(path: string): Promise<void>;
   search(q: string): Promise<SearchHit[]>;
   readScene(path: string): Promise<string>; // excalidraw 场景 JSON 原文
   saveScene(

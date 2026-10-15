@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../backend";
+import { backend } from "../backend";
 import { showContextMenu } from "./ContextMenu";
 import { useSettings } from "../i18n";
 import { useDomain } from "../domain/provider";
 import { emitEditScene } from "./ExcalidrawBlock";
 import { importDroppedFiles } from "../lib/dropImport";
 import { I } from "./icons";
+
+// macOS 的文件管理器叫 Finder，菜单文案随平台切换
+const IS_MAC = /mac|iphone|ipad|ipod/i.test(
+  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    ""
+);
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
 export function InlineInputRow({
@@ -200,17 +208,7 @@ function TreeRow({
               } },
               { separator: true },
               { label: t("rename"), onClick: () => h.onRequestRename(item) },
-              {
-                label: t("trashLabel"),
-                danger: true,
-                onClick: () => {
-                  // 二级确认（与编辑器删除一致），避免右键单击误删
-                  showContextMenu(e.clientX, e.clientY, [
-                    { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
-                    { label: t("cancel") },
-                  ]);
-                },
-              },
+              { label: t("trashLabel"), danger: true, onClick: animatedDelete },
             ]);
           }}
         >
@@ -288,21 +286,18 @@ function TreeRow({
             { label: t("open"), onClick: () => h.onOpenNote(item.path) },
             { label: t("openInNewTab"), onClick: () => h.onOpenNote(item.path, { newTab: true }) },
             { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
+            {
+              label: IS_MAC ? t("revealInFinder") : t("revealInExplorer"),
+              onClick: () =>
+                void backend
+                  .revealPath(item.path)
+                  .catch((err) => console.error("在文件管理器中显示失败", err)),
+            },
             { separator: true },
             { label: t("newCanvas"), onClick: () => h.onNewCanvasIn(parentFolder) }, // 同级目录新建白板（行内命名）
             { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
-            {
-              label: t("trashLabel"),
-              danger: true,
-              onClick: () => {
-                // 二级确认（与编辑器删除一致），避免右键单击误删
-                showContextMenu(e.clientX, e.clientY, [
-                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
-                  { label: t("cancel") },
-                ]);
-              },
-            },
+            { label: t("trashLabel"), danger: true, onClick: animatedDelete },
           ]);
         }}
       >
@@ -377,16 +372,7 @@ function TreeRow({
             },
             { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
-            {
-              label: t("trashLabel"),
-              danger: true,
-              onClick: () => {
-                showContextMenu(e.clientX, e.clientY, [
-                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
-                  { label: t("cancel") },
-                ]);
-              },
-            },
+            { label: t("trashLabel"), danger: true, onClick: animatedDelete },
           ]);
           return;
         }
@@ -396,16 +382,7 @@ function TreeRow({
             { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
             { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
-            {
-              label: t("trashLabel"),
-              danger: true,
-              onClick: () => {
-                showContextMenu(e.clientX, e.clientY, [
-                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
-                  { label: t("cancel") },
-                ]);
-              },
-            },
+            { label: t("trashLabel"), danger: true, onClick: animatedDelete },
           ]);
           return;
         }
@@ -415,16 +392,7 @@ function TreeRow({
             { label: t("openInNewPane"), onClick: () => h.onOpenNote(item.path, { newPane: true }) },
             { separator: true },
             { label: t("rename"), onClick: () => h.onRequestRename(item) },
-            {
-              label: t("trashLabel"),
-              danger: true,
-              onClick: () => {
-                showContextMenu(e.clientX, e.clientY, [
-                  { label: t("confirmTrash"), danger: true, onClick: animatedDelete },
-                  { label: t("cancel") },
-                ]);
-              },
-            },
+            { label: t("trashLabel"), danger: true, onClick: animatedDelete },
           ]);
         }
       }}

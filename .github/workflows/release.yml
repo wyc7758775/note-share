@@ -1,5 +1,7 @@
 # 打标签（v*）即发布：macOS（Apple Silicon + Intel）与 Windows 三路并行构建，
-# 产物（dmg / nsis exe / msi）自动挂到同名 GitHub Release（草稿，确认后手动发布）。
+# 产物（dmg / nsis exe / msi + 更新器签名产物 latest.json）自动挂到同名 GitHub Release
+# （草稿，确认后手动发布；客户端更新检查只认已发布 Release = 人工放行门）。
+# Windows 侧额外上传热更资源（web.zip + hotupdate.json），供已装客户端免重装即时更新。
 name: Release
 
 on:
@@ -48,6 +50,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 更新器签名：对 NSIS/.app.tar.gz 等更新产物做 minisign 签名并生成 latest.json
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "NoteShare ${{ github.ref_name }}"
@@ -55,6 +60,33 @@ jobs:
             打包产物：
             - macOS：.dmg（Apple Silicon / Intel 各一；未做开发者签名，首次打开请右键 → 打开）
             - Windows：NSIS 安装包（-setup.exe）与 MSI（.msi）
+            - 客户端更新：latest.json（Windows 应用内检查更新用）
+            - 热更新：web.zip + hotupdate.json（应用内免重装即时更新前端资源）
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      # 热更资源只出一份（dist 跨平台相同）：由 Windows 任务打包上传。
+      # zip 条目统一正斜杠、置于压缩包根（index.html / assets/…）。
+      - name: Upload hot-update assets
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          if (Test-Path web.zip) { Remove-Item web.zip }
+          $zip = [System.IO.Compression.ZipFile]::Open("$PWD/web.zip", 'Create')
+          Get-ChildItem dist -Recurse -File | ForEach-Object {
+            $rel = [IO.Path]::GetRelativePath("$PWD/dist", $_.FullName) -replace '\\', '/'
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $rel) | Out-Null
+          }
+          $zip.Dispose()
+          $manifest = @{
+            version = $env:TAG
+            url = "https://github.com/wyc7758775/note-share/releases/latest/download/web.zip"
+          } | ConvertTo-Json -Compress
+          Set-Content -Path hotupdate.json -Value $manifest -Encoding utf8NoBOM
+          gh release upload "$env:TAG" web.zip hotupdate.json --clobber

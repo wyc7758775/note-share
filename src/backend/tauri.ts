@@ -30,6 +30,7 @@ export const tauriBackend: Backend = {
   renamePath: (from, newName) => invoke<string>("rename_path", { from, newName }),
   movePath: (from, toFolder) => invoke<string>("move_path", { from, toFolder }),
   deletePath: (path) => invoke<void>("delete_path", { path }),
+  revealPath: (path) => invoke<void>("reveal_path", { path }),
   search: (q) => invoke<SearchHit[]>("search", { q }),
   readScene: (path) => invoke<string>("read_scene", { path }),
   saveScene: (name, sceneJson, pngBase64, _folder?) =>

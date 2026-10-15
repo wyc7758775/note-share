@@ -2796,7 +2796,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px 6px;
+  padding: 12px 5% 6px; /* 与 .home-editor-wrap 同基准 */
   color: var(--wf-note);
 }
 .home-crumb {
@@ -2843,13 +2843,27 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .home-crumb-item:last-child .home-crumb-btn {
   color: var(--wf-text);
 }
+/* 搜索框：内嵌放大镜（图标绝对定位在首列，input 让位） */
+.home-search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-right: 2px;
+}
+.home-search-icon {
+  position: absolute;
+  left: 8px;
+  color: var(--wf-note);
+  pointer-events: none;
+}
 .home-search {
   flex: none;
   width: 180px;
   border: none;
   border-radius: 6px;
   background: var(--wf-bg2);
-  padding: 5px 10px;
+  padding: 5px 10px 5px 26px;
   font-size: 13px;
   color: var(--wf-text);
   outline: none;
@@ -2887,7 +2901,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 .home-editor-wrap {
   /* 铺满可用宽度（不居中留白）；底部只留少量呼吸（+ 紧贴最后条目） */
-  padding: 30px 44px 24px;
+  /* 左右边距 5%（用户定的基准；百分比随窗宽自适应，两容器与工具栏同基准） */
+  padding: 30px 5% 24px;
 }
 
 /* 大纲正文 */
@@ -2910,7 +2925,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-left: 0;
 }
 .outline-doc ul[data-type="taskList"] ul[data-type="taskList"] {
-  padding-left: 6px; /* 层级差 = 26(行圆点区) + 6 ≈ 32px，紧凑 */
+  padding-left: 10px; /* 层级差 = 26(行圆点区) + 10 = 36px，官方实测 */
   position: relative;
 }
 
@@ -2933,19 +2948,23 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .outline-add:hover {
   opacity: 1;
 }
-/* 层级参考线（Workflowy 缩进竖线）：1px 极浅灰，x 对齐父条目圆点中心，
-   从父行下方延到最后一个子行的圆点中心；不随悬停变化 */
-.outline-doc ul[data-type="taskList"] ul[data-type="taskList"]::before {
-  content: "";
+/* 层级参考线（官方规律）：x 贴子条目圆点左侧（不取父圆点列）；
+   y 从第一个子条目圆点中心到最后一个子条目圆点中心——
+   首段从圆点高度起（不向上连父），末段止于圆点中心（不穿子孙区），
+   单子条目时起止重合≈不可见。逐 li 画段接续成整条。 */
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"] .react-renderer > li::before {
+  content: none; /* 退役：线由下方 ul::before 画（用户方案） */
   position: absolute;
-  left: -17px;
-  top: -6px;
-  bottom: 12px;
+  left: 0; /* 编辑器式：对齐本层级缩进列，所有同级严格同 x（逐级 +36px 网格） */
+  top: 0;
+  bottom: 0; /* 贯穿块内每一行（含子树），编辑器 indent guides 同款 */
   width: 1px;
-  background: var(--line);
-  opacity: 0.6; /* 主题线色降透明度，保持参考线的"若有若无" */
+  /* ink 25% 实色：白底≈#d0cfce、暗底≈#4a4a4a，两套主题都肉眼可见（--line@0.6 在白底只剩 4% 对比度=隐形） */
+  background: color-mix(in srgb, var(--ink) 14%, transparent); /* 官方 10-15% 灰：可辨但不抢 */
   pointer-events: none;
 }
+
+
 .outline-item {
   position: relative;
   display: flex;
@@ -2957,8 +2976,10 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 /* 折叠箭头：叠在缩进空间（不占布局），25% 透明度，行悬停全亮，展开旋转 90° */
 .outline-arrow {
   position: absolute;
-  left: -24px;
-  top: 3px;
+  left: -0.5px; /* 中心对齐竖线（线中心 li.x+9.5，按钮 20 宽 → left = 9.5-10） */
+  top: 7px;
+  opacity: 0; /* 官方：不悬停不出现（折叠态常显由 .outline-collapsed-item 规则保留） */
+  pointer-events: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2968,7 +2989,6 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border: none;
   background: none;
   color: var(--wf-sub);
-  opacity: 0.25;
   transition: opacity 0.15s ease;
   cursor: pointer;
 }
@@ -2994,7 +3014,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   align-items: center;
   justify-content: center;
   width: 18px;
-  height: 28px;
+  height: 36px;
   cursor: pointer;
 }
 .outline-bullet-halo {
@@ -3024,6 +3044,37 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 /* 完成态（Workflowy 精确值）：仅本条圆点与首段文字 0.37 + 删除线，子级不受影响。
    注意只取直属首段（NodeViewContent 会多包一层 div）：后代选择器会把子条目一起划掉 */
+/* 待办条目（官方 todo）：复选框取代圆点常显位（圆点中心 +9），
+   点方块=切换完成；方块后面的圆点悬停浮现（中心 +27，与方块等距 18px），
+   点圆点=进入节点详情（zoom）、拖圆点=移动子树 */
+.outline-check {
+  position: absolute;
+  left: 1px;
+  top: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid var(--wf-sub);
+  border-radius: 3.5px;
+  background: var(--paper);
+  color: #fff;
+  cursor: pointer;
+}
+.outline-check:hover {
+  border-color: var(--accent);
+}
+.outline-check.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.outline-item.is-todo > .outline-bullet {
+  left: 18px; /* 中心 +27：与方块中心(+9)保持 18px 等距 */
+  width: 18px;
+}
 .outline-item.is-done > .outline-bullet {
   opacity: 0.37;
 }
@@ -3043,8 +3094,11 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 /* NodeViewContent 会多包一层 [data-node-view-content-react] div，选择器用后代/first-child 跨过它 */
 .outline-content p {
   margin: 0;
-  min-height: 28px;
   padding: 4px 12px 0 0;
+}
+/* 节点间距：首段行盒 34px（官方原型行距更疏；备注等后续段落不受此限） */
+.outline-content p:first-child {
+  min-height: 36px; /* 官方实测行高 36px */
 }
 .outline-content p + p {
   font-size: 13px;
@@ -3159,19 +3213,20 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: var(--surface-hover);
 }
 
-/* 行首 ⋯ 菜单（Workflowy：叠在缩进空间、圆点左侧，比折叠箭头更靠外）；
-   实底小浮钮（缩进收紧后会与上层圆点区域交叠，底色保证视觉干净）；
-   悬停行淡入；菜单打开期间常显 */
+/* ⋯ 菜单：左侧缩进沟里、圆点左边（原位不动，只离窗口边远一点）；
+   实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -40px;
-  top: 3px;
+  left: -3.5px; /* 中心对齐竖线（线中心 li.x+9.5，按钮 26 宽 → left = 9.5-13） */
+  top: 5px;
   z-index: 5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
+  opacity: 0; /* 官方：不悬停不出现 */
+  pointer-events: none; /* 隐藏时不挡点击 */
   border: none;
   background: var(--wf-bg);
   border-radius: 5px;
@@ -3180,12 +3235,16 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   transition: opacity 0.15s ease;
 }
 .outline-item-menu svg {
-  width: 12px;
-  height: 12px;
+  width: 15px;
+  height: 15px;
 }
 .outline-item:hover > .outline-item-menu,
 .outline-item.outline-menu-hl > .outline-item-menu {
   opacity: 1;
+}
+/* 叶子行没有折叠箭头：⋯ 移入箭头槽位，行首永远 18px 等距（悬停前后一致） */
+.outline-item.no-arrow > .outline-item-menu {
+  left: -22px; /* 26 宽按钮中心对齐 20 宽箭头槽位中心(-9)：-9-13 */
 }
 .outline-item-menu:hover {
   background: var(--wf-bg2);
@@ -3197,6 +3256,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border-radius: 6px;
 }
 .outline-item.outline-zoom-root > .outline-item-menu {
+  left: -34px; /* 与下方子级 ⋯ 同列：子级 li 比标题 li 多 6px（嵌套 ul padding） */
   top: 11px; /* 27px 大标题行中心对齐 */
 }
 
@@ -3265,31 +3325,15 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: var(--surface-hover);
   color: var(--ink);
 }
-/* 看板态的返回开关（看板是节点级布局，不占全局切换器） */
-.home-view-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  margin-right: 6px;
-  color: var(--ink);
-  font-size: 13px;
-}
-.home-view-back:hover {
-  background: var(--surface-hover);
-}
 
 /* ---------- 看板视图（官方 Boards：子级=列，孙级=卡片，灰底列、白底卡片、手柄在右） ---------- */
+/* 内联看板：嵌在条目行下方，随内容自然高度（水平滚动列） */
 .home-board {
   display: flex;
   gap: 14px;
   align-items: stretch;
-  padding: 16px 44px 32px;
+  padding: 8px 2px 12px;
   overflow-x: auto;
-  min-height: 100%;
 }
 .home-board-empty {
   color: var(--ink-soft);
@@ -3302,19 +3346,17 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
-  background: var(--surface);
-  padding: 10px;
-  transition: background 0.12s ease;
+  padding: 0 0 12px; /* 内缩统一由列头/卡片区自己拿 16px；官方：列透明无底色 */
 }
-.home-board-col.is-over {
-  background: var(--surface-hover);
+.home-board-col.is-over .home-board-cards {
+  /* 拖卡反馈落在卡片区左侧的细高亮条，不整列铺底色 */
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .home-board-col-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 4px 10px;
+  padding: 12px 16px 8px;
   min-height: 26px;
 }
 .home-board-col-title {
@@ -3333,6 +3375,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 0 16px; /* 与列头同一内缩（官方：列内所有元素统一 16px） */
 }
 .home-board-card {
   display: flex;
@@ -3387,16 +3430,23 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border-radius: 50%;
   background: var(--wf-sub);
 }
+/* 列底添加（官方：纯 + 无文字，浅灰小图标，悬停微亮） */
 .home-board-add {
-  text-align: left;
-  color: var(--ink-soft);
-  font-size: 13px;
-  padding: 6px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
   border-radius: 6px;
+  color: var(--ink-soft);
+  opacity: 0.75;
 }
 .home-board-add:hover {
   background: var(--surface-hover);
   color: var(--ink);
+  opacity: 1;
 }
 .home-board-input {
   border: none;
@@ -3808,6 +3858,37 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   color: var(--ink-faint);
 }
 
+/* 内联看板（官方 Boards）：开了 board 的条目 = 标题行 + 看板块（子列表 DOM 保留但隐藏，
+   PM 位置/事务不受影响，卡片列的增删拖全由 HomeBoard 组件驱动同一文档） */
+.outline-item.is-board {
+  display: block; /* 标题行与看板块上下排（默认 flex 行排） */
+}
+.outline-item.is-board > .outline-content > div > ul {
+  display: none; /* 连同其 ::before 线一起隐藏 */
+}
+/* 看板内部的列/卡片有自己的布局，不参与缩进参考线 */
+.outline-item.is-board ul[data-type="taskList"]::before {
+  content: none;
+}
+/* 看板节点自身（ul 被隐藏，伪元素没载体）：li 上补脊柱线，从圆点下缘到看板块底 */
+.outline-item.is-board > .outline-bullet ~ * ~ .home-board ~ * ,
+.outline-item.is-board {
+  position: relative;
+}
+.outline-item.is-board::after {
+  content: "";
+  position: absolute;
+  left: 9px; /* 圆点中心列（li 相对坐标） */
+  top: 24px; /* 圆点下缘留隙（dot 中心 18 + 半径 3.5 + 2） */
+  bottom: 6px;
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  pointer-events: none;
+}
+.outline-item.is-board > .home-board {
+  margin: 2px 0 8px;
+  max-width: 100%;
+}
 /* ---------- 语音块（录音态 / 播放器） ---------- */
 .voice-block {
   display: block;
@@ -4019,4 +4100,67 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 缩进竖线（用户方案：纯 CSS 伪元素，挂在嵌套 ul 上）：
+   从父节点圆点垂直中心起（top:-18px 上探到父行中心），沿父圆点列往下走到子列表末尾（bottom:0）。
+   left:-17px：ul 内容左 - 26(父行圆点区) + 9(圆点中心) 相对 ul 盒。 */
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"]::before {
+  content: none; /* ul 顶随备注段漂移，改挂 li::after */
+  position: absolute;
+  left: -17.5px; /* x 微调 -0.5px（用户：还是有一点不对齐；半像素居中于圆点与右邻列之间） */
+  top: -15px; /* 上端远离父圆点（用户：距离上节点太近——拉大空隙2→5px） */
+  bottom: 13px; /* 下端收近末子圆点（用户：距离下面又太远—10→8px） */
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent); /* 用户：颜色重一些 */
+  pointer-events: none;
+}
+/* （v1 退役：给所有嵌套 li 画线 → 叶子行悬空线、外层线穿内层） */
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"] .react-renderer > li.outline-item::after {
+  content: none;
+  position: absolute;
+  left: 9px;
+  top: 24px; /* 圆点下缘（dot 中心 18 + 半径 3.5 + 2.5 隙） */
+  bottom: 9px;
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  pointer-events: none;
+}
+/* （原覆盖层样式保留但组件已卸载） */
+.outline-root {
+  position: relative;
+}
+.outline-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.outline-doc {
+  position: relative;
+  z-index: 1; /* 线在内容后面 */
+}
+.outline-guide-line {
+  position: absolute;
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+/* 看板列间分隔线：DPR>1 时 1px border 会被稀释成 0.667px 几乎不可见，
+   改用 inset box-shadow 画物理 1px 线，颜色提到 20% */
+.home-board .home-board-col + .home-board-col {
+  box-shadow: inset 1px 0 0 0 color-mix(in srgb, var(--ink) 20%, transparent);
+}
+/* 缩进脊柱线 v2：线是【有子级的节点】的属性——data-has-kids 由 OutlineItemView 标记。
+   起点=父圆点下缘 2px 隙（top 24 固定，备注不漂移）；终点=本 li 底上方 9px（末子圆点中心附近）。
+   叶子行/空行无子级 → 无线（v1 的悬空线根治）。 */
+.outline-doc ul[data-type="taskList"] ul[data-type="taskList"] .react-renderer > li.outline-item[data-has-kids]::after,
+.outline-doc li.outline-item[data-has-kids]::after {
+  content: "";
+  position: absolute;
+  left: 9px; /* 圆点中心列 */
+  top: 27.5px; /* 距父圆点下缘 5px（实测校准 +1） */
+  bottom: 27px; /* 实测渲染间隙 11px → 收 1px = 精确 10px */
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  pointer-events: none;
 }

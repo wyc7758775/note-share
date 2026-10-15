@@ -8,3 +8,5 @@ server/data/
 .DS_Store
 .dev-vaults.json
 .zcode/
+# Tauri 更新签名私钥（公钥 .pub 入库，私钥绝不提交）
+src-tauri/keys/*.key

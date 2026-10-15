@@ -1,11 +1,13 @@
-// 看板视图（对齐官方 Boards 语义）：zoom 节点的子条目 = 列，孙条目 = 卡片。
+// 看板（对齐官方 Boards 语义）：看板条目的子条目 = 列，孙条目 = 卡片。
+// 官方看板是内联的——和大纲其他条目同层共存（父视图里直接展开成列），
+// 本组件由条目 NodeView 内联渲染（zoom 进去看板节点也是同一份，标题+看板）。
 // - 列底 + 内联输入新卡片（挂为该列末位子级）；看板右缘 + 新列
 // - 卡片右侧圆点是拖拽手柄（官方：bullet 在卡片右侧）；拖到别的列 = 移动条目
 // - 列间分隔线可拖宽窄；一切修改直接写大纲文档（单一数据源 Home.md）
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { outlineStructureKey, withFlip } from "./outlineKit";
+import { fixZoomOnRemoval, itemDeleteRange, withFlip } from "./outlineKit";
 import { useSettings } from "../../i18n";
 
 interface Card {
@@ -52,28 +54,19 @@ function addressAt(doc: PMNode, pos: number): number[] {
   return out;
 }
 
-function deriveColumns(editor: Editor): Column[] {
+/** 看板条目（rootPos）的列/卡推导：root 首个嵌套任务列表 = 列集 */
+function deriveColumns(editor: Editor, rootPos: number): Column[] {
   const doc = editor.state.doc;
-  const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos ?? null;
+  const root = doc.nodeAt(rootPos);
+  if (!root || root.type.name !== "taskItem") return [];
   let listNode: PMNode | null = null;
   let listPos = 0;
-  if (zoomPos != null) {
-    const root = doc.nodeAt(zoomPos);
-    if (!root) return [];
-    root.forEach((c, off) => {
-      if (c.type.name === "taskList" && !listNode) {
-        listNode = c;
-        listPos = zoomPos + 1 + off;
-      }
-    });
-  } else {
-    doc.forEach((c, off) => {
-      if (c.type.name === "taskList" && !listNode) {
-        listNode = c;
-        listPos = off;
-      }
-    });
-  }
+  root.forEach((c, off) => {
+    if (c.type.name === "taskList" && !listNode) {
+      listNode = c;
+      listPos = rootPos + 1 + off;
+    }
+  });
   if (!listNode) return [];
   const out: Column[] = [];
   let childOff = 0;
@@ -114,9 +107,12 @@ function deriveColumns(editor: Editor): Column[] {
 
 export default function HomeBoard({
   editor,
+  rootPos,
   onLocate,
 }: {
   editor: Editor | null;
+  /** 看板节点自身位置（列=其子级，卡=孙级） */
+  rootPos: number;
   onLocate: (address: number[]) => void;
 }) {
   const { t } = useSettings();
@@ -156,9 +152,9 @@ export default function HomeBoard({
   }, []);
 
   const columns = useMemo(
-    () => (editor ? deriveColumns(editor) : [] as Column[]),
+    () => (editor ? deriveColumns(editor, rootPos) : [] as Column[]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor, tick]
+    [editor, rootPos, tick]
   );
   if (!editor) return null;
 
@@ -184,26 +180,24 @@ export default function HomeBoard({
   };
 
   const addColumn = () => {
-    const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos ?? null;
+    const root = editor.state.doc.nodeAt(rootPos);
+    if (!root || root.type.name !== "taskItem") return;
     let listPos = -1;
     let listEnd = 0;
-    if (zoomPos != null) {
-      const root = editor.state.doc.nodeAt(zoomPos);
-      root?.forEach((c, off) => {
-        if (c.type.name === "taskList" && listPos < 0) {
-          listPos = zoomPos + 1 + off;
-          listEnd = listPos + c.nodeSize - 1;
-        }
-      });
-    } else {
-      editor.state.doc.forEach((c, off) => {
-        if (c.type.name === "taskList" && listPos < 0) {
-          listPos = off;
-          listEnd = off + c.nodeSize - 1;
-        }
-      });
+    root.forEach((c, off) => {
+      if (c.type.name === "taskList" && listPos < 0) {
+        listPos = rootPos + 1 + off;
+        listEnd = listPos + c.nodeSize - 1;
+      }
+    });
+    if (listPos < 0) {
+      // 看板节点还没有子列表：新建一层（必须放在段落后，否则列渲染到标题上方）
+      listEnd = rootPos + root.nodeSize - 1;
+      editor.view.dispatch(
+        editor.state.tr.insert(listEnd, editor.state.schema.nodes.taskList.create(null, mkItem("")))
+      );
+      return;
     }
-    if (listPos < 0) return;
     editor.view.dispatch(editor.state.tr.insert(listEnd, mkItem("")));
   };
 
@@ -214,13 +208,22 @@ export default function HomeBoard({
     if (!node || node.type.name !== "taskItem") return;
     if (cardPos >= col.pos && cardPos < col.pos + node.nodeSize + 2) return; // 已在该列
     const tr = editor.state.tr;
-    tr.delete(cardPos, cardPos + node.nodeSize);
+    const range = itemDeleteRange(doc, cardPos);
+    tr.delete(range.from, range.to);
     const insertAt = tr.mapping.map(col.insertEnd);
     if (col.needNewList) {
       tr.insert(insertAt, schema.nodes.taskList.create(null, node));
     } else {
       tr.insert(insertAt, node);
     }
+    // 缩放根在被拖卡片子树内：跟到新列（新列包了列表，节点起点 +1）
+    fixZoomOnRemoval(
+      tr,
+      editor.state,
+      cardPos,
+      node.nodeSize,
+      col.needNewList ? insertAt + 1 : insertAt
+    );
     withFlip(editor, () => editor.view.dispatch(tr));
   };
 
@@ -302,8 +305,14 @@ export default function HomeBoard({
                 }}
               />
             ) : (
-              <button className="home-board-add" onClick={() => setAdding(col.pos)}>
-                + {t("homeBoardAdd")}
+              <button
+                className="home-board-add"
+                title={t("homeBoardAdd")}
+                onClick={() => setAdding(col.pos)}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
               </button>
             )}
           </div>

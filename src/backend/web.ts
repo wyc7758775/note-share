@@ -42,6 +42,7 @@ export const webBackend: Backend = {
   renamePath: (from, newName) => call<string>("rename", { from, newName }),
   movePath: (from, toFolder) => call<string>("move", { from, toFolder }),
   deletePath: (path) => call<void>("delete", { path }),
+  revealPath: (path) => call<void>("reveal", { path }),
   search: (q) => call<SearchHit[]>("search", { q }),
   readScene: (path) => call<string>("scene", { path }),
   saveScene: (name, sceneJson, pngBase64, _folder?) =>

@@ -6,11 +6,11 @@
 // 可见性方案：整个文档始终是同一棵 ProseMirror 树，zoom/搜索/折叠只是把
 // 不相关的 taskItem（或其正文段落）加 display:none 装饰——命令、撤销、拖拽
 // 都工作在真实文档上，无需切片回填。
-import { Extension, type Editor } from "@tiptap/core";
+import { Extension, InputRule, type Editor } from "@tiptap/core";
 import { TaskItem } from "@tiptap/extension-task-item";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import type { Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
-import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { OutlineItemView } from "./OutlineItemView";
@@ -50,6 +50,54 @@ function mapItemPos(tr: Transaction, pos: number): number | null {
   } catch {
     return null;
   }
+}
+
+/** 条目的删除区间：它是所在列表唯一子级、且该列表是嵌套列表时，整表一起删。
+ *  只删最后一项会留下空 taskList，违反 content: "taskItem+" 约束，
+ *  PM 的 fitter 会在空列表里回填一个默认空条目——"删完多出空节点"的来源。
+ *  顶层列表是文档骨架：删最后一项保留 PM 的回填（大纲至少留一条，官方同款）。 */
+export function itemDeleteRange(doc: PMNode, pos: number): { from: number; to: number } {
+  const node = doc.nodeAt(pos);
+  const $ = doc.resolve(pos);
+  const parent = $.parent;
+  if (
+    node &&
+    parent.type.name === "taskList" &&
+    parent.childCount === 1 &&
+    $.depth >= 2 &&
+    $.node($.depth - 1).type.name === "taskItem"
+  ) {
+    const listFrom = pos - 1; // 列表 open token
+    return { from: listFrom, to: listFrom + parent.nodeSize };
+  }
+  return { from: pos, to: pos + (node?.nodeSize ?? 0) };
+}
+
+/** 条目被删除/移动时修正缩放状态，meta 必须骑在同一事务上：
+ *  - 纯删除（newNodeStart=null）：缩放根在被删区间内 → 落回被删条目的父级
+ *    （否则映射会漂到邻居条目上，视图跳到无关节点）
+ *  - 移动（newNodeStart=节点在最终文档的新起点）：缩放根跟节点走 */
+export function fixZoomOnRemoval(
+  tr: Transaction,
+  state: EditorState,
+  pos: number,
+  size: number,
+  newNodeStart: number | null
+): void {
+  const z = outlineStructureKey.getState(state)?.zoomPos ?? null;
+  if (z == null || z < pos || z >= pos + size) return;
+  if (newNodeStart != null) {
+    tr.setMeta(OUTLINE_META, { zoomPos: newNodeStart + (z - pos) });
+    return;
+  }
+  const $ = state.doc.resolve(pos);
+  for (let d = $.depth - 1; d > 0; d--) {
+    if ($.node(d).type.name === "taskItem") {
+      tr.setMeta(OUTLINE_META, { zoomPos: $.before(d) });
+      return;
+    }
+  }
+  tr.setMeta(OUTLINE_META, { zoomPos: null });
 }
 
 function itemTitle(node: PMNode): string {
@@ -430,10 +478,14 @@ function moveItemCommand(editor: Editor, dir: 1 | -1): boolean {
     const prev = parent.child(index - 1);
     tr.delete(start, end);
     tr.insert(start - prev.nodeSize, node);
+    fixZoomOnRemoval(tr, state, start, node.nodeSize, start - prev.nodeSize);
   } else {
     if (index >= parent.childCount - 1) return true;
+    const next = parent.child(index + 1);
     tr.delete(start, end);
-    tr.insert(start, node); // 下一个兄弟已滑到 start，插它前面
+    // 删除后下一个兄弟滑到 start，要排它后面：插在 start + 兄弟长度
+    tr.insert(start + next.nodeSize, node);
+    fixZoomOnRemoval(tr, state, start, node.nodeSize, start + next.nodeSize);
   }
   const sel = TextSelection.near(tr.doc.resolve(tr.mapping.map($from.pos)));
   tr.setSelection(sel);
@@ -542,7 +594,9 @@ function deleteItemCommand(editor: Editor): boolean {
   if (!hit) return false;
   const { $from } = editor.state.selection;
   const tr = editor.state.tr;
-  tr.delete(hit.start, hit.start + hit.node.nodeSize);
+  const range = itemDeleteRange(editor.state.doc, hit.start);
+  tr.delete(range.from, range.to);
+  fixZoomOnRemoval(tr, editor.state, hit.start, hit.node.nodeSize, null);
   const sel = TextSelection.near(tr.doc.resolve(tr.mapping.map($from.pos)));
   tr.setSelection(sel);
   withFlip(editor, () => editor.view.dispatch(tr.scrollIntoView()));
@@ -728,7 +782,9 @@ function backspaceCommand(editor: Editor): boolean {
       tr.replace(itemPos, itemPos + item.nodeSize, slice);
       tr.setSelection(TextSelection.near(tr.doc.resolve(itemPos + 3), -1));
     } else {
-      tr.delete(itemPos, itemPos + item.nodeSize);
+      const range = itemDeleteRange(state.doc, itemPos);
+      tr.delete(range.from, range.to);
+      fixZoomOnRemoval(tr, state, itemPos, item.nodeSize, null);
       tr.setSelection(TextSelection.near(tr.doc.resolve(Math.max(0, itemPos - 1)), -1));
     }
     withFlip(editor, () => editor.view.dispatch(tr));
@@ -1259,19 +1315,25 @@ export function ensureTodayTarget(editor: Editor): number | null {
 }
 
 /** 当前 zoom 的节点是否以看板布局打开（看板是节点属性，非全局状态；根视图恒列表） */
-export function zoomIsBoard(editor: Editor): boolean {
-  const zoomPos = outlineStructureKey.getState(editor.state)?.zoomPos ?? null;
-  if (zoomPos == null) return false;
-  return !!editor.state.doc.nodeAt(zoomPos)?.attrs.board;
-}
-
-/** 设置节点的看板布局属性（写入文档 → Home.md 持久化，刷新不丢） */
+/** 设置节点的看板布局属性（写入文档 → Home.md 持久化，刷新不丢）。
+ *  看板是内联渲染的：开了 board 的条目在大纲流里就地展开成列。 */
 export function setNodeBoard(editor: Editor, pos: number, on: boolean) {
   const node = editor.state.doc.nodeAt(pos);
   if (!node || node.type.name !== "taskItem") return;
   editor.view.dispatch(
     editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, board: on })
   );
+}
+
+/** 删除条目（含子树）：唯一子级整列表删（防空壳回填），缩放根被删落回父级 */
+export function deleteItemAt(editor: Editor, pos: number): boolean {
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node || node.type.name !== "taskItem") return false;
+  const range = itemDeleteRange(editor.state.doc, pos);
+  const tr = editor.state.tr.delete(range.from, range.to);
+  fixZoomOnRemoval(tr, editor.state, pos, node.nodeSize, null);
+  editor.view.dispatch(tr);
+  return true;
 }
 
 /** 把条目整体移动为某父条目的末位子级（看板换列 / Move to today 共用） */
@@ -1284,11 +1346,14 @@ export function moveItemUnder(editor: Editor, fromPos: number, parentPos: number
   const nested = nestedListOf(parent);
   const schema = editor.state.schema;
   const tr = editor.state.tr;
-  tr.delete(fromPos, fromPos + node.nodeSize);
+  const range = itemDeleteRange(doc, fromPos);
+  tr.delete(range.from, range.to);
   const insertAt = nested
     ? tr.mapping.map(parentPos + 1 + nested.off + nested.node.nodeSize - 1)
     : tr.mapping.map(parentPos + parent.nodeSize - 1);
   tr.insert(insertAt, nested ? node : schema.nodes.taskList.create(null, node));
+  // 缩放根在被移动子树内：跟到新位置（包装了新列表时节点起点 +1）
+  fixZoomOnRemoval(tr, editor.state, fromPos, node.nodeSize, nested ? insertAt : insertAt + 1);
   withFlip(editor, () => editor.view.dispatch(tr));
   return true;
 }
@@ -1491,9 +1556,12 @@ export function applyHomeNodeDrop(
   const collapsedNow = outlineStructureKey.getState(state)?.collapsed ?? [];
   const expandTarget =
     target.mode === "child" && collapsedNow.includes(targetPos) ? targetPos : null;
-  tr.delete(fromPos, fromPos + node.nodeSize);
+  const range = itemDeleteRange(doc, fromPos);
+  tr.delete(range.from, range.to);
   const at = tr.mapping.map(insertAt);
   tr.insert(at, insertNode);
+  // 缩放根在被拖动子树内：跟到新位置（child 无子列表时包了新列表，节点起点 +1）
+  fixZoomOnRemoval(tr, state, fromPos, node.nodeSize, insertNode === node ? at : at + 1);
   const sel = TextSelection.near(tr.doc.resolve(tr.mapping.map(fromPos + 2)));
   tr.setSelection(sel);
   // FLIP 动效：行从旧位置平滑滑动到新位置
@@ -1592,7 +1660,50 @@ export const OutlineItem = TaskItem.extend({
         renderHTML: (attributes: Record<string, unknown>) =>
           attributes.board ? { "data-board": "1" } : {},
       },
+      // 待办条目（官方 todo：行首复选框取代圆点；输入 [] + 空格转换；存 ^todo 锚）
+      todo: {
+        default: false,
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-todo") === "1",
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes.todo ? { "data-todo": "1" } : {},
+      },
     };
+  },
+  addInputRules() {
+    return [
+      // 官方 markdown 快捷：条目开头输入 "[] " → 转待办（未完成），"[x] " → 转待办（已完成）
+      new InputRule({
+        find: /^(\[( |x|X)?\])\s$/,
+        handler: ({ state, range, match, chain }) => {
+          const $ = state.doc.resolve(range.from);
+          let itemPos: number | null = null;
+          let attrs: Record<string, unknown> | null = null;
+          for (let d = $.depth; d > 0; d--) {
+            if ($.node(d).type.name === "taskItem") {
+              itemPos = $.before(d);
+              attrs = {
+                ...$.node(d).attrs,
+                todo: true,
+                // [x]/[X] 空格 = 已完成；[] 空格 = 未完成
+                checked: match[2] === "x" || match[2] === "X",
+              };
+              break;
+            }
+          }
+          if (itemPos == null || attrs == null) return;
+          // chain 单发派发：删除 "[] " 文本 + 打 todo 属性 + 光标放回文本起点
+          // （不经 chain 的话 TipTap 事后自设选择，光标会漂走、续打字串行）
+          chain()
+            .command(({ tr }) => {
+              tr.delete(range.from, range.to);
+              tr.setNodeMarkup(itemPos as number, undefined, attrs as Record<string, unknown>);
+              tr.setSelection(TextSelection.near(tr.doc.resolve(range.from)));
+              return true;
+            })
+            .run();
+        },
+      }),
+    ];
   },
   addNodeView() {
     return ReactNodeViewRenderer(OutlineItemView);
@@ -1612,6 +1723,7 @@ export const OutlineItem = TaskItem.extend({
               state.renderInline(first);
               if (node.attrs.blockId) state.write(` ^${node.attrs.blockId}`);
               if (node.attrs.board) state.write(" ^board");
+              if (node.attrs.todo) state.write(" ^todo");
               state.ensureNewLine();
               for (let i = 1; i < node.childCount; i++) {
                 const child = node.child(i);
@@ -1666,7 +1778,12 @@ export const OutlineItem = TaskItem.extend({
               let n: Node | null;
               while ((n = walker.nextNode())) last = n as Text;
               if (!last?.textContent) return;
-              // 先剥行尾 ^board（序列化顺序：text ^id ^board）
+              // 先剥行尾锚（序列化顺序：text ^id ^board ^todo——从最后一个剥起）
+              const mt = /\s*\^todo\s*$/.exec(last.textContent);
+              if (mt) {
+                last.textContent = last.textContent.slice(0, mt.index);
+                li.setAttribute("data-todo", "1");
+              }
               const mb = /\s*\^board\s*$/.exec(last.textContent);
               if (mb) {
                 last.textContent = last.textContent.slice(0, mb.index);

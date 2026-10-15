@@ -5,6 +5,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -233,6 +234,20 @@ const handlers = {
     const stamp = Date.now().toString(36);
     const target = path.join(trash, `${stamp}-${path.basename(abs)}`);
     fs.renameSync(abs, target);
+  },
+  // 在系统文件管理器中显示文件（与 Rust reveal_path 同语义）
+  "reveal": async ({ path: rel }) => {
+    const abs = resolveInside(rel);
+    if (!fs.existsSync(abs)) throw new Error("文件不存在");
+    const opts = { detached: true, stdio: "ignore" };
+    if (process.platform === "win32") {
+      // explorer 的命令行非标准解析：须原样传 /select,"路径"，禁止 Node 的默认加引号
+      spawn("explorer", [`/select,"${abs}"`], { ...opts, windowsVerbatimArguments: true }).unref();
+    } else if (process.platform === "darwin") {
+      spawn("open", ["-R", abs], opts).unref();
+    } else {
+      spawn("xdg-open", [path.dirname(abs)], opts).unref();
+    }
   },
   "search": async ({ q }) => {
     const needle = q.toLowerCase();

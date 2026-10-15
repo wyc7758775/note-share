@@ -13,12 +13,14 @@ import { backend } from "../../backend";
 import { subtreeMarkdown } from "../../outline/parse";
 import { showContextMenu } from "../ContextMenu";
 import { emitOpenNote } from "../WikiLink";
+import HomeBoard from "./HomeBoard";
 import {
   NODE_MIME,
   OUTLINE_META_KEY,
   applyDragPreview,
   clearDragSrcHl,
   collectOutlineTags,
+  deleteItemAt,
   ensureDayTarget,
   ensureTodayTarget,
   getActiveOutlineController,
@@ -64,6 +66,20 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
 
   const classes = ["outline-item"];
   if (done) classes.push("is-done");
+  // 叶子行（无折叠箭头）：⋯ 移入箭头槽位，行首三槽位 18px 等距不空档
+  if (!hasChildren) classes.push("no-arrow");
+  // 待办条目（官方 todo）：行首复选框取代圆点常显位——点方块=切换完成（不进详情），
+  // 方块后面的圆点悬停浮现，点它进节点详情（zoom）／拖它移动
+  const isTodo = !!node.attrs.todo;
+  if (isTodo) classes.push("is-todo");
+  // 官方看板是内联的：条目标题照常，子级区域就地展开成列（zoom 根/普通行同款）
+  // 折叠态与祖先壳不渲染看板（折叠=收起；壳=只留通道）
+  const showBoard =
+    !!node.attrs.board &&
+    !collapsedNow &&
+    pos != null &&
+    !(st?.zoomAncestors ?? new Set<number>()).has(pos);
+  if (showBoard) classes.push("is-board");
   if (st && pos != null) {
     if (collapsedNow) classes.push("outline-collapsed-item");
     if (st.zoomPos === pos) classes.push("outline-zoom-root");
@@ -103,12 +119,23 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
       },
       {
         // 官方 Boards：看板是节点自己的布局属性（写盘持久化，只有该节点是看板）
+        // 内联渲染——原地切换，不跳转视图
         label: node.attrs.board ? t("homeTurnList") : t("homeTurnBoard"),
         disabled: pos == null,
         onClick: () => {
           if (pos == null) return;
           setNodeBoard(editor, pos, !node.attrs.board);
-          ctl?.zoomTo(pos);
+        },
+      },
+      {
+        // 官方 todo 可逆转换（输入 [] 空格之外的菜单出口）
+        label: isTodo ? t("homeTurnPlain") : t("homeTurnTodo"),
+        disabled: pos == null,
+        onClick: () => {
+          if (pos == null) return;
+          editor.view.dispatch(
+            editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, todo: !isTodo })
+          );
         },
       },
       { separator: true },
@@ -165,9 +192,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
         danger: true,
         onClick: () => {
           if (pos == null) return;
-          withFlip(editor, () =>
-            editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize))
-          );
+          withFlip(editor, () => deleteItemAt(editor, pos));
         },
       },
       // tag 选择区（Workflowy Turn into）：列出大纲已用的 #tag，勾选即时加上/去掉
@@ -194,7 +219,11 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper as="li" className={classes.join(" ")}>
+    <NodeViewWrapper
+      as="li"
+      className={classes.join(" ")}
+      data-has-kids={hasChildren ? "1" : undefined}
+    >
       <button
         className="outline-item-menu"
         contentEditable={false}
@@ -220,6 +249,28 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path d="M13.75 9.57a.5.5 0 0 1 0 .87l-5.25 3.03a.5.5 0 0 1-.75-.43V7.97a.5.5 0 0 1 .75-.43l5.25 3.03z" />
           </svg>
+        </button>
+      )}
+      {isTodo && (
+        <button
+          className={`outline-check${done ? " is-on" : ""}`}
+          contentEditable={false}
+          title={t(done ? "homeMarkUndo" : "homeMarkDone")}
+          onClick={(e) => {
+            // 点方块 = 只切换完成态（官方：不进详情、不聚焦编辑器）
+            e.preventDefault();
+            e.stopPropagation();
+            if (pos == null) return;
+            editor.view.dispatch(
+              editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked: !done })
+            );
+          }}
+        >
+          {done ? (
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
         </button>
       )}
       <span
@@ -257,6 +308,13 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
         </span>
       </span>
       <NodeViewContent className="outline-content" />
+      {showBoard && editor && pos != null && (
+        <HomeBoard
+          editor={editor}
+          rootPos={pos}
+          onLocate={(addr) => getActiveOutlineController()?.zoomToAddress(addr)}
+        />
+      )}
     </NodeViewWrapper>
   );
 }

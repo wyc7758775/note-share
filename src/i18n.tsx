@@ -125,6 +125,8 @@ const zh: Record<string, string> = {
   homeBoardDrag: "拖动卡片",
   homeBoardView: "看板视图（此节点）",
   homeTurnBoard: "转为看板",
+  homeTurnTodo: "转为待办",
+  homeTurnPlain: "转为普通条目",
   homeTurnList: "转为列表",
   homeBackToList: "返回列表",
   homeMoveToday: "移到今天",
@@ -245,7 +247,8 @@ const zh: Record<string, string> = {
   slImage: "图片",
   slImageDesc: "上传本地图片插入笔记",
   slCanvas: "画板",
-  slCanvasDesc: "插入 Excalidraw 手绘图",  slVoice: "语音",
+  slCanvasDesc: "插入 Excalidraw 手绘图",
+  slVoice: "语音",
   slVoiceDesc: "录一段语音，插入为可播放的块",
 
   // ---- 语音块 ----
@@ -264,7 +267,6 @@ const zh: Record<string, string> = {
   voiceDownload: "下载音频",
   voiceDelete: "删除语音块",
   voiceLoadFail: "音频加载失败",
-
   slTask: "待办清单",
   slTaskDesc: "可勾选的任务列表",
   slCode: "代码块",
@@ -280,7 +282,9 @@ const zh: Record<string, string> = {
 
   // ---- 文件树 ----
   newNoteHere: "在此新建笔记",
-  trashLabel: "删除（移入回收站）",
+  trashLabel: "删除",
+  revealInFinder: "在 Finder 中显示",
+  revealInExplorer: "在资源管理器中显示",
   confirmAgain: "再次点击确认移入回收站",
   open: "打开",
   viewAsset: "查看图片",
@@ -351,6 +355,24 @@ const zh: Record<string, string> = {
   accentLight: "亮色主题",
   accentDark: "暗色主题",
   accentReset: "恢复默认",
+
+  // ---- 版本与更新 ----
+  versionSection: "版本与更新",
+  versionClient: "客户端版本",
+  versionHot: "热更新",
+  versionHotNone: "未安装",
+  versionHotRunning: "（运行中）",
+  updateCheck: "检查更新",
+  updateChecking: "检查中…",
+  updateDownload: "下载更新",
+  updateDownloading: "下载中…",
+  updateInstalling: "安装中，即将重启…",
+  updateUpToDate: "已是最新版本",
+  updateAvailable: "有可用更新",
+  updateHotApply: "应用热更新",
+  updateHotClear: "清除热更新（回退到安装包内置资源）",
+  updateError: "更新失败",
+  updateMacManual: "此平台不支持自动更新，请前往 GitHub Releases 手动下载新版本",
 };
 
 const en: Record<string, string> = {
@@ -446,6 +468,8 @@ const en: Record<string, string> = {
   homeBoardView: "Board view (this node)",
   homeTurnBoard: "Turn into board",
   homeTurnList: "Turn into list",
+  homeTurnTodo: "Turn into to-do",
+  homeTurnPlain: "Turn into plain item",
   homeBackToList: "Back to list",
   homeMoveToday: "Move to today",
   homeMoveTomorrow: "Move to tomorrow",
@@ -562,7 +586,8 @@ const en: Record<string, string> = {
   slImage: "Image",
   slImageDesc: "Upload a local image",
   slCanvas: "Canvas",
-  slCanvasDesc: "Insert an Excalidraw drawing",  slVoice: "Voice",
+  slCanvasDesc: "Insert an Excalidraw drawing",
+  slVoice: "Voice",
   slVoiceDesc: "Record a voice clip as a playable block",
 
   // ---- Voice block ----
@@ -581,7 +606,6 @@ const en: Record<string, string> = {
   voiceDownload: "Download audio",
   voiceDelete: "Delete voice clip",
   voiceLoadFail: "Failed to load audio",
-
   slTask: "Task list",
   slTaskDesc: "Checkable task list",
   slCode: "Code block",
@@ -596,7 +620,9 @@ const en: Record<string, string> = {
   slH2Desc: "Medium heading",
 
   newNoteHere: "New note here",
-  trashLabel: "Delete (move to trash)",
+  trashLabel: "Delete",
+  revealInFinder: "Reveal in Finder",
+  revealInExplorer: "Show in File Explorer",
   confirmAgain: "Click again to move to trash",
   open: "Open",
   viewAsset: "View image",
@@ -664,6 +690,23 @@ const en: Record<string, string> = {
   accentLight: "Light theme",
   accentDark: "Dark theme",
   accentReset: "Reset",
+
+  versionSection: "Version & updates",
+  versionClient: "Client version",
+  versionHot: "Hot update",
+  versionHotNone: "None",
+  versionHotRunning: " (running)",
+  updateCheck: "Check for updates",
+  updateChecking: "Checking…",
+  updateDownload: "Download update",
+  updateDownloading: "Downloading…",
+  updateInstalling: "Installing, restarting soon…",
+  updateUpToDate: "You're up to date",
+  updateAvailable: "Update available",
+  updateHotApply: "Apply hot update",
+  updateHotClear: "Remove hot update (fall back to bundled assets)",
+  updateError: "Update failed",
+  updateMacManual: "Auto-update is unavailable on this platform; download new versions from GitHub Releases",
 };
 
 const dicts: Record<Lang, Record<string, string>> = { zh, en };

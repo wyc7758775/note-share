@@ -10,6 +10,7 @@ import { HOME_PATH, type OutlineSearchRow } from "../outline/store";
 import { requestOpenHome, requestZoomHome } from "../outline/home-bus";
 import { NODE_MIME } from "./home/outlineKit";
 import { I } from "./icons";
+import { startUpdate, updatePercent, useUpdates } from "../updater/store";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import VaultMenu from "./VaultMenu";
@@ -82,6 +83,29 @@ interface Props {
   onResize: (width: number) => void;
   onOpenSettings: () => void;
   onToggleSidebar: () => void;
+}
+
+/** 设置按钮右侧的更新下载按钮：有可用更新（或下载中）才出现，点击即下载 */
+function UpdateButton() {
+  const { t } = useSettings();
+  const upd = useUpdates();
+  const busy = upd.phase === "downloading" || upd.phase === "installing";
+  const ready = upd.clientVersion !== null || upd.hotVersion !== null;
+  if (!upd.canAuto || (!ready && !busy)) return null;
+  const pct = upd.phase === "downloading" ? updatePercent(upd) : null;
+  return (
+    <button
+      className={`vault-update-btn ${busy ? "busy" : ""}`}
+      data-tip={t("updateAvailable")}
+      onClick={startUpdate}
+      disabled={busy}
+    >
+      <span className={upd.phase === "downloading" && pct === null ? "spin" : undefined}>
+        {I.download}
+      </span>
+      {pct !== null && <span className="up-pct">{pct}%</span>}
+    </button>
+  );
 }
 
 export default function Sidebar(props: Props) {
@@ -498,6 +522,7 @@ export default function Sidebar(props: Props) {
         >
           {I.gear}
         </button>
+        <UpdateButton />
       </div>
 
       {/* 右缘拖宽手柄 */}
