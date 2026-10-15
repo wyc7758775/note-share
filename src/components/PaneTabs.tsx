@@ -9,6 +9,7 @@ import { useSettings } from "../i18n";
 import { HOME_PATH } from "../outline/store";
 import { NODE_MIME } from "./home/outlineKit";
 import type { Pane } from "../domain/workspace";
+import WindowControls, { SHOW_WINDOW_CONTROLS } from "./WindowControls";
 import { I } from "./icons";
 
 /** 标签拖拽的 dataTransfer 类型（栏内重排、跨栏移动与拆分落区共用） */
@@ -18,6 +19,8 @@ interface Props {
   pane: Pane;
   /** 是否为活动栏（活动栏标签条配色更亮） */
   active: boolean;
+  /** 视觉右上角的栏：标签条右端挂自绘窗口按钮（无原生标题栏时） */
+  titleEdge?: boolean;
 }
 
 function tabLabel(path: string): string {
@@ -25,7 +28,7 @@ function tabLabel(path: string): string {
   return path.split("/").pop()?.replace(/\.(md|excalidraw|canvas)$/i, "") ?? "";
 }
 
-export default function PaneTabs({ pane, active }: Props) {
+export default function PaneTabs({ pane, active, titleEdge }: Props) {
   const { t } = useSettings();
   const { workspace } = useDomain();
   useWorkspaceVersion(); // 标签增删/切换/激活跟随工作台版本
@@ -93,10 +96,12 @@ export default function PaneTabs({ pane, active }: Props) {
   };
 
   return (
-    <div className={`tab-bar ${active ? "tab-bar-active" : ""}`}>
+    // 标签条即顶栏：空白处（条自身与内边距，不含任何子元素）可拖动窗口 / 双击最大化
+    <div className={`tab-bar ${active ? "tab-bar-active" : ""}`} data-tauri-drag-region>
       <div
         ref={stripRef}
         className="tab-strip"
+        data-tauri-drag-region
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(TAB_MIME)) return;
           e.preventDefault();
@@ -216,6 +221,7 @@ export default function PaneTabs({ pane, active }: Props) {
           style={{ transform: `translateX(${lineX}px)` }}
         />
       </div>
+      {titleEdge && SHOW_WINDOW_CONTROLS && <WindowControls />}
     </div>
   );
 }

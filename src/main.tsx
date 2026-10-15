@@ -3,7 +3,12 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { SettingsProvider } from "./i18n";
 import { silentCheck } from "./updater/store";
+import { IS_MAC } from "./lib/platform";
 import "./styles.css";
+
+// macOS：系统红绿灯悬浮在窗口左上（titleBarStyle=overlay），
+// 打上标记让侧栏顶排/收起侧栏后的标签条让位（见 styles.css 的 .on-mac）
+if (IS_MAC) document.documentElement.classList.add("on-mac");
 
 // 领域容器由 App 按 session 创建（切仓库 = 重建容器 + remount），
 // 这里只保留设置上下文

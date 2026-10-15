@@ -283,6 +283,10 @@ const zh: Record<string, string> = {
   // ---- 文件树 ----
   newNoteHere: "在此新建笔记",
   trashLabel: "删除",
+  winMin: "最小化",
+  winMax: "最大化",
+  winRestore: "还原",
+  winClose: "关闭",
   revealInFinder: "在 Finder 中显示",
   revealInExplorer: "在资源管理器中显示",
   confirmAgain: "再次点击确认移入回收站",
@@ -621,6 +625,10 @@ const en: Record<string, string> = {
 
   newNoteHere: "New note here",
   trashLabel: "Delete",
+  winMin: "Minimize",
+  winMax: "Maximize",
+  winRestore: "Restore",
+  winClose: "Close",
   revealInFinder: "Reveal in Finder",
   revealInExplorer: "Show in File Explorer",
   confirmAgain: "Click again to move to trash",

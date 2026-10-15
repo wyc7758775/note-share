@@ -103,6 +103,8 @@ export function explainVoiceErr(err: unknown): VoiceErr {
  * 避免两个块同时抢麦克风。
  */
 export class VoiceRecorder {
+  /** 当前活动会话（全局唯一；属性赋值而非变量别名，避免 this 逃逸分析的歧义） */
+  private static active: VoiceRecorder | null = null;
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -118,15 +120,13 @@ export class VoiceRecorder {
   async start(): Promise<void> {
     // 全局单会话：正常流程旧的必然已 stop/cancel，这里兜的是组件树异常重建
     // 留下的幽灵会话（不回收会让后续录音永远 busy）
-    if (activeRecorder && !activeRecorder.ended) activeRecorder.cancel();
+    const ghost = VoiceRecorder.active;
+    if (ghost && !ghost.ended) ghost.cancel();
     this.mime = pickMime() ?? "";
     if (!this.mime) throw new Error("voice:unsupported");
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      throw err; // name 保留给 explainVoiceErr
-    }
-    activeRecorder = this;
+    // 错误原样抛出：name 字段留给 explainVoiceErr 归类
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    VoiceRecorder.active = this;
     this.ctx = new AudioContext();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 512;
@@ -196,17 +196,15 @@ export class VoiceRecorder {
   private teardown(): void {
     window.clearInterval(this.levelTimer);
     try {
-      this.rec?.state !== "inactive" && this.rec?.stop();
+      if (this.rec && this.rec.state !== "inactive") this.rec.stop();
     } catch {
       /* 已停止 */
     }
     this.stream?.getTracks().forEach((t) => t.stop());
     void this.ctx?.close().catch(() => {});
-    if (activeRecorder === this) activeRecorder = null;
+    if (VoiceRecorder.active === this) VoiceRecorder.active = null;
   }
 }
-
-let activeRecorder: VoiceRecorder | null = null;
 
 // ---------- 资源解析（vault 路径 → dataURL / 元数据，模块级缓存） ----------
 

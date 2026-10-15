@@ -6,14 +6,8 @@ import { useSettings } from "../i18n";
 import { useDomain } from "../domain/provider";
 import { emitEditScene } from "./ExcalidrawBlock";
 import { importDroppedFiles } from "../lib/dropImport";
+import { IS_MAC } from "../lib/platform";
 import { I } from "./icons";
-
-// macOS 的文件管理器叫 Finder，菜单文案随平台切换
-const IS_MAC = /mac|iphone|ipad|ipod/i.test(
-  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-    navigator.platform ??
-    ""
-);
 
 // ---------- 行内输入行（重命名 / 新建文件夹共用） ----------
 export function InlineInputRow({

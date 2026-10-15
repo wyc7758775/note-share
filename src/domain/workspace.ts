@@ -44,6 +44,17 @@ interface ColNode {
 }
 export type LayoutNode = PaneNode | RowNode | ColNode;
 
+/** 视觉右上角的栏（自绘窗口按钮挂在它的标签条右端）：row 取最右子树、col 取最上子树 */
+export function topRightPaneId(node: LayoutNode): number | null {
+  if (node.kind === "pane") return node.paneId;
+  const kids = node.kind === "row" ? [...node.children].reverse() : node.children;
+  for (const child of kids) {
+    const id = topRightPaneId(child);
+    if (id !== null) return id;
+  }
+  return null;
+}
+
 export class Workspace {
   private panes = new Map<number, Pane>();
   private root: LayoutNode;

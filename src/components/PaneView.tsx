@@ -27,6 +27,8 @@ const EDGE = 0.25;
 interface Props {
   pane: Pane;
   active: boolean;
+  /** 视觉右上角的栏：标签条右端挂自绘窗口按钮 */
+  titleEdge?: boolean;
   vaultName: string | null;
   /** 欢迎页"新建笔记" */
   onNewNote: () => void;
@@ -74,6 +76,7 @@ function zoneRect(zone: DropZone): React.CSSProperties {
 export default function PaneView({
   pane,
   active,
+  titleEdge,
   vaultName,
   onNewNote,
   onOpenHome,
@@ -146,7 +149,7 @@ export default function PaneView({
       }}
       onDropCapture={handleDropZone}
     >
-      <PaneTabs pane={pane} active={active} />
+      <PaneTabs pane={pane} active={active} titleEdge={titleEdge} />
 
       {pane.tabs.length === 0 ? (
         <div className="relative min-h-0 flex-1">

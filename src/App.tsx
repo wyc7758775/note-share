@@ -12,6 +12,7 @@ import { VaultRegistry, type VaultRef } from "./domain/vault";
 import { VaultService } from "./application/vault-service";
 import { setMainWindowSize } from "./backend/window-size";
 import type { LayoutNode } from "./domain/workspace";
+import { topRightPaneId } from "./domain/workspace";
 import Sidebar, { FOCUS_SEARCH_EVENT } from "./components/Sidebar";
 import PaneView from "./components/PaneView";
 import DropImport from "./components/DropImport";
@@ -323,6 +324,8 @@ function VaultApp({
 
   // ---- 布局树递归渲染：row = 左右并排，col = 上下堆叠，叶子是栏（标签组） ----
   const activePaneId = workspace.active.id;
+  // 右上角栏：无原生标题栏后，它的标签条右端挂窗口按钮
+  const titlePaneId = topRightPaneId(workspace.layout);
 
   const renderLayout = (node: LayoutNode): ReactNode => {
     if (node.kind === "pane") {
@@ -333,6 +336,7 @@ function VaultApp({
           key={pane.id}
           pane={pane}
           active={pane.id === activePaneId}
+          titleEdge={pane.id === titlePaneId}
           vaultName={vault.name}
           onNewNote={async () => {
             const path = await noteService.create(t("untitledNote"), "");

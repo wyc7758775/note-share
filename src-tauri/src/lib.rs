@@ -491,6 +491,12 @@ pub fn run() {
             vault: Mutex::new(None),
         })
         .setup(|app| {
+            // Windows/Linux 去原生标题栏：标签条即顶栏（空白处拖动/双击最大化/窗口
+            // 按钮全在前端）。macOS 不走这里：titleBarStyle=overlay 保留系统红绿灯。
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_decorations(false);
+            }
             #[cfg(target_os = "windows")]
             grant_microphone_permission(app);
             if let Ok(cfg) = app.path().app_config_dir() {

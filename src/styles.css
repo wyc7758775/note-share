@@ -1429,6 +1429,38 @@ body {
   background: var(--paper-side);
   border-bottom: 1px solid var(--line);
 }
+
+/* ---------- 自绘窗口按钮（Windows/Linux 无原生标题栏，挂右上角栏的标签条右端） ---------- */
+.win-controls {
+  display: flex;
+  align-self: stretch;
+  flex: none;
+  margin: -5px -4px 0 -2px; /* 抵掉 tab-bar 的上/右内边距，按钮贴住窗口边缘 */
+}
+.win-controls .cap-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  color: var(--ink-soft);
+}
+.win-controls .cap-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.win-controls .cap-close:hover {
+  background: #e81123; /* Windows 关闭键的既定红 */
+  color: #fff;
+}
+
+/* macOS：系统红绿灯悬浮左上（titleBarStyle=overlay），侧栏顶排与其让位；
+   收起侧栏后悬浮在主区左上，让所有标签条左端留空 */
+.on-mac .side-tabs {
+  padding-left: 84px;
+}
+.on-mac .sidebar-collapsed .tab-bar {
+  padding-left: 84px;
+}
 .tab-strip {
   position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
   display: flex;
