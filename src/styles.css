@@ -4,7 +4,7 @@
 /* 语义色板：亮 / 暗两套（html[data-theme="dark"] 切换） */
 :root {
   --paper: #faf9f7;
-  --paper-side: #eae6df;
+  --paper-side: #edeae4;
   --surface: #ffffff;
   --surface-hover: rgb(0 0 0 / 0.05);
   --ink: #292524;
@@ -43,7 +43,7 @@
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
-  --paper-side: #2b2623;
+  --paper-side: #272221;
   --surface: #292524;
   --surface-hover: rgb(255 255 255 / 0.06);
   --ink: #e7e5e4;
@@ -1492,9 +1492,10 @@ body {
   justify-content: space-between;
   gap: 4px;
   height: var(--tabbar-h);
-  padding: 5px 4px 0 6px;
+  padding: 5px 4px 0 0;
   background: var(--paper-side);
-  /* 无底边线（Obsidian 同款）：条与内容仅靠颜色差分隔，激活标签的凹角衔接才自然 */
+  /* 无底边线（Obsidian 同款）：条与内容仅靠颜色差分隔，激活标签的凹角衔接才自然；
+     左内边距为 0：首个标签直接顶住侧栏边缘 */
 }
 
 /* ---------- 自绘窗口按钮（Windows/Linux 无原生标题栏，挂右上角栏的标签条右端） ---------- */
@@ -1528,10 +1529,10 @@ body {
 .on-mac .sidebar-collapsed .tab-bar {
   padding-left: 84px;
 }
-/* Win/Linux 侧栏收起：展开按钮悬浮在主区左上，标签条左端同样让位（按钮 28px@left10 + 间隙），
-   避免按钮压住首个标签；mac 用上面的 84px 规则（特异性更高） */
+/* Win/Linux 侧栏收起：展开按钮悬浮在主区左上（left:10、宽 28），标签条让出 40px
+   让按钮与首个标签之间仅余 2px 空隙；mac 用上面的 84px 规则（特异性更高） */
 .sidebar-collapsed .tab-bar {
-  padding-left: 46px;
+  padding-left: 40px;
 }
 .tab-strip {
   position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
@@ -1540,12 +1541,11 @@ body {
   gap: 2px;
   min-width: 0;
   flex: 1;
-  /* 横向余量：激活标签两端的 .tab-fillet（各 9px）悬在标签条目之外，
-     overflow 滚动容器不留边会把首尾标签的圆角片裁掉 */
-  padding: 0 9px;
+  /* 左 0：首标签顶住栏缘（首标签激活时不画左凹角，无裁剪问题）；
+     右留 6px：末标签激活时右凹角悬在条目外，防滚动容器裁剪 */
+  padding: 0 6px 0 0;
   overflow-x: auto;
   scrollbar-width: none;
-  /* 裁掉超出条高的部分（圆角片自身有 overflow 保护，这里只裁标签本体） */
 }
 .tab-strip::-webkit-scrollbar {
   display: none;

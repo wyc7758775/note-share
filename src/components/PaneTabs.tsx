@@ -124,12 +124,15 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
           if (delta && el.scrollWidth > el.clientWidth) el.scrollLeft += delta;
         }}
       >
-        {pane.tabs.map((tab) => {
+        {pane.tabs.map((tab, idx) => {
           const on = tab.id === pane.activeTabId;
           const isScene = /\.excalidraw$/i.test(tab.path);
           const isCanvas = /\.canvas$/i.test(tab.path);
           const isPdf = /\.pdf$/i.test(tab.path);
           const isHome = tab.path === HOME_PATH;
+          // 凹角只画在有邻居的一侧：首/末标签贴边时白底直接顶到栏缘，无需过渡
+          const hasLeft = idx > 0;
+          const hasRight = idx < pane.tabs.length - 1;
           return (
             <div
               key={tab.id}
@@ -194,12 +197,12 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
             >
               {/* 激活标签的底部外圆角（水桶形衔接）：内联 SVG 楔形，半径 5.5px、
                   无描边（纯色分界，Obsidian 同款）。fillet-l 在左、fillet-r 镜像。 */}
-              {on && (
+              {on && hasLeft && (
                 <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
                   <path d="M5.5 0 A5.5 5.5 0 0 0 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
-              {on && (
+              {on && hasRight && (
                 <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
                   <path d="M0 0 A5.5 5.5 0 0 1 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
                 </svg>
