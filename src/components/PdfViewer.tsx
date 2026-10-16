@@ -369,6 +369,9 @@ export default function PdfViewer({ src, active }: Props) {
   }, [src]);
 
   // ---- 适宽计算 ----
+  // 视口尺寸变化做尾沿防抖（150ms）：侧栏收放是 240ms 宽度动画，期间若逐帧重算
+  // 适宽会让可见页每帧重渲染（卡顿）；动画期间保持原尺寸，视口稳定后一次到位
+  // （Obsidian 的 PDF 视图同款策略）。
   useEffect(() => {
     if (!geos.length) return;
     const el = scrollRef.current;
@@ -378,10 +381,17 @@ export default function PdfViewer({ src, active }: Props) {
       const avail = el.clientWidth - 64;
       if (maxW > 0 && avail > 0) setFitScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, avail / maxW)));
     };
-    calc();
-    const ro = new ResizeObserver(calc);
+    calc(); // 挂载/换文档立即适配
+    let timer = 0;
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(calc, 150);
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(timer);
+    };
   }, [geos]);
 
   const scale = scaleMode === "fit" ? fitScale : scaleMode;
