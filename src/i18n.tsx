@@ -308,6 +308,9 @@ const zh: Record<string, string> = {
   pdfConverting: "转换中…",
   pdfConverted: "已生成 {name}",
   pdfConvertFail: "转换失败",
+  pdfThumbs: "缩略图",
+  pdfOutline: "目录",
+  pdfNoOutline: "此 PDF 没有内嵌目录",
 
   // ---- OS 拖放导入 ----
   dropImportHint: "松开导入到 {folder}",
@@ -650,6 +653,9 @@ const en: Record<string, string> = {
   pdfConverting: "Converting…",
   pdfConverted: "Created {name}",
   pdfConvertFail: "Conversion failed",
+  pdfThumbs: "Thumbnails",
+  pdfOutline: "Outline",
+  pdfNoOutline: "This PDF has no embedded outline",
 
   // ---- OS drag & drop import ----
   dropImportHint: "Drop to import into {folder}",

@@ -1300,6 +1300,76 @@ body {
 .pdf-close-btn {
   font-size: 14px !important;
 }
+
+/* ---------- PDF 左侧栏：缩略图 / 目录（工具栏开关，同一时间只开一个） ---------- */
+.pdf-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pdf-side {
+  flex: none;
+  width: 148px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 12px 8px;
+}
+.pdf-thumb-wrap {
+  margin: 0 auto 14px;
+  width: 104px;
+  cursor: pointer;
+  text-align: center;
+}
+.pdf-thumb {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #ffffff; /* 与正文页一致保持纸白 */
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.12s;
+}
+.pdf-thumb canvas {
+  display: block;
+}
+.pdf-thumb-wrap:hover .pdf-thumb {
+  border-color: var(--line-strong);
+}
+.pdf-thumb-wrap.on .pdf-thumb {
+  border-color: var(--accent);
+}
+.pdf-thumb-no {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.pdf-outline {
+  padding: 4px;
+}
+.pdf-outline-item {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdf-outline-item:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.pdf-outline-empty {
+  padding: 14px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
 .pdf-scroll {
   flex: 1;
   min-height: 0;

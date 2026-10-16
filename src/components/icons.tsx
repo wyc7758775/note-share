@@ -119,6 +119,24 @@ export const I = {  chevron: (
       <path d="M3.4 8h1.1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   ),
+  thumbs: (
+    // PDF 缩略图面板：2×2 拼页
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect x="2.2" y="2.2" width="5.1" height="6.8" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="8.7" y="2.2" width="5.1" height="4.5" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="2.2" y="10.4" width="5.1" height="3.4" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="8.7" y="8.1" width="5.1" height="5.7" rx="0.9" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  ),
+  listTree: (
+    // PDF 目录：圆点行 + 层级缩进
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <circle cx="3" cy="4" r="1.1" fill="currentColor" />
+      <circle cx="3" cy="8" r="1.1" fill="currentColor" />
+      <circle cx="3" cy="12" r="1.1" fill="currentColor" />
+      <path d="M6.2 4h7.6M6.2 8h7.6M6.2 12h4.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  ),
   switchVault: (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
       <path d="M2.5 5.5h9l-2.5-2.5M13.5 10.5h-9l2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />

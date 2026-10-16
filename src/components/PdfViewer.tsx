@@ -1,6 +1,7 @@
 // PDF 标签视图：pdfjs 连续滚动渲染（IntersectionObserver 懒渲染当前页 ±1）、
 // 工具栏缩放/适宽/页码跳转；"转为 Markdown" 用本地文本层提取（pdfToMarkdown）。
-import { useCallback, useEffect, useRef, useState } from "react";
+// 左侧栏两种模式：缩略图（懒渲染小页，点击跳页）与目录（PDF 内嵌书签树）。
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import PdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?worker";
@@ -9,6 +10,7 @@ import { useDomain } from "../domain/provider";
 import { backend } from "../backend";
 import type { NoteService } from "../application/note-service";
 import { pdfToMarkdown } from "../lib/pdfToMarkdown";
+import { I } from "./icons";
 
 // Vite 把 worker 打进产物（dev 与 Tauri webview 下都走同源 blob，无跨域问题）。
 // 每个文档配专属 PDFWorker：pdfjs 的 task.destroy() 会 terminate 底层 Worker
@@ -44,6 +46,13 @@ const STEP = 1.15;
 interface PageGeo {
   width: number;
   height: number;
+}
+
+/** PDF 内嵌书签（getOutline 的返回，只取跳转要用的字段） */
+interface OutlineNode {
+  title: string;
+  dest: unknown;
+  items?: OutlineNode[] | null;
 }
 
 interface Props {
@@ -149,6 +158,144 @@ function useVisiblePages(root: HTMLElement | null, pageCount: number): Set<numbe
   return visible;
 }
 
+/** 缩略图侧栏：小页懒渲染（面板内 IntersectionObserver），点击跳页，当前页高亮并跟随滚动 */
+function PdfThumbs({
+  doc,
+  geos,
+  page,
+  onGo,
+}: {
+  doc: PDFDocumentProxy;
+  geos: PageGeo[];
+  page: number;
+  onGo: (n: number) => void;
+}) {
+  const { t } = useSettings();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const canvases = useRef<Map<number, HTMLCanvasElement>>(new Map());
+  const rendered = useRef<Set<number>>(new Set());
+  const TW = 104; // 缩略图逻辑宽度（px）
+
+  useEffect(() => {
+    const root = panelRef.current;
+    if (!root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (!en.isIntersecting) continue;
+          const n = Number((en.target as HTMLElement).dataset.page);
+          io.unobserve(en.target); // 画一次就够（scale 不变）
+          void renderThumb(n);
+        }
+      },
+      { root, rootMargin: "80% 0px" }
+    );
+    root.querySelectorAll(".pdf-thumb-wrap").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- geos 变＝换文档，ref 集合随组件重建清空
+  }, [doc, geos]);
+
+  async function renderThumb(n: number) {
+    if (rendered.current.has(n)) return;
+    rendered.current.add(n);
+    const canvas = canvases.current.get(n);
+    if (!canvas) return;
+    try {
+      const pg = await doc.getPage(n);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const base = pg.getViewport({ scale: 1 });
+      const vp = pg.getViewport({ scale: (TW * dpr) / base.width });
+      canvas.width = Math.floor(vp.width);
+      canvas.height = Math.floor(vp.height);
+      await pg.render({ canvas, viewport: vp }).promise;
+    } catch (e) {
+      if (!(e instanceof Error) || !/cancel/i.test(e.message)) console.warn("缩略图渲染失败", e);
+    }
+  }
+
+  // 主区翻页时把当前页的缩略图滚进面板视野
+  useEffect(() => {
+    panelRef.current
+      ?.querySelector(`.pdf-thumb-wrap[data-page="${page}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [page]);
+
+  return (
+    <div className="pdf-side" ref={panelRef}>
+      {geos.map((g, i) => (
+        <div
+          key={i}
+          className={`pdf-thumb-wrap${page === i + 1 ? " on" : ""}`}
+          data-page={i + 1}
+          title={t("pdfGoPage")}
+          onClick={() => onGo(i + 1)}
+        >
+          {/* 占位高度按首页几何预置：未渲染时滚动布局不跳动 */}
+          <div className="pdf-thumb" style={{ height: Math.round((TW * g.height) / g.width) }}>
+            <canvas
+              ref={(el) => {
+                if (el) canvases.current.set(i + 1, el);
+                else canvases.current.delete(i + 1);
+              }}
+            />
+          </div>
+          <span className="pdf-thumb-no">{i + 1}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 目录侧栏：PDF 内嵌书签树，点击解析 dest → 页码跳转；无书签给占位提示 */
+function PdfOutline({
+  nodes,
+  doc,
+  onGo,
+}: {
+  nodes: OutlineNode[] | null;
+  doc: PDFDocumentProxy;
+  onGo: (n: number) => void;
+}) {
+  const { t } = useSettings();
+
+  if (!nodes || nodes.length === 0) {
+    return (
+      <div className="pdf-side">
+        <div className="pdf-outline-empty">{t("pdfNoOutline")}</div>
+      </div>
+    );
+  }
+
+  const jump = async (item: OutlineNode) => {
+    try {
+      let dest = item.dest;
+      if (typeof dest === "string") dest = await doc.getDestination(dest);
+      if (!Array.isArray(dest) || !dest[0]) return;
+      const idx = await doc.getPageIndex(dest[0] as Parameters<PDFDocumentProxy["getPageIndex"]>[0]);
+      onGo(idx + 1);
+    } catch (e) {
+      console.warn("目录跳转失败", e);
+    }
+  };
+
+  const render = (list: OutlineNode[], depth: number): ReactNode =>
+    list.map((it, i) => (
+      <Fragment key={i}>
+        <div
+          className="pdf-outline-item"
+          style={{ paddingLeft: 8 + depth * 14 }}
+          title={it.title}
+          onClick={() => void jump(it)}
+        >
+          {it.title}
+        </div>
+        {it.items && it.items.length > 0 && render(it.items, depth + 1)}
+      </Fragment>
+    ));
+
+  return <div className="pdf-side pdf-outline">{render(nodes, 0)}</div>;
+}
+
 export default function PdfViewer({ src, active, onClose }: Props) {
   const { t } = useSettings();
   const { notes: noteService, workspace } = useDomain();
@@ -158,6 +305,9 @@ export default function PdfViewer({ src, active, onClose }: Props) {
   const [scaleMode, setScaleMode] = useState<"fit" | number>("fit");
   const [fitScale, setFitScale] = useState(1);
   const [page, setPage] = useState(1);
+  // 左侧栏：thumbs = 缩略图，outline = 内嵌书签目录；null = 收起
+  const [side, setSide] = useState<"thumbs" | "outline" | null>(null);
+  const [outline, setOutline] = useState<OutlineNode[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const visiblePages = useVisiblePages(root, geos.length);
@@ -173,6 +323,7 @@ export default function PdfViewer({ src, active, onClose }: Props) {
       setGeos([]);
       setError(null);
       setConvert("idle");
+      setOutline(null);
       try {
         const { base64 } = await backend.readAssetBase64(src);
         const bin = atob(base64);
@@ -189,6 +340,12 @@ export default function PdfViewer({ src, active, onClose }: Props) {
         setGeos(Array.from({ length: loaded.numPages }, () => ({ width: vp.width, height: vp.height })));
         setDoc(loaded);
         setPage(1);
+        void loaded
+          .getOutline()
+          .then((ol) => {
+            if (!dead) setOutline((ol as unknown as OutlineNode[]) ?? null);
+          })
+          .catch(() => {});
       } catch (e) {
         console.error("PDF 加载失败", e);
         if (!dead) setError(src.split("/").pop() ?? src);
@@ -288,6 +445,22 @@ export default function PdfViewer({ src, active, onClose }: Props) {
     <div className="pdf-viewer">
       <div className="pdf-toolbar">
         <div className="pdf-toolbar-group">
+          <button
+            title={t("pdfThumbs")}
+            className={side === "thumbs" ? "pdf-tool-on" : ""}
+            onClick={() => setSide((s) => (s === "thumbs" ? null : "thumbs"))}
+          >
+            {I.thumbs}
+          </button>
+          <button
+            title={t("pdfOutline")}
+            className={side === "outline" ? "pdf-tool-on" : ""}
+            onClick={() => setSide((s) => (s === "outline" ? null : "outline"))}
+          >
+            {I.listTree}
+          </button>
+        </div>
+        <div className="pdf-toolbar-group">
           <button title={t("pdfZoomOut")} onClick={() => zoom(-1)} disabled={!doc}>
             −
           </button>
@@ -340,19 +513,23 @@ export default function PdfViewer({ src, active, onClose }: Props) {
         </button>
       </div>
 
-      <div className="pdf-scroll" ref={(el) => { scrollRef.current = el; setRoot(el); }}>
-        {error ? (
-          <div className="pdf-fallback">
-            <p>{t("pdfLoadFail")}</p>
-            <p className="pdf-fallback-path">{error}</p>
-          </div>
-        ) : !doc ? (
-          <div className="pdf-fallback">{t("pdfLoading")}</div>
-        ) : (
-          geos.map((g, i) => (
-            <PdfPage key={i} doc={doc} pageNo={i + 1} geo={g} scale={scale} visible={visiblePages.has(i + 1)} />
-          ))
-        )}
+      <div className="pdf-body">
+        {doc && side === "thumbs" && <PdfThumbs doc={doc} geos={geos} page={page} onGo={goToPage} />}
+        {doc && side === "outline" && <PdfOutline nodes={outline} doc={doc} onGo={goToPage} />}
+        <div className="pdf-scroll" ref={(el) => { scrollRef.current = el; setRoot(el); }}>
+          {error ? (
+            <div className="pdf-fallback">
+              <p>{t("pdfLoadFail")}</p>
+              <p className="pdf-fallback-path">{error}</p>
+            </div>
+          ) : !doc ? (
+            <div className="pdf-fallback">{t("pdfLoading")}</div>
+          ) : (
+            geos.map((g, i) => (
+              <PdfPage key={i} doc={doc} pageNo={i + 1} geo={g} scale={scale} visible={visiblePages.has(i + 1)} />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
