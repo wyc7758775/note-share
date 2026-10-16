@@ -192,9 +192,20 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              {/* 激活标签的底部外圆角片（水桶形衔接内容区，CSS 绘制，不占布局） */}
-              {on && <i className="tab-fillet tab-fillet-l" aria-hidden />}
-              {on && <i className="tab-fillet tab-fillet-r" aria-hidden />}
+              {/* 激活标签的底部外圆角（水桶形衔接）：内联 SVG 明确画出楔形+弧线，
+                  不用 mask/渐变（二者在该场景下多次画错/失效）。fillet-l 在左、fillet-r 镜像。 */}
+              {on && (
+                <svg className="tab-fillet tab-fillet-l" width="8" height="8" viewBox="0 0 8 8" aria-hidden>
+                  <path d="M8 0 A8 8 0 0 0 0 8 L8 8 Z" fill="var(--paper)" />
+                  <path d="M8 0 A8 8 0 0 0 0 8" fill="none" stroke="var(--line)" strokeWidth="1" />
+                </svg>
+              )}
+              {on && (
+                <svg className="tab-fillet tab-fillet-r" width="8" height="8" viewBox="0 0 8 8" aria-hidden>
+                  <path d="M0 0 A8 8 0 0 1 8 8 L0 8 Z" fill="var(--paper)" />
+                  <path d="M0 0 A8 8 0 0 1 8 8" fill="none" stroke="var(--line)" strokeWidth="1" />
+                </svg>
+              )}
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
                 {isHome
                   ? I.home
