@@ -1545,6 +1545,7 @@ body {
   padding: 0 9px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* 裁掉超出条高的部分（圆角片自身有 overflow 保护，这里只裁标签本体） */
 }
 .tab-strip::-webkit-scrollbar {
   display: none;
@@ -1571,6 +1572,7 @@ body {
 .tab-item-on {
   color: var(--ink);
   background: var(--paper);
+  z-index: 1; /* 圆角片盖过相邻标签的 hover 底色，衔接弧线保持完整 */
 }
 /* 激活标签底边盖住标签条底线，视觉上与内容区连成一体 */
 .tab-item-on::after {
