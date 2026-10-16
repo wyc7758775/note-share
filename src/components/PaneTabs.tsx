@@ -192,18 +192,16 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              {/* 激活标签的底部外圆角（水桶形衔接）：内联 SVG 明确画出楔形+弧线，
-                  不用 mask/渐变（二者在该场景下多次画错/失效）。fillet-l 在左、fillet-r 镜像。 */}
+              {/* 激活标签的底部外圆角（水桶形衔接）：内联 SVG 楔形，半径 5.5px、
+                  无描边（纯色分界，Obsidian 同款）。fillet-l 在左、fillet-r 镜像。 */}
               {on && (
-                <svg className="tab-fillet tab-fillet-l" width="8" height="8" viewBox="0 0 8 8" aria-hidden>
-                  <path d="M8 0 A8 8 0 0 0 0 8 L8 8 Z" fill="var(--paper)" />
-                  <path d="M8 0 A8 8 0 0 0 0 8" fill="none" stroke="var(--line)" strokeWidth="1" />
+                <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
+                  <path d="M5.5 0 A5.5 5.5 0 0 0 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               {on && (
-                <svg className="tab-fillet tab-fillet-r" width="8" height="8" viewBox="0 0 8 8" aria-hidden>
-                  <path d="M0 0 A8 8 0 0 1 8 8 L0 8 Z" fill="var(--paper)" />
-                  <path d="M0 0 A8 8 0 0 1 8 8" fill="none" stroke="var(--line)" strokeWidth="1" />
+                <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
+                  <path d="M0 0 A5.5 5.5 0 0 1 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
