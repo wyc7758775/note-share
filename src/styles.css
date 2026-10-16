@@ -1565,9 +1565,10 @@ body {
   cursor: pointer;
   user-select: none;
 }
-.tab-item:hover {
+/* 非激活标签悬停：只加深文字，不刷底色——灰色胶囊与参考样式不符；
+   :not() 同时压低特异性，避免 hover 盖过激活态背景 */
+.tab-item:hover:not(.tab-item-on) {
   color: var(--ink);
-  background: var(--surface-hover);
 }
 .tab-item-on {
   color: var(--ink);
