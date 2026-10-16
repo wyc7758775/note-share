@@ -190,6 +190,9 @@ export default function PaneTabs({ pane, active, titleEdge }: Props) {
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
+              {/* 激活标签的底部外圆角片（水桶形衔接内容区，CSS 绘制，不占布局） */}
+              {on && <i className="tab-fillet tab-fillet-l" aria-hidden />}
+              {on && <i className="tab-fillet tab-fillet-r" aria-hidden />}
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
                 {isHome
                   ? I.home

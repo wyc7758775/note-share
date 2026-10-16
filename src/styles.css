@@ -1540,6 +1540,9 @@ body {
   gap: 2px;
   min-width: 0;
   flex: 1;
+  /* 横向余量：激活标签两端的 .tab-fillet（各 9px）悬在标签条目之外，
+     overflow 滚动容器不留边会把首尾标签的圆角片裁掉 */
+  padding: 0 9px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1578,6 +1581,42 @@ body {
   bottom: -1px;
   height: 1px;
   background: var(--paper);
+}
+/* 激活标签底部外圆角（凹角）：纸色填充挖去 8px 四分之一圆（mask），
+   ::before 沿弧线描 1px 边——横线行至弧线随之上收，标签与内容呈水桶形衔接。
+   底边贴 -1px 连同底线那一行一起盖掉。 */
+.tab-fillet {
+  position: absolute;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+  background: var(--paper);
+}
+.tab-fillet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.tab-fillet-l {
+  left: -9px;
+  -webkit-mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
+  mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
+}
+.tab-fillet-l::before {
+  border-bottom-right-radius: 9px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.tab-fillet-r {
+  right: -9px;
+  -webkit-mask: radial-gradient(circle 8px at 0 100%, transparent 7.5px, #000 8px);
+  mask: radial-gradient(circle 8px at 0 100%, transparent 7.5px, #000 8px);
+}
+.tab-fillet-r::before {
+  border-bottom-left-radius: 9px;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .tab-item-drag {
   opacity: 0.45;
