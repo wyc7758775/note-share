@@ -4,7 +4,7 @@
 /* 语义色板：亮 / 暗两套（html[data-theme="dark"] 切换） */
 :root {
   --paper: #faf9f7;
-  --paper-side: #f3f1ed;
+  --paper-side: #eae6df;
   --surface: #ffffff;
   --surface-hover: rgb(0 0 0 / 0.05);
   --ink: #292524;
@@ -43,7 +43,7 @@
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
-  --paper-side: #211e1d;
+  --paper-side: #2b2623;
   --surface: #292524;
   --surface-hover: rgb(255 255 255 / 0.06);
   --ink: #e7e5e4;
