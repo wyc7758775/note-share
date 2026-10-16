@@ -170,14 +170,16 @@ function PdfThumbs({
   onGo: (n: number) => void;
 }) {
   const { t } = useSettings();
+  // root 走 state（与主视图 useVisiblePages 同款）：ref 时序上 StrictMode/HMR 重挂载
+  // 会让 panelRef 指向已脱离文档的旧节点，IO 以它为 root 就永远不派发
+  const [root, setRoot] = useState<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const canvases = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const rendered = useRef<Set<number>>(new Set());
   const TW = 104; // 缩略图逻辑宽度（px）
 
   useEffect(() => {
-    const root = panelRef.current;
-    if (!root) return;
+    if (!root || geos.length <= 0) return;
     const io = new IntersectionObserver(
       (entries) => {
         for (const en of entries) {
@@ -191,8 +193,8 @@ function PdfThumbs({
     );
     root.querySelectorAll(".pdf-thumb-wrap").forEach((el) => io.observe(el));
     return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- geos 变＝换文档，ref 集合随组件重建清空
-  }, [doc, geos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- doc 经闭包取最新；geos.length 变＝换文档
+  }, [root, geos.length]);
 
   async function renderThumb(n: number) {
     if (rendered.current.has(n)) return;
@@ -206,6 +208,10 @@ function PdfThumbs({
       const vp = pg.getViewport({ scale: (TW * dpr) / base.width });
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
+      // CSS 尺寸必须显式设：画布按 dpr 放大物理像素渲染，不设就会以物理尺寸
+      // 显示在 TW 宽的框里，高缩放屏（1.5x/2x）上内容从左上角被裁掉
+      canvas.style.width = `${TW}px`;
+      canvas.style.height = `${Math.round((TW * vp.height) / vp.width)}px`;
       await pg.render({ canvas, viewport: vp }).promise;
     } catch (e) {
       if (!(e instanceof Error) || !/cancel/i.test(e.message)) console.warn("缩略图渲染失败", e);
@@ -220,7 +226,13 @@ function PdfThumbs({
   }, [page]);
 
   return (
-    <div className="pdf-side" ref={panelRef}>
+    <div
+      className="pdf-side"
+      ref={(el) => {
+        panelRef.current = el;
+        setRoot(el);
+      }}
+    >
       {geos.map((g, i) => (
         <div
           key={i}
