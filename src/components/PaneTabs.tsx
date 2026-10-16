@@ -21,6 +21,8 @@ interface Props {
   active: boolean;
   /** 视觉右上角的栏：标签条右端挂自绘窗口按钮（无原生标题栏时） */
   titleEdge?: boolean;
+  /** 右端 ＋：新建笔记（落在活动标签所在文件夹，参数为空 = 库根目录） */
+  onNewNote: (folder: string) => void;
 }
 
 function tabLabel(path: string): string {
@@ -28,7 +30,7 @@ function tabLabel(path: string): string {
   return path.split("/").pop()?.replace(/\.(md|excalidraw|canvas)$/i, "") ?? "";
 }
 
-export default function PaneTabs({ pane, active, titleEdge }: Props) {
+export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) {
   const { t } = useSettings();
   const { workspace } = useDomain();
   useWorkspaceVersion(); // 标签增删/切换/激活跟随工作台版本
@@ -224,6 +226,22 @@ export default function PaneTabs({ pane, active, titleEdge }: Props) {
           style={{ transform: `translateX(${lineX}px)` }}
         />
       </div>
+      {/* 右端：分隔线 + 新建笔记（与标签条之间留出拖拽落区空白的观感一致） */}
+      <button
+        className="tab-new"
+        data-tip={t("newNote")}
+        onClick={() => {
+          const cur = pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? pane.tabs[pane.tabs.length - 1];
+          const p = cur?.path;
+          const folder =
+            p && p !== HOME_PATH && /\.md$/i.test(p) && p.includes("/")
+              ? p.slice(0, p.lastIndexOf("/"))
+              : "";
+          onNewNote(folder);
+        }}
+      >
+        +
+      </button>
       {titleEdge && SHOW_WINDOW_CONTROLS && <WindowControls />}
     </div>
   );

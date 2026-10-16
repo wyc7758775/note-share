@@ -30,8 +30,8 @@ interface Props {
   /** 视觉右上角的栏：标签条右端挂自绘窗口按钮 */
   titleEdge?: boolean;
   vaultName: string | null;
-  /** 欢迎页"新建笔记" */
-  onNewNote: () => void;
+  /** 欢迎页/标签条 ＋ "新建笔记"（folder = 落点文件夹，空 = 库根目录） */
+  onNewNote: (folder?: string) => void;
   /** 欢迎页"打开 Home 大纲" */
   onOpenHome: () => void;
   /** 欢迎页"新建白板"（命名回车后） */
@@ -149,7 +149,7 @@ export default function PaneView({
       }}
       onDropCapture={handleDropZone}
     >
-      <PaneTabs pane={pane} active={active} titleEdge={titleEdge} />
+      <PaneTabs pane={pane} active={active} titleEdge={titleEdge} onNewNote={onNewNote} />
 
       {pane.tabs.length === 0 ? (
         <div className="relative min-h-0 flex-1">

@@ -338,8 +338,8 @@ function VaultApp({
           active={pane.id === activePaneId}
           titleEdge={pane.id === titlePaneId}
           vaultName={vault.name}
-          onNewNote={async () => {
-            const path = await noteService.create(t("untitledNote"), "");
+          onNewNote={async (folder?: string) => {
+            const path = await noteService.create(t("untitledNote"), folder ?? "");
             if (path) openNote(path);
           }}
           onOpenHome={() => openNote(HOME_PATH)}

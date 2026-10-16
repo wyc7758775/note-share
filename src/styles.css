@@ -1584,9 +1584,11 @@ body {
   height: 1px;
   background: var(--paper);
 }
-/* 激活标签底部外圆角（凹角）：纸色填充挖去 8px 四分之一圆（mask），
-   ::before 沿弧线描 1px 边——横线行至弧线随之上收，标签与内容呈水桶形衔接。
-   底边贴 -1px 连同底线那一行一起盖掉。 */
+/* 激活标签底部外圆角（凹角）：圆角片贴在标签两外侧、底部与内容区齐平。
+   填充层 = 纸色，mask 在背离标签的底角挖去 8px 四分之一圆（挖孔圆心：
+   左片 0% 100%、右片 100% 100%——即靠缝隙的一侧，保留贴标签的一角）；
+   ::before = 底线色，环状 mask 只留沿弧线的 ~1px 描边。
+   两层同一圆心，横线行至标签两侧沿弧线上收，与内容区呈水桶形衔接。 */
 .tab-fillet {
   position: absolute;
   bottom: -1px;
@@ -1599,26 +1601,25 @@ body {
   content: "";
   position: absolute;
   inset: 0;
+  background: var(--line);
 }
 .tab-fillet-l {
   left: -9px;
-  -webkit-mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
-  mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
-}
-.tab-fillet-l::before {
-  border-bottom-right-radius: 9px;
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.tab-fillet-r {
-  right: -9px;
   -webkit-mask: radial-gradient(circle 8px at 0 100%, transparent 7.5px, #000 8px);
   mask: radial-gradient(circle 8px at 0 100%, transparent 7.5px, #000 8px);
 }
+.tab-fillet-l::before {
+  -webkit-mask: radial-gradient(circle 8px at 0 100%, transparent 6.9px, #000 7.5px, #000 8.3px, transparent 8.9px);
+  mask: radial-gradient(circle 8px at 0 100%, transparent 6.9px, #000 7.5px, #000 8.3px, transparent 8.9px);
+}
+.tab-fillet-r {
+  right: -9px;
+  -webkit-mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
+  mask: radial-gradient(circle 8px at 100% 100%, transparent 7.5px, #000 8px);
+}
 .tab-fillet-r::before {
-  border-bottom-left-radius: 9px;
-  border-left: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  -webkit-mask: radial-gradient(circle 8px at 100% 100%, transparent 6.9px, #000 7.5px, #000 8.3px, transparent 8.9px);
+  mask: radial-gradient(circle 8px at 100% 100%, transparent 6.9px, #000 7.5px, #000 8.3px, transparent 8.9px);
 }
 .tab-item-drag {
   opacity: 0.45;
@@ -1683,11 +1684,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-bottom: 3px;
-  border-radius: 6px;
+  align-self: stretch;
+  /* 全高贴缘：抵掉 bar 的上/右内边距与底边框行，分隔线纵贯整个标签条（参考样式） */
+  margin: -5px -4px -1px 0;
+  width: 34px;
+  border-left: 1px solid var(--line); /* ＋ 前的竖分隔线 */
   color: var(--ink-faint);
+  font-size: 16px;
+  line-height: 1;
 }
 .tab-new:hover {
   color: var(--ink);
