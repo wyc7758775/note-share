@@ -1542,8 +1542,8 @@ body {
   min-width: 0;
   flex: 1;
   /* 左 0：首标签顶住栏缘（首标签激活时不画左凹角，无裁剪问题）；
-     右留 6px：末标签激活时右凹角悬在条目外，防滚动容器裁剪 */
-  padding: 0 6px 0 0;
+     右留 7px：末标签激活时右凹角悬在条目外，防滚动容器裁剪 */
+  padding: 0 7px 0 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1580,21 +1580,21 @@ body {
    左片 0% 100%、右片 100% 100%——即靠缝隙的一侧，保留贴标签的一角）；
    ::before = 底线色，环状 mask 只留沿弧线的 ~1px 描边。
    两层同一圆心，横线行至标签两侧沿弧线上收，与内容区呈水桶形衔接。 */
-/* 凹角圆角片：内联 SVG（PaneTabs.tsx 中绘制楔形，半径 5.5、无描边），这里只定位。
+/* 凹角圆角片：内联 SVG（PaneTabs.tsx 中绘制竖椭圆楔形 7×9，无描边），这里只定位。
    左片贴标签左缘、右片贴右缘，底边与内容区顶对齐。 */
 .tab-fillet {
   position: absolute;
   bottom: 0;
-  width: 5.5px;
-  height: 5.5px;
+  width: 7px;
+  height: 9px;
   pointer-events: none;
   display: block;
 }
 .tab-fillet-l {
-  left: -5.5px;
+  left: -7px;
 }
 .tab-fillet-r {
-  right: -5.5px;
+  right: -7px;
 }
 .tab-item-drag {
   opacity: 0.45;
