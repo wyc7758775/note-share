@@ -59,7 +59,6 @@ interface Props {
   src: string;
   /** 标签处于活动栏且可见（隐藏时停 rAF 一类的活，这里暂不区分） */
   active: boolean;
-  onClose: () => void;
 }
 
 /** 单页：进入视口才渲染 canvas；scale 变化时重渲，卸载时取消渲染任务 */
@@ -296,7 +295,7 @@ function PdfOutline({
   return <div className="pdf-side pdf-outline">{render(nodes, 0)}</div>;
 }
 
-export default function PdfViewer({ src, active, onClose }: Props) {
+export default function PdfViewer({ src, active }: Props) {
   const { t } = useSettings();
   const { notes: noteService, workspace } = useDomain();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -508,9 +507,6 @@ export default function PdfViewer({ src, active, onClose }: Props) {
             {convert === "busy" ? t("pdfConverting") : convert === "fail" ? t("pdfConvertFail") : t("pdfConvert")}
           </button>
         )}
-        <button className="pdf-close-btn" title={t("close")} onClick={onClose}>
-          ✕
-        </button>
       </div>
 
       <div className="pdf-body">

@@ -1193,7 +1193,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--paper-side);
+  background: var(--paper); /* 与激活标签同色 */
 }
 .img-tab img {
   max-width: 100%;
@@ -1297,9 +1297,6 @@ body {
   font-size: 12px;
   color: var(--accent);
 }
-.pdf-close-btn {
-  font-size: 14px !important;
-}
 
 /* ---------- PDF 左侧栏：缩略图 / 目录（工具栏开关，同一时间只开一个） ---------- */
 .pdf-body {
@@ -1375,7 +1372,7 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 24px 32px 48px;
-  background: var(--paper-side);
+  background: var(--paper); /* 与激活标签同色，标签与内容连成一体 */
 }
 .pdf-page {
   position: relative;
@@ -1531,6 +1528,11 @@ body {
 .on-mac .sidebar-collapsed .tab-bar {
   padding-left: 84px;
 }
+/* Win/Linux 侧栏收起：展开按钮悬浮在主区左上，标签条左端同样让位（按钮 28px@left10 + 间隙），
+   避免按钮压住首个标签；mac 用上面的 84px 规则（特异性更高） */
+.sidebar-collapsed .tab-bar {
+  padding-left: 46px;
+}
 .tab-strip {
   position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
   display: flex;
@@ -1553,7 +1555,7 @@ body {
   height: 32px;
   max-width: 200px;
   padding: 0 7px 0 10px;
-  border-radius: 7px 7px 0 0;
+  border-radius: 8px 8px 0 0;
   font-size: 12.5px;
   color: var(--ink-soft);
   cursor: pointer;

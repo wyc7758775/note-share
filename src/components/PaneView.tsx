@@ -212,7 +212,6 @@ export default function PaneView({
                     key={tab.path}
                     src={tab.path}
                     active={active && on}
-                    onClose={() => workspace.closeTab(pane.id, tab.id)}
                   />
                 </Suspense>
               ) : IMG_RE.test(tab.path) ? (
