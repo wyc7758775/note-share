@@ -3110,7 +3110,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -24px;
+  left: -1px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
   top: 7px;
   opacity: 0; /* 官方：不悬停不出现（折叠态常显由 .outline-collapsed-item 规则保留） */
   pointer-events: none;
@@ -3356,7 +3356,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -3.5px; /* 中心对齐竖线（线中心 li.x+9.5，按钮 26 宽 → left = 9.5-13） */
+  left: -27px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
   top: 5px;
   z-index: 5;
   display: inline-flex;
@@ -3380,6 +3380,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .outline-item:hover > .outline-item-menu,
 .outline-item.outline-menu-hl > .outline-item-menu {
   opacity: 1;
+  pointer-events: auto;
 }
 /* 叶子行没有折叠箭头：⋯ 移入箭头槽位，行首永远 18px 等距（悬停前后一致） */
 .outline-item.no-arrow > .outline-item-menu {
