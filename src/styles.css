@@ -3131,6 +3131,11 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 .outline-item:hover > .outline-arrow {
   opacity: 1;
+  pointer-events: auto;
+}
+.outline-item.outline-collapsed-item > .outline-arrow {
+  opacity: 1;
+  pointer-events: auto;
 }
 .outline-item.outline-collapsed-item > .outline-arrow svg {
   transform: rotate(0deg);
