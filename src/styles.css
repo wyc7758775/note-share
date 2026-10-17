@@ -3110,7 +3110,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -16px; /* ▼ 悬停时居中于 ⋯ 菜单与圆点之间 */
+  left: -4.5px; /* ▼ 盒中心对齐竖线（线=行左缘+9.5）：28 宽盒 → left = 9.5-14 = -4.5 */
   top: 4px; /* 28px 盒中心 = 行中心 = 圆点中心 */
   opacity: 0.45; /* 父条目三角常驻淡显，悬停行全亮 */
   pointer-events: auto;
@@ -3133,6 +3133,15 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .outline-item:hover > .outline-arrow {
   opacity: 1;
   pointer-events: auto;
+}
+/* 悬停行：圆点/勾选框/标题整体右移 14px 让位——⋯ 与 ▼ 出现在腾出的空隙，▼ 居中压在脊柱线上 */
+.outline-item:hover > .outline-bullet,
+.outline-item:hover > .outline-check,
+.outline-item:hover > .outline-content > div > p {
+  transform: translateX(14px);
+}
+.outline-item:hover > .outline-check {
+  left: 1px; /* 位移用 transform，保留 left 定位基准 */
 }
 .outline-item.outline-collapsed-item > .outline-arrow {
   opacity: 1;
@@ -3356,7 +3365,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -35.5px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
+  left: -36.5px; /* ⋯ 与 ▼ 组合中心压在父级竖线上（竖线=行左缘-14.5） */
   top: 5px;
   z-index: 5;
   display: inline-flex;
