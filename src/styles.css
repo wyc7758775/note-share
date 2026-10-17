@@ -3368,7 +3368,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   pointer-events: none; /* 隐藏时不挡点击 */
   border: none;
   background: var(--wf-bg);
-  border-radius: 5px;
+  border-radius: 50%; /* ⋯ 悬停底为圆形（参考图同款），且不遮挡分割线（位于线左侧） */
   color: var(--wf-note);
   opacity: 0;
   transition: opacity 0.15s ease;
