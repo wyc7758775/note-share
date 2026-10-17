@@ -195,17 +195,16 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              {/* 激活标签的底部外圆角（水桶形衔接）：内联 SVG 贝塞尔软切楔形
-                  （控制点压向缝隙侧顶角，入口缓、收尾快，Obsidian 同款剖面）。
-                  fillet-l 在左、fillet-r 镜像。 */}
+              {/* 激活标签的底部外圆角：内联 SVG 直切斜边 + 轻微软化
+                  （Obsidian 实测剖面 ≈ 45° 直切，仅 1px 弧度）。fillet-l 在左、fillet-r 镜像。 */}
               {on && (
-                <svg className="tab-fillet tab-fillet-l" width="7" height="9" viewBox="0 0 7 9" aria-hidden>
-                  <path d="M7 0 Q2.2 2.2 0 9 L7 9 Z" fill="var(--paper)" />
+                <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
+                  <path d="M5.5 0 Q1 1.2 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               {on && (
-                <svg className="tab-fillet tab-fillet-r" width="7" height="9" viewBox="0 0 7 9" aria-hidden>
-                  <path d="M0 0 Q4.8 2.2 7 9 L0 9 Z" fill="var(--paper)" />
+                <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
+                  <path d="M0 0 Q4.5 1.2 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>

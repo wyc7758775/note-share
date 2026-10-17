@@ -1580,21 +1580,21 @@ body {
    左片 0% 100%、右片 100% 100%——即靠缝隙的一侧，保留贴标签的一角）；
    ::before = 底线色，环状 mask 只留沿弧线的 ~1px 描边。
    两层同一圆心，横线行至标签两侧沿弧线上收，与内容区呈水桶形衔接。 */
-/* 凹角圆角片：内联 SVG（PaneTabs.tsx 中绘制竖椭圆楔形 7×9，无描边），这里只定位。
+/* 凹角圆角片：内联 SVG（PaneTabs.tsx 中绘制 5.5×5.5 直切软斜边），这里只定位。
    左片贴标签左缘、右片贴右缘，底边与内容区顶对齐。 */
 .tab-fillet {
   position: absolute;
   bottom: 0;
-  width: 7px;
-  height: 9px;
+  width: 5.5px;
+  height: 5.5px;
   pointer-events: none;
   display: block;
 }
 .tab-fillet-l {
-  left: -7px;
+  left: -5.5px;
 }
 .tab-fillet-r {
-  right: -7px;
+  right: -5.5px;
 }
 .tab-item-drag {
   opacity: 0.45;
