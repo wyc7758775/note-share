@@ -3057,7 +3057,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-left: 0;
 }
 .outline-doc ul[data-type="taskList"] ul[data-type="taskList"] {
-  padding-left: 10px; /* 层级差 = 26(行圆点区) + 10 = 36px，官方实测 */
+  padding-left: 0; /* 层级差 = 26(行圆点区) - 2 = 24px（Workflowy 同款紧凑缩进；原 36px 偏宽） */
+  margin-left: -2px;
   position: relative;
 }
 
