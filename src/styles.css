@@ -3106,10 +3106,11 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-left: 26px;
 }
 
-/* 折叠箭头：叠在缩进空间（不占布局），25% 透明度，行悬停全亮，展开旋转 90° */
+/* 折叠箭头：叠在缩进空间（不占布局），25% 透明度，行悬停全亮，展开旋转 90°。
+   left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -0.5px; /* 中心对齐竖线（线中心 li.x+9.5，按钮 20 宽 → left = 9.5-10） */
+  left: -24px;
   top: 7px;
   opacity: 0; /* 官方：不悬停不出现（折叠态常显由 .outline-collapsed-item 规则保留） */
   pointer-events: none;
