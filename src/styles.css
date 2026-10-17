@@ -3167,7 +3167,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   transition: background 0.15s ease;
 }
 .outline-item.outline-collapsed-item > .outline-bullet > .outline-bullet-halo {
-  background: var(--wf-bg3);
+  background: color-mix(in srgb, var(--wf-bg3) 55%, transparent); /* 折叠提示更含蓄：halo 半强度 */
 }
 .outline-bullet:hover > .outline-bullet-halo {
   background: var(--wf-bg3);
