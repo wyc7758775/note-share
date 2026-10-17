@@ -3110,7 +3110,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -12px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
+  left: -13.5px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
   top: 8px;
   opacity: 0.45; /* 父条目三角常驻（Workflowy 同款淡显但清晰可见），悬停行全亮 */
   display: inline-flex;
@@ -3355,7 +3355,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -33px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
+  left: -35.5px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
   top: 5px;
   z-index: 5;
   display: inline-flex;
