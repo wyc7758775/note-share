@@ -1217,7 +1217,7 @@ body {
   gap: 14px;
   height: 40px;
   padding: 0 10px;
-  background: var(--surface);
+  background: var(--paper); /* 与激活标签同为纸色：标签→工具栏→页面无缝相连 */
   border-bottom: 1px solid var(--line);
 }
 .pdf-toolbar-group {
