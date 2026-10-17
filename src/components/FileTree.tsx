@@ -112,12 +112,13 @@ function TreeRow({
   const renaming = renamingPath === item.path;
   const [dropHint, setDropHint] = useState(false);
   const dragging = useRef(false);
-  // 删除退出动画：先播收起动效，再真正走回收站（防止连点重复删）
+  // 删除退出动画：先播收起动效，再真正走回收站（防止连点重复删）。
+  // 240ms = 行塌缩 0.2s / 子容器收起 0.22s 的最长时长加余量
   const [exiting, setExiting] = useState(false);
   const animatedDelete = () => {
     if (exiting) return;
     setExiting(true);
-    window.setTimeout(() => h.onDelete(item.path), 200);
+    window.setTimeout(() => h.onDelete(item.path), 240);
   };
 
   const isFolder = item.kind === "folder";
@@ -223,7 +224,7 @@ function TreeRow({
         </div>
         {(item.children || newCanvasIn === item.path) && (
           <div
-            className={`tree-children ${open || newCanvasIn === item.path ? "" : "tree-children-closed"}`}
+            className={`tree-children ${open || newCanvasIn === item.path ? "" : "tree-children-closed"} ${exiting ? "tree-children-closed" : ""}`}
           >
             {newCanvasIn === item.path && (
               <InlineInputRow

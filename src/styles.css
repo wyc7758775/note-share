@@ -627,7 +627,8 @@ body {
 .tree-row-active:hover {
   background-color: var(--active-bg-hover);
 }
-/* 删除退出动画：淡出 + 收起（高度/内边距一起塌缩） */
+/* 删除退出动画：淡出 + 塌缩。.tree-row 的 min-height:30px 优先级高于 max-height，
+   height/min-height/max-height 必须一起压到 0，否则行只隐不缩、留下空白 */
 .tree-row-exiting {
   overflow: hidden;
   animation: tree-row-out 0.2s ease forwards;
@@ -636,10 +637,12 @@ body {
 @keyframes tree-row-out {
   from {
     opacity: 1;
-    max-height: 40px;
+    max-height: 30px;
   }
   to {
     opacity: 0;
+    height: 0;
+    min-height: 0;
     max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
@@ -4283,7 +4286,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   position: absolute;
   left: 9px; /* 圆点中心列 */
   top: 27.5px; /* 距父圆点下缘 5px（实测校准 +1） */
-  bottom: 27px; /* 实测渲染间隙 11px → 收 1px = 精确 10px */
+  bottom: 21px; /* 延伸到末子圆点顶部（36px 行：圆点中心=底上 18px，圆点半径 3.5） */
   width: 1px;
   background: color-mix(in srgb, var(--ink) 16%, transparent);
   pointer-events: none;

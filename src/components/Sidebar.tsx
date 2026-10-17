@@ -266,7 +266,8 @@ export default function Sidebar(props: Props) {
       if (/\.md$/i.test(path)) {
         await noteService.trash(path); // 笔记走领域事件（栏清理由 Workspace 订阅完成）
       } else {
-        await backend.deletePath(path); // 文件夹
+        await backend.deletePath(path); // 文件夹/附件不属于笔记聚合，没有领域事件
+        await props.onTreeChanged(); // 必须手动刷新，否则被删的行永远留在树里
       }
     },
     onArmDelete: armDelete,
