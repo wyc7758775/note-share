@@ -3110,7 +3110,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -20.5px; /* ▼ 固定在行左侧空隙（⋯ 与圆点之间），不随悬停移动、不占圆点位 */
+  left: -12.5px; /* ▼ 组合中心压线：[-12.5,-0.5] 与圆点相接 */
   top: 4px; /* 28px 盒中心 = 行中心 = 圆点中心 */
   opacity: 0.45; /* 父条目三角常驻淡显，悬停行全亮 */
   pointer-events: auto;
@@ -3356,7 +3356,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -36.5px; /* ⋯ 与 ▼ 组合中心压在父级竖线上（竖线=行左缘-14.5） */
+  left: -42.5px; /* ⋯ 26 宽在 ▼（28 宽）左侧：[-42.5,-16.5]，▼ [-12.5,+15.5] 互不重叠 */
   top: 5px;
   z-index: 5;
   display: inline-flex;
