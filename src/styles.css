@@ -3110,14 +3110,15 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -13.5px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
-  top: 8px;
-  opacity: 0.45; /* 父条目三角常驻（Workflowy 同款淡显但清晰可见），悬停行全亮 */
+  left: -15px; /* ▼ 悬停时居中于 ⋯ 菜单与圆点之间 */
+  top: 4px; /* 28px 盒中心 = 行中心 = 圆点中心 */
+  opacity: 0; /* 不悬停不出现 */
+  pointer-events: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 12px;
-  height: 14px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   background: none;

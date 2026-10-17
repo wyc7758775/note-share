@@ -246,8 +246,8 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
             if (pos != null) getActiveOutlineController()?.toggleCollapse(pos);
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.75 9.57a.5.5 0 0 1 0 .87l-5.25 3.03a.5.5 0 0 1-.75-.43V7.97a.5.5 0 0 1 .75-.43l5.25 3.03z" />
+          <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.75 9.57a.5.5 0 0 1 0 .87l-5.25 3.03a.5.5 0 0 1 .75-.43V7.97a.5.5 0 0 1 .75-.43l5.25 3.03z" />
           </svg>
         </button>
       )}
