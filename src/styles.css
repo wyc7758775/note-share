@@ -3110,15 +3110,14 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
 .outline-arrow {
   position: absolute;
-  left: -1px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
-  top: 7px;
-  opacity: 0; /* 官方：不悬停不出现（折叠态常显由 .outline-collapsed-item 规则保留） */
-  pointer-events: none;
+  left: -12px; /* 悬停布局 ⋯ ▼ •：▼ 在 ⋯ 与圆点之间 */
+  top: 8px;
+  opacity: 0.45; /* 父条目三角常驻（Workflowy 同款淡显但清晰可见），悬停行全亮 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 22px;
+  width: 12px;
+  height: 14px;
   padding: 0;
   border: none;
   background: none;
@@ -3356,7 +3355,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
    实底小浮钮；悬停行淡入；菜单打开期间常显 */
 .outline-item-menu {
   position: absolute;
-  left: -27px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
+  left: -33px; /* 悬停布局 ⋯ ▼ •：⋯ 在缩进空隙最左，▼ 紧跟其后，圆点保持原位 */
   top: 5px;
   z-index: 5;
   display: inline-flex;
@@ -3374,8 +3373,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   transition: opacity 0.15s ease;
 }
 .outline-item-menu svg {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
 }
 .outline-item:hover > .outline-item-menu,
 .outline-item.outline-menu-hl > .outline-item-menu {
