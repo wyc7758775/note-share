@@ -197,12 +197,12 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
             >
               {/* 激活标签的底部外圆角：内联 SVG 直切斜边 + 轻微软化
                   （Obsidian 实测剖面 ≈ 45° 直切，仅 1px 弧度）。fillet-l 在左、fillet-r 镜像。 */}
-              {on && (
+              {on && hasLeft && (
                 <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
                   <path d="M5.5 0 Q2.1 2.1 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
-              {on && (
+              {on && hasRight && (
                 <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
                   <path d="M0 0 Q3.4 2.1 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
                 </svg>
