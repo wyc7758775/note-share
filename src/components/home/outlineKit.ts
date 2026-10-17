@@ -14,7 +14,7 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 import type { EditorView } from "@tiptap/pm/view";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { OutlineItemView } from "./OutlineItemView";
-import { isDateText, monthOfText } from "./homeViews";
+import { dayTitle, isDateText, monthOfText, yearOfText } from "./homeViews";
 
 /** 大纲节点拖拽的 dataTransfer 类型（Home 内重排 / 侧栏搜索行共用） */
 export const NODE_MIME = "application/x-noteshare-home-node";
@@ -892,6 +892,180 @@ export const OutlineDates = Extension.create({
     ];
   },
 });
+
+// ---------------- 日期条目 chip（官方 dateChip：pill 底 + 点击弹日期选择器） ----------------
+//
+// 磁盘格式仍是纯文本标题（Obsidian 兼容，零迁移）：官方格式（"Sat, Oct 12"）的日期条目
+// 在编辑器里用行内装饰渲染成 pill，点击弹选择器；选定新日期后改写标题文本，
+// 并按 Calendar/年/月 结构归位重排（setDayEntryDate）。
+
+const CHIP_WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CHIP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** 解析官方日期标题（"Tue, Oct 13"）→ { 月, 日, 周几 }；不猜年份，失败返回 null */
+export function parseOfficialDayLabel(text: string): { m: number; d: number; wd: number } | null {
+  const m = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat), (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{1,2})$/.exec(
+    text
+  );
+  if (!m) return null;
+  return { wd: CHIP_WD.indexOf(m[1]), m: CHIP_MON.indexOf(m[2]), d: Number(m[3]) };
+}
+
+/** 日期条目的真实日期：年份优先取年条目祖先；没有结构时用星期消歧——
+ *  相邻三年里 (月,日) 的星期各不相同，标题里的星期唯一确定年份（同 zoomAnchor 的匹配语义） */
+export function dayEntryDate(doc: PMNode, itemPos: number): Date | null {
+  const item = doc.nodeAt(itemPos);
+  if (!item || item.type.name !== "taskItem") return null;
+  const parsed = parseOfficialDayLabel(bareOwnText(item));
+  if (!parsed) return null;
+  const $ = doc.resolve(itemPos + 1);
+  let year: number | null = null;
+  for (let d = $.depth - 1; d > 0 && year == null; d--) {
+    const anc = $.node(d);
+    if (anc.type.name === "taskItem") year = yearOfText(bareOwnText(anc));
+  }
+  if (year != null) return new Date(year, parsed.m, parsed.d);
+  const ty = new Date().getFullYear();
+  const cands = [ty - 1, ty, ty + 1].map((y) => new Date(y, parsed.m, parsed.d));
+  const wdHit = cands.find((dt) => dt.getDay() === parsed.wd);
+  if (wdHit) return wdHit;
+  // 星期对不上（手写笔误）：取距今天最近的一年，chip 仍可点开选择器改正确
+  const now = Date.now();
+  return [...cands].sort((a, b) => Math.abs(a.getTime() - now) - Math.abs(b.getTime() - now))[0];
+}
+
+function dayChipDecos(doc: PMNode): DecorationSet {
+  const out: Decoration[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== "taskItem") return true;
+    // 仅当条目首段整段就是官方日期标题时成 chip（正文里夹带日期的条目不渲染）
+    const first = node.childCount ? node.child(0) : null;
+    if (first?.type.name !== "paragraph" || first.content.size === 0) return true;
+    if (!parseOfficialDayLabel(bareOwnText(node))) return true;
+    out.push(
+      Decoration.inline(pos + 2, pos + 2 + first.content.size, { class: "wf-date-chip" })
+    );
+    return true;
+  });
+  return out.length ? DecorationSet.create(doc, out) : DecorationSet.empty;
+}
+
+export const OutlineDateChips = Extension.create({
+  name: "outlineDateChips",
+  addKeyboardShortcuts() {
+    const editor = this.editor;
+    /** Атомарное удаление chip (официальная семантика dateChip): Backspace/Delete внутри pill или вплотную справа
+     *  удаляет весь заголовок разом — почастично нельзя, иначе chip незаметно выродится в сломанную дату */
+    const atomicChipDelete = (dir: "back" | "fwd"): boolean => {
+      const { state } = editor;
+      const { selection } = state;
+      if (!selection.empty) return false;
+      const { $from } = selection;
+      if ($from.parent.type.name !== "paragraph" || $from.depth < 2) return false;
+      if ($from.node($from.depth - 1).type.name !== "taskItem") return false;
+      // chip — только первый абзац записи; примечания (2-й и последующие абзацы) удаляются как обычно
+      if ($from.index($from.depth - 1) !== 0) return false;
+      if (!parseOfficialDayLabel(bareOwnText($from.node($from.depth - 1)))) return false;
+      // 边界（文本前按 Backspace / 文本后按 Delete）同样整体删除：
+      // 放行默认行为会先吃掉一个字符，正是"逐字删除"的来源
+      const tr = state.tr.delete($from.start(), $from.end());
+      tr.setSelection(TextSelection.near(tr.doc.resolve($from.start())));
+      editor.view.dispatch(tr.scrollIntoView());
+      return true;
+    };
+    return {
+      Backspace: () => atomicChipDelete("back"),
+      Delete: () => atomicChipDelete("fwd"),
+    };
+  },
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("outlineDateChips"),
+        state: {
+          init: (_, { doc }) => dayChipDecos(doc),
+          apply: (tr, old) => (tr.docChanged ? dayChipDecos(tr.doc) : old),
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+/** 日期条目改期（官方 dateChip 语义）：标题换成新日期的官方格式，并按
+ *  Calendar/年/月 结构归位到月份内按日升序的排位（跨月/跨年自动迁月）。
+ *  建链（ensureMonthTarget）与搬移分两段派发，撤销时按两次退回。 */
+export function setDayEntryDate(editor: Editor, itemPos: number, d: Date): void {
+  const item = editor.state.doc.nodeAt(itemPos);
+  if (!item || item.type.name !== "taskItem") return;
+  const first = item.childCount ? item.child(0) : null;
+  if (!first || first.type.name !== "paragraph") return;
+  const addr = itemAddressAt(editor.state.doc, itemPos);
+  // 建链内部会自行派发事务（跨月/跨年首次落位时新建 Calendar/年/月），
+  // 之后必须重取 editor.state——入口捕获的旧 state 文档尺寸已失效
+  const monthPos = ensureMonthTarget(editor, d.getFullYear(), d.getMonth());
+  const { state } = editor;
+  const doc = state.doc;
+  const pos = addr ? itemPosAtAddress(doc, addr) : itemPos;
+  const itemNow = pos != null ? doc.nodeAt(pos) : null;
+  if (monthPos == null || pos == null || !itemNow || itemNow.type.name !== "taskItem") return;
+  const oldFirst = itemNow.childCount ? itemNow.child(0) : null;
+  if (!oldFirst || oldFirst.type.name !== "paragraph") return;
+
+  // 新条目 = 官方格式标题 + 原有条目的备注/子树
+  const para = state.schema.nodes.paragraph.create(null, state.schema.text(dayTitle(d)));
+  const rest: PMNode[] = [];
+  itemNow.forEach((c, off) => {
+    if (off >= oldFirst.nodeSize) rest.push(c);
+  });
+  const next = state.schema.nodes.taskItem.create(itemNow.attrs, [para, ...rest]);
+
+  const month = doc.nodeAt(monthPos);
+  if (!month) return;
+  const key = d.getMonth() * 100 + d.getDate();
+  const tr = state.tr;
+  let insertAt: number;
+  let insertNode: PMNode = next;
+  const nested = nestedListOf(month);
+  if (!nested) {
+    // 月份条目还没有子级：包一层新列表
+    insertAt = monthPos + month.nodeSize - 1;
+    insertNode = state.schema.nodes.taskList.create(null, next);
+  } else {
+    // 月份内按日升序：插到首个更大日期之前，否则末尾
+    const listAbs = monthPos + 1 + nested.off;
+    let off = 0;
+    let before: number | null = null;
+    nested.node.forEach((child) => {
+      if (before == null && child.type.name === "taskItem") {
+        const p = parseOfficialDayLabel(bareOwnText(child));
+        if (p && p.m * 100 + p.d > key) before = listAbs + 1 + off;
+      }
+      off += child.nodeSize;
+    });
+    insertAt = before ?? listAbs + 1 + nested.node.content.size;
+  }
+  const range = itemDeleteRange(doc, pos);
+  // 目标插入点在被整表删除的区间内（日期条目是其列表唯一子级，删除连列表外壳一起拿走）：
+  // 包一层新列表放回原位，否则裸 taskItem 落进 month 内容里层级错乱
+  const intoDeletedList = nested != null && insertAt > range.from && insertAt < range.to;
+  if (intoDeletedList) {
+    insertAt = range.from;
+    insertNode = state.schema.nodes.taskList.create(null, next);
+  }
+  tr.delete(range.from, range.to);
+  const at = tr.mapping.map(insertAt);
+  tr.insert(at, insertNode);
+  // 缩放根在被移动条目内时跟走（包了新列表时节点起点 +1）
+  fixZoomOnRemoval(tr, state, pos, itemNow.nodeSize, insertNode === next ? at : at + 1);
+  const sel = TextSelection.near(tr.doc.resolve(tr.mapping.map(pos + 2)));
+  tr.setSelection(sel);
+  withFlip(editor, () => editor.view.dispatch(tr.scrollIntoView()));
+}
 
 // ---------------- Calendar ribbon 宿主（官方顺序：标题在下、日期条在标题下方、正文再下） ----------------
 

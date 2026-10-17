@@ -40,6 +40,9 @@
   /* Calendar chip 底色：当前打开日 = 浅底（官方 bg-secondary），今天 = 深底（官方 bg-tertiary） */
   --wf-chip-cur: rgb(0 0 0 / 0.045);
   --wf-chip-today: rgb(0 0 0 / 0.13);
+  /* 日期条目 chip（官方 dateChip）：实测底色 13% 黑，hover 加深一档 */
+  --wf-date-chip: rgb(0 0 0 / 0.13);
+  --wf-date-chip-hover: rgb(0 0 0 / 0.18);
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
@@ -63,6 +66,8 @@ html[data-theme="dark"] {
   --code-block-bg: #232020;
   --wf-chip-cur: rgb(255 255 255 / 0.07);
   --wf-chip-today: rgb(255 255 255 / 0.18);
+  --wf-date-chip: rgb(255 255 255 / 0.18);
+  --wf-date-chip-hover: rgb(255 255 255 / 0.24);
   --code-block-border: var(--line);
   --danger-bg: rgb(220 38 38 / 0.15);
   --tip-bg: #3f3a37;
@@ -3865,6 +3870,10 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .wf-picker-grid button.is-out {
   color: var(--ink-faint);
 }
+/* chip 弹层：当前日期浅底（今天深底优先级更高，规则顺序在后） */
+.wf-picker-grid button.is-cur {
+  background: var(--wf-chip-cur);
+}
 .wf-picker-grid button.is-today {
   background: var(--wf-chip-today);
 }
@@ -3873,6 +3882,30 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 .wf-picker-grid12 button.is-out {
   color: inherit;
+}
+
+/* ---------- 日期条目 chip（官方 dateChip：stadium pill，点击弹选择器） ---------- */
+/* 官方实测：全圆角、底 13% 黑、字随正文；截高≈1.5em、横向内距≈0.7em */
+.wf-date-chip {
+  border-radius: 999px;
+  background: var(--wf-date-chip);
+  padding: 3px 11px;
+  cursor: pointer;
+}
+.wf-date-chip:hover {
+  background: var(--wf-date-chip-hover);
+}
+/* chip 选择器浮层宿主（屏幕级单例，位置由 JS 计算） */
+.wf-date-pop {
+  position: fixed;
+  z-index: 60;
+  display: none;
+}
+.wf-date-pop[data-show="1"] {
+  display: block;
+}
+.wf-date-pop .wf-picker {
+  position: static;
 }
 
 /* 相对日装饰前缀（Today, / Tomorrow, / Yesterday, ）——与正文同色同字号（官方一致） */
@@ -4286,7 +4319,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   position: absolute;
   left: 9px; /* 圆点中心列 */
   top: 27.5px; /* 距父圆点下缘 5px（实测校准 +1） */
-  bottom: 21px; /* 延伸到末子圆点顶部（36px 行：圆点中心=底上 18px，圆点半径 3.5） */
+  bottom: 18px; /* 延伸到末子圆点中心（36px 行：圆点中心=底上 18px） */
   width: 1px;
   background: color-mix(in srgb, var(--ink) 16%, transparent);
   pointer-events: none;

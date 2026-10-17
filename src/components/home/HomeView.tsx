@@ -28,6 +28,7 @@ import {
   OutlineItem,
   OutlineKeys,
   OutlineConflictKeys,
+  OutlineDateChips,
   OutlineDates,
   OutlineNormalize,
   OutlineRibbonHost,
@@ -39,13 +40,16 @@ import {
   applyHomeNodeDrop,
   clearDragSrcHl,
   createOutlineController,
+  dayEntryDate,
   ensureTodayTarget,
+  itemPosAround,
   outlineStructureKey,
   resolveOutlineDropTarget,
   setActiveOutlineController,
   type OutlineController,
   type OutlineCrumb,
 } from "./outlineKit";
+import { openDateChipPicker } from "./DateChipPick";
 
 interface DropHint {
   top: number;
@@ -90,6 +94,7 @@ export default function HomeView({ active }: { active: boolean }) {
       OutlineTags,
       OutlineTagSuggest,
       OutlineDates,
+      OutlineDateChips,
       OutlineRibbonHost,
       Wikilink,
       InlineAudio,
@@ -116,6 +121,17 @@ export default function HomeView({ active }: { active: boolean }) {
     editorProps: {
       attributes: { class: "outline-doc focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
+        mousedown: (view, event) => {
+          // 点击日期 chip（官方 dateChip）：不落光标，原地弹日期选择器
+          const el = (event.target as HTMLElement).closest?.(".wf-date-chip");
+          if (!el || !editor) return false;
+          event.preventDefault();
+          const itemPos = itemPosAround(view.state.doc, view.posAtDOM(el, 0));
+          if (itemPos == null) return true;
+          const date = dayEntryDate(view.state.doc, itemPos);
+          if (date) openDateChipPicker({ editor, itemPos, date, anchor: el.getBoundingClientRect() });
+          return true;
+        },
         click: (_view, event) => {
           // 点击 #tag（官方语义：按该标签过滤，再点同一标签退出过滤）
           const tagEl = (event.target as HTMLElement).closest?.(".outline-tag");

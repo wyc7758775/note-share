@@ -143,15 +143,15 @@ export const I = {  chevron: (
     </svg>
   ),
   home: (
-    // Workflowy 式大纲标识：三行圆点列表
+    // Workflowy 入口标识：官方 logo 构图（буллет-лист со сдвинутой средней строкой = уровень иерархии）
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-      <circle cx="3" cy="4" r="1.2" fill="currentColor" />
-      <circle cx="3" cy="8" r="1.2" fill="currentColor" />
-      <circle cx="3" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="3" cy="4.2" r="1.3" fill="currentColor" />
+      <circle cx="5.8" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="3" cy="11.8" r="1.3" fill="currentColor" />
       <path
-        d="M6.5 4h7M6.5 8h7M6.5 12h7"
+        d="M6.3 4.2h6.7M8.9 8h3.6M6.3 11.8h6.7"
         stroke="currentColor"
-        strokeWidth="1.3"
+        strokeWidth="1.5"
         strokeLinecap="round"
       />
     </svg>
