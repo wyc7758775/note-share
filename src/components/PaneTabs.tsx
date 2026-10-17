@@ -199,12 +199,12 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                   （Obsidian 实测剖面 ≈ 45° 直切，仅 1px 弧度）。fillet-l 在左、fillet-r 镜像。 */}
               {on && (
                 <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
-                  <path d="M5.5 0 Q1 1.2 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
+                  <path d="M5.5 0 Q1.7 1.7 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               {on && (
                 <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
-                  <path d="M0 0 Q4.5 1.2 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
+                  <path d="M0 0 Q3.8 1.7 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
                 </svg>
               )}
               <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>

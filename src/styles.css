@@ -1538,7 +1538,7 @@ body {
   position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 0; /* 标签互相贴住（Obsidian 同款）：激活标签的凹角以 z-index 盖在邻居上 */
   min-width: 0;
   flex: 1;
   /* 左 0：首标签顶住栏缘（首标签激活时不画左凹角，无裁剪问题）；
