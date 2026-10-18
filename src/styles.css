@@ -3112,8 +3112,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   position: absolute;
   left: -12.5px; /* ▼ 组合中心压线：[-12.5,-0.5] 与圆点相接 */
   top: 4px; /* 28px 盒中心 = 行中心 = 圆点中心 */
-  opacity: 0.45; /* 父条目三角常驻淡显，悬停行全亮 */
-  pointer-events: auto;
+  opacity: 0; /* 不悬停不出现（Workflowy 官方交互） */
+  pointer-events: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3122,7 +3122,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding: 0;
   border: none;
   background: none;
-  color: var(--wf-sub);
+  color: var(--wf-note);
   transition: opacity 0.15s ease;
   cursor: pointer;
 }
