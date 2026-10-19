@@ -11,4 +11,4 @@ function detect(): Backend {
 }
 
 export const backend: Backend = detect();
-export type { Backend, TreeNode, NoteRaw, SearchHit, VaultInfo, VaultList } from "./types";
+export type { Backend, TreeNode, NoteRaw, SearchHit, VaultInfo, VaultList, BrowseDir } from "./types";

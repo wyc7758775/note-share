@@ -2,7 +2,7 @@
 // 仓库是应用级概念（跨 vault 生命周期），所以它不进 createDomain 的领域容器，
 // 持有应用级聚合 VaultRegistry；IO 走 Backend 端口，完成后回填注册表。
 
-import { backend, type VaultInfo } from "../backend";
+import { backend, type VaultInfo, type BrowseDir } from "../backend";
 import type { VaultRegistry } from "../domain/vault";
 
 export class VaultService {
@@ -37,6 +37,11 @@ export class VaultService {
   /** 弹系统对话框选文件夹（只选路径，是否打开由调用方决定） */
   pickFolder(): Promise<string | null> {
     return backend.pickFolder();
+  }
+
+  /** 目录浏览（web 模式自绘选目录弹窗的数据源）；桌面端无此通道，返回 null */
+  browse(path: string): Promise<BrowseDir | null> {
+    return backend.browse ? backend.browse(path) : Promise.resolve(null);
   }
 
   /** 新建/打开本地仓库卡片是否可用（web 模式退化为 VAULT_DIR 单仓库） */

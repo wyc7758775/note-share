@@ -10,6 +10,7 @@ import { useVaultsVersion } from "../domain/vault";
 import type { VaultService } from "../application/vault-service";
 import { PikachuLogo, I } from "./icons";
 import { setPickerWindowSize } from "../backend/window-size";
+import FolderBrowseDialog from "./FolderBrowseDialog";
 
 const LAST_PARENT_KEY = "noteshare.lastVaultParent";
 
@@ -30,6 +31,7 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
   const [name, setName] = useState("");
   const [location, setLocation] = useState(() => localStorage.getItem(LAST_PARENT_KEY) ?? "");
   const [webPath, setWebPath] = useState(""); // web 模式手输的仓库路径
+  const [browseFor, setBrowseFor] = useState<"open" | "location" | null>(null); // 自绘选目录弹窗的用途
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -43,8 +45,13 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
   }, [location]);
 
   const browse = async () => {
-    const dir = await service.pickFolder();
-    if (dir) setLocation(dir);
+    // 桌面端系统弹窗；web 模式自绘目录浏览弹窗（同一入口两实现）
+    if (service.canManage) {
+      const dir = await service.pickFolder();
+      if (dir) setLocation(dir);
+    } else {
+      setBrowseFor("location");
+    }
   };
 
   const create = async () => {
@@ -205,6 +212,9 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
                     if (e.key === "Enter" && webPath.trim() && !busy) void openListed(webPath.trim());
                   }}
                 />
+                <button className="btn-ghost" disabled={busy} onClick={() => setBrowseFor("open")}>
+                  {t("browse")}
+                </button>
                 <button
                   className="btn-ghost"
                   disabled={busy || !webPath.trim()}
@@ -255,6 +265,19 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
         {!canManage && <p className="vs-webnote">{t("vaultWebTip")}</p>}
         {err && <p className="vs-err">{err}</p>}
       </div>
+
+      {browseFor && (
+        <FolderBrowseDialog
+          service={service}
+          onClose={() => setBrowseFor(null)}
+          onPick={(p) => {
+            const target = browseFor;
+            setBrowseFor(null);
+            if (target === "location") setLocation(p);
+            else void openListed(p);
+          }}
+        />
+      )}
     </div>
   );
 }

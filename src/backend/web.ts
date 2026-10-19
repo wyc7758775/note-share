@@ -1,6 +1,7 @@
 import type {
   AssetData,
   Backend,
+  BrowseDir,
   NoteRaw,
   SavedScene,
   SearchHit,
@@ -34,6 +35,7 @@ export const webBackend: Backend = {
   createVault: (parent, name) => call<VaultInfo>("vault-create", { parent, name }),
   removeVault: (path) => call<void>("vault-remove", { path }),
   pickFolder: async () => null,
+  browse: (path) => call<BrowseDir>("fs-browse", { path }),
   tree: () => call<TreeNode[]>("tree"),
   readNote: (path) => call<NoteRaw>("note", { path }),
   writeNote: (path, raw) => call<void>("note-save", { path, raw }),

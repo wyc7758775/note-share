@@ -48,6 +48,13 @@ export interface VaultList {
   active: string | null; // 上次打开的仓库路径（列表按 lastOpenedAt 取最新）
 }
 
+/** 目录浏览结果（web 模式自绘选目录弹窗）；dir 为空串 = 虚拟根（盘符/根目录级） */
+export interface BrowseDir {
+  dir: string;
+  parent: string | null; // 上一级路径；虚拟根没有上一级
+  folders: { name: string; path: string }[]; // path 为后端拼好的绝对路径
+}
+
 export interface Backend {
   mode: "tauri" | "web";
   /** 仓库注册表（桌面端权威在应用配置目录 vaults.json；web 模式恒为 VAULT_DIR 单条） */
@@ -60,6 +67,8 @@ export interface Backend {
   removeVault(path: string): Promise<void>;
   /** 弹系统对话框选一个文件夹（只选路径不打开；web 模式返回 null） */
   pickFolder(): Promise<string | null>;
+  /** 列出目录下的子文件夹（只 web 模式实现，供自绘选目录弹窗；桌面端走 pickFolder） */
+  browse?(path: string): Promise<BrowseDir>;
   tree(): Promise<TreeNode[]>;
   readNote(path: string): Promise<NoteRaw>;
   writeNote(path: string, raw: string): Promise<void>;

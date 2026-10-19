@@ -24,6 +24,53 @@ const MIME = {
 
 const toPosix = (p) => p.split(path.sep).join("/");
 
+// --- 目录浏览（web 模式自绘"选文件夹"弹窗的数据源，只读）---
+// 虚拟根 dir=""：Windows 列盘符，其余平台列根目录一级；
+// 子项绝对路径由服务端拼好返回，前端不做拼接（避免 win/unix 分隔符差异）。
+function listDrives() {
+  if (process.platform === "win32") {
+    const drives = [];
+    for (let c = 90; c >= 65; c--) {
+      // Z→A：数据盘（D/E…）排在系统盘 C 前面更顺手
+      const letter = `${String.fromCharCode(c)}:\\`;
+      if (fs.existsSync(letter)) drives.push({ name: letter, path: letter });
+    }
+    return drives;
+  }
+  try {
+    return fs
+      .readdirSync("/", { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => ({ name: e.name, path: `/${e.name}` }));
+  } catch {
+    return [];
+  }
+}
+
+function browseDir(p) {
+  if (!p) return { dir: "", parent: null, folders: listDrives() };
+  const dir = path.resolve(String(p));
+  let st;
+  try {
+    st = fs.statSync(dir);
+  } catch {
+    throw new Error("文件夹不存在或不可访问");
+  }
+  if (!st.isDirectory()) throw new Error("不是文件夹");
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    throw new Error("无法读取该文件夹（可能没有权限）");
+  }
+  const folders = entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("$"))
+    .map((e) => ({ name: e.name, path: path.join(dir, e.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  const parent = path.dirname(dir);
+  return { dir, parent: parent === dir ? "" : parent, folders };
+}
+
 function resolveInside(rel) {
   if (!rel || rel.includes("..")) throw new Error("非法路径");
   const abs = path.resolve(VAULT, rel);
@@ -164,6 +211,8 @@ const handlers = {
     writeRegistry(reg);
     return null;
   },
+  // web 模式自绘选目录弹窗：列出子文件夹（只读，不碰仓库状态）
+  "fs-browse": async ({ path: p }) => browseDir(p),
   "tree": async () => buildTree(VAULT, ""),
   "note": async ({ path: rel }) => {
     const abs = resolveInside(rel);
@@ -348,7 +397,15 @@ const handlers = {
 };
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS 只放行本机开发页面（vite 的 localhost/127.0.0.1 任意端口）。
+  // 此前的 "*" 把这套能读写磁盘仓库的 API 开给了浏览器里任何网页。
+  const origin = req.headers.origin;
+  if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "origin not allowed" }));
+    return;
+  }
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") {
