@@ -37,12 +37,18 @@
   --wf-bg: var(--paper);
   --wf-bg2: var(--surface-hover);
   --wf-bg3: var(--line);
-  /* Calendar chip 底色：当前打开日 = 浅底（官方 bg-secondary），今天 = 深底（官方 bg-tertiary） */
-  --wf-chip-cur: rgb(0 0 0 / 0.045);
-  --wf-chip-today: rgb(0 0 0 / 0.13);
-  /* 日期条目 chip（官方 dateChip）：实测底色 13% 黑，hover 加深一档 */
-  --wf-date-chip: rgb(0 0 0 / 0.13);
-  --wf-date-chip-hover: rgb(0 0 0 / 0.18);
+  /* Calendar 日期格：底格浅灰、今天/当前格深一档（参考图 Workflowy 冷灰） */
+  --wf-chip-base: #f3f4f4;
+  --wf-chip-cur: #dce0e2;
+  --wf-chip-today: #dce0e2;
+  /* 日期条目 chip + 顶部返回圆底（同一档浅灰） */
+  --wf-date-chip: #dce0e2;
+  --wf-date-chip-hover: #d0d5d8;
+  /* 顶栏面包屑：圆底 / 房子 / 分隔箭头 / 文字 */
+  --wf-top-circle: #dce0e2;
+  --wf-top-icon: #a0a5a9;
+  --wf-top-sep: #5b6166;
+  --wf-top-crumb: #8b9094;
 }
 html[data-theme="dark"] {
   --paper: #1a1817;
@@ -64,10 +70,15 @@ html[data-theme="dark"] {
   --code-bg: rgb(255 255 255 / 0.08);
   --code-fg: #e0af68;
   --code-block-bg: #232020;
-  --wf-chip-cur: rgb(255 255 255 / 0.07);
-  --wf-chip-today: rgb(255 255 255 / 0.18);
-  --wf-date-chip: rgb(255 255 255 / 0.18);
+  --wf-chip-base: rgb(255 255 255 / 0.05);
+  --wf-chip-cur: rgb(255 255 255 / 0.16);
+  --wf-chip-today: rgb(255 255 255 / 0.16);
+  --wf-date-chip: rgb(255 255 255 / 0.16);
   --wf-date-chip-hover: rgb(255 255 255 / 0.24);
+  --wf-top-circle: rgb(255 255 255 / 0.12);
+  --wf-top-icon: #a8a29e;
+  --wf-top-sep: #d6d3d1;
+  --wf-top-crumb: #a8a29e;
   --code-block-border: var(--line);
   --danger-bg: rgb(220 38 38 / 0.15);
   --tip-bg: #3f3a37;
@@ -2928,8 +2939,38 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 5% 6px; /* 与 .home-editor-wrap 同基准 */
+  padding: 10px 16px; /* 顶部操作区贴边（比内容区留白小） */
+  border-bottom: 1px solid var(--line);
   color: var(--wf-note);
+}
+/* 参考图：左侧大圆返回钮（历史后退） */
+.home-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: transparent; /* 不常驻圆底：仅 hover 时出现 */
+  color: var(--wf-top-sep);
+  cursor: pointer;
+  transition: background 0.12s ease, opacity 0.12s ease;
+}
+.home-back svg {
+  width: 16px;
+  height: 16px;
+}
+.home-back:hover:not(:disabled) {
+  background: var(--wf-top-circle);
+  color: var(--wf-top-crumb);
+}
+.home-back:disabled {
+  cursor: default;
+}
+.home-back:disabled svg {
+  opacity: 0.45;
 }
 .home-crumb {
   display: flex;
@@ -2937,7 +2978,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   min-width: 0;
   overflow: hidden;
   flex: 0 1 auto;
-  font-size: 14px;
+  font-size: 15px;
 }
 .home-crumb-item {
   display: flex;
@@ -2945,10 +2986,14 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   white-space: nowrap;
 }
 .home-crumb-sep {
-  color: var(--wf-note);
-  opacity: 0.6;
-  margin: 0 4px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--wf-top-sep);
+  margin: 0 6px;
+}
+.home-crumb-sep svg {
+  width: 16px;
+  height: 16px;
 }
 .home-crumb-btn {
   max-width: 220px;
@@ -2958,22 +3003,32 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border: none;
   background: none;
   padding: 2px 3px;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--wf-note);
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--wf-top-crumb);
 }
 .home-crumb-home {
   display: inline-flex;
   align-items: center;
-  padding: 2px 4px;
-  color: var(--wf-note);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--wf-top-icon);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.home-crumb-home svg {
+  width: 20px;
+  height: 20px;
 }
 .home-crumb-btn:hover {
   text-decoration: underline;
-  color: var(--wf-sub);
+  color: var(--wf-top-sep);
 }
-.home-crumb-item:last-child .home-crumb-btn {
-  color: var(--wf-text);
+/* 参考图：hover 圆底在 Home 房子上（返回箭头保持无底） */
+.home-crumb-home:hover {
+  background: var(--wf-top-circle);
 }
 /* 搜索框：内嵌放大镜（图标绝对定位在首列，input 让位） */
 .home-search-box {
@@ -3024,7 +3079,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 }
 .home-tool-btn.is-on {
   color: var(--wf-text);
-  background: var(--wf-bg2);
+  background: var(--wf-bg3);
 }
 .home-scroll {
   flex: 1;
@@ -3032,9 +3087,14 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   overflow-y: auto;
 }
 .home-editor-wrap {
-  /* 铺满可用宽度（不居中留白）；底部只留少量呼吸（+ 紧贴最后条目） */
-  /* 左右边距 5%（用户定的基准；百分比随窗宽自适应，两容器与工具栏同基准） */
-  padding: 30px 5% 24px;
+  /* 内容区左右留白加大（至少 72px）：根级父行的 ⋯ 位于 li.x-58，不能被左边界裁掉；
+     百分比随窗宽自适应，保证内容整体更居中 */
+  padding: 30px max(8%, 72px) 24px;
+}
+/* 日期/日历视图内容再收窄一点 */
+.home-editor-wrap:has(.wf-ribbon-host) {
+  padding-left: max(11%, 104px);
+  padding-right: max(11%, 104px);
 }
 
 /* 大纲正文 */
@@ -3057,8 +3117,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-left: 0;
 }
 .outline-doc ul[data-type="taskList"] ul[data-type="taskList"] {
-  padding-left: 0; /* 层级差 = 26(行圆点区) - 2 = 24px（Workflowy 同款紧凑缩进；原 36px 偏宽） */
-  margin-left: -2px;
+  padding-left: 0; /* 层级差 = 26(行圆点区) + 10 = 36px（Workflowy 同款网格） */
+  margin-left: 10px;
   position: relative;
 }
 
@@ -3106,13 +3166,14 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-left: 26px;
 }
 
-/* 折叠箭头：叠在缩进空间（不占布局），25% 透明度，行悬停全亮，展开旋转 90°。
-   left -24：与 ⋯ 菜单（left -3.5 宽 26）错开，避免悬停时菜单盖住箭头 */
+/* 折叠箭头：叠在缩进空间（不占布局），常驻淡显、悬停行全亮，展开旋转 90°。
+   36px 缩进网格：图形中心按参考图落在最近一格内偏左（li.x-12.5，约 0.6 格）；
+   垂直：与圆点同一中心线（行顶 +19）。 */
 .outline-arrow {
   position: absolute;
-  left: -12.5px; /* ▼ 组合中心压线：[-12.5,-0.5] 与圆点相接 */
-  top: 4px; /* 28px 盒中心 = 行中心 = 圆点中心 */
-  opacity: 0.6; /* 父条目三角常驻可见（Workflowy 同款），悬停行全亮 */
+  left: -26.5px; /* 28 宽盒中心 = li.x-12.5（对齐参考图的光学位置） */
+  top: 5px; /* 28px 盒中心 = 圆点中心（行顶 +19） */
+  opacity: 0.3; /* 父条目三角常驻淡显（比 ⋯ 更轻），悬停行稍亮 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3129,11 +3190,11 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   transition: transform 0.2s ease;
   transform: rotate(90deg);
 }
-.outline-item:hover > .outline-arrow {
-  opacity: 1;
+.outline-item:hover:not(:has(.outline-item:hover)) > .outline-arrow {
+  opacity: 0.55;
 }
 .outline-item.outline-collapsed-item > .outline-arrow {
-  opacity: 1;
+  opacity: 0.7;
 }
 .outline-item.outline-collapsed-item > .outline-arrow svg {
   transform: rotate(0deg);
@@ -3236,6 +3297,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .outline-content p:first-child {
   min-height: 36px; /* 官方实测行高 36px */
 }
+/* 悬停行首行底色：已按用户要求删除（2026-10-20） */
 .outline-content p + p {
   font-size: 13px;
   line-height: 17px;
@@ -3302,6 +3364,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 /* 祖先壳通道不缩进、不画竖线：zoom 视图从大标题顶格开始 */
 .outline-item.outline-ancestor > .outline-content ul[data-type="taskList"] {
   padding-left: 0;
+  margin-left: -2px; /* 祖先壳通道不随新缩进网格右移：zoom 标题绝对位置不变 */
 }
 .outline-item.outline-ancestor > .outline-content ul[data-type="taskList"]::before {
   background: none;
@@ -3349,43 +3412,62 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   background: var(--surface-hover);
 }
 
-/* ⋯ 菜单：左侧缩进沟里、圆点左边（原位不动，只离窗口边远一点）；
-   实底小浮钮；悬停行淡入；菜单打开期间常显 */
+/* ⋯ 菜单：命中盒 38px 宽（右缘 -26 接到 ▼ 盒，鼠标从行/▼ 过来不会掉 hover）；
+   视觉仍是居中于 36px 列的 26px 圆底；隐藏时保持可命中，避免“进不去”。
+   叶子行没有 ▼ 时，⋯ 移入最近一格（见 .no-arrow）。 */
 .outline-item-menu {
   position: absolute;
-  left: -42.5px; /* ⋯ 26 宽在 ▼（28 宽）左侧：[-42.5,-16.5]，▼ [-12.5,+15.5] 互不重叠 */
-  top: 5px;
+  left: -64px; /* 38 宽盒中心 = li.x-45 */
+  top: 6px; /* 26px 盒中心 = 圆点中心（行顶 +19） */
   z-index: 5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: 38px; /* 右缘 -26：与 ▼ 盒 [-26.5,+1.5] 衔接 */
   height: 26px;
-  opacity: 0; /* 官方：不悬停不出现 */
-  pointer-events: none; /* 隐藏时不挡点击 */
+  opacity: 0; /* 不悬停不出现（但保留命中：隐藏也可 hover/点击） */
   border: none;
-  background: var(--wf-bg);
-  border-radius: 50%; /* ⋯ 悬停底为圆形（参考图同款），且不遮挡分割线（位于线左侧） */
+  background: none;
   color: var(--wf-note);
-  opacity: 0;
   transition: opacity 0.15s ease;
 }
-.outline-item-menu svg {
-  width: 12px;
-  height: 12px;
+/* 圆底单独画：命中盒比圆钮宽，视觉仍是 26px */
+.outline-item-menu::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--wf-bg);
+  transition: background 0.15s ease;
 }
-.outline-item:hover > .outline-item-menu,
+.outline-item-menu svg {
+  position: relative; /* 盖在圆底之上 */
+  z-index: 1;
+  width: 22px; /* 参考图 ⋯ 更宽（实画约 16px）；26px 钮内留 2px 余量 */
+  height: 22px;
+}
+/* 只给“鼠标最深处那一行”显示 ⋯：祖先行也会 :hover，但它的子树里有 li:hover，
+   用 :not(:has(...)) 排除，避免悬停子行时整条祖先链的 ⋯ 全冒出来 */
+.outline-item:hover:not(:has(.outline-item:hover)) > .outline-item-menu,
 .outline-item.outline-menu-hl > .outline-item-menu {
   opacity: 1;
-  pointer-events: auto;
 }
-/* 叶子行没有折叠箭头：⋯ 移入箭头槽位，行首永远 18px 等距（悬停前后一致） */
+/* 叶子行没有折叠箭头：⋯ 移入最近一格（与 ▼ 同列），命中盒保持 26px */
 .outline-item.no-arrow > .outline-item-menu {
-  left: -22px; /* 26 宽按钮中心对齐 20 宽箭头槽位中心(-9)：-9-13 */
+  left: -25px; /* 26 宽盒中心 = li.x-12（参考图叶子行 ⋯ 位置，离左侧竖线 1px） */
+  width: 26px;
+}
+.outline-item.no-arrow > .outline-item-menu::before {
+  left: 0;
 }
 .outline-item-menu:hover {
-  background: var(--wf-bg2);
   color: var(--wf-sub);
+}
+.outline-item-menu:hover::before {
+  background: var(--wf-bg2);
 }
 /* ⋯ 菜单打开：目标条目 + 当前展开的子树整块高亮（li 盒子天然罩住嵌套子列表） */
 .outline-item.outline-menu-hl {
@@ -3393,7 +3475,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border-radius: 6px;
 }
 .outline-item.outline-zoom-root > .outline-item-menu {
-  left: -34px; /* 与下方子级 ⋯ 同列：子级 li 比标题 li 多 6px（嵌套 ul padding） */
+  left: -40px; /* 38 宽盒中心 = li.x-21（保持标题行视觉位置） */
   top: 11px; /* 27px 大标题行中心对齐 */
 }
 
@@ -3636,7 +3718,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 56px;
+  height: 38px;
+  margin-top: 18px; /* 与日期格（跳过 18px 月份标签）垂直居中对齐 */
   margin-right: 6px;
   flex: none;
 }
@@ -3682,7 +3765,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   height: 18px;
   font-size: 10px;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 .wf-chip-box {
@@ -3695,7 +3778,9 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   width: 28px;
   height: 38px;
   box-sizing: border-box;
+  padding-bottom: 6px; /* 给底部“有内容圆点”留位，避免和日期数字叠在一起 */
   border-radius: 4px;
+  background: var(--wf-chip-base);
   color: var(--ink-soft);
 }
 .wf-chip-box:hover {
@@ -3705,11 +3790,12 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   font-size: 10px;
   line-height: 1;
   font-weight: 300;
+  color: var(--ink-faint);
 }
 .wf-chip-num {
   font-size: 14px;
   line-height: 1;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
 }
 /* 今天 = 深底（官方 bg-tertiary）；当前打开日 = 浅底（官方 bg-secondary） */
@@ -3894,8 +3980,20 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 .wf-date-chip {
   border-radius: 999px;
   background: var(--wf-date-chip);
-  padding: 3px 11px;
+  padding: 2px 9px;
+  font-size: 14px; /* 行内日期标识比正文字号小一档 */
+  line-height: 1.4;
   cursor: pointer;
+}
+/* 参考图：缩放标题里的日期 chip 带下划线（普通大纲里的 chip 保持原样） */
+/* 只作用于缩放标题自己的日期 chip；正文行里的日期 chip 保持 14px、无下划线 */
+.outline-item.outline-zoom-root > .outline-content > div > p:first-child .wf-date-chip {
+  font-size: 20px;
+  line-height: 24px;
+  padding: 2px 10px;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
 }
 .wf-date-chip:hover {
   background: var(--wf-date-chip-hover);
@@ -4047,7 +4145,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   top: 24px; /* 圆点下缘留隙（dot 中心 18 + 半径 3.5 + 2） */
   bottom: 6px;
   width: 1px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   pointer-events: none;
 }
 .outline-item.is-board > .home-board {
@@ -4316,18 +4414,23 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   box-shadow: inset 1px 0 0 0 color-mix(in srgb, var(--ink) 20%, transparent);
 }
 /* 缩进脊柱线 v2：线是【有子级的节点】的属性——data-has-kids 由 OutlineItemView 标记。
-   起点=父圆点下缘 2px 隙（top 24 固定，备注不漂移）；终点=本 li 底上方 9px（末子圆点中心附近）。
-   叶子行/空行无子级 → 无线（v1 的悬空线根治）。 */
+   起点=父圆点下缘 8.5px（top 27.5）；终点=末子圆点中心上方 7px（bottom 24），
+   上下留白接近、下端略短。叶子行/空行无子级 → 无线。 */
 .outline-doc ul[data-type="taskList"] ul[data-type="taskList"] .react-renderer > li.outline-item[data-has-kids]::after,
 .outline-doc li.outline-item[data-has-kids]::after {
   content: "";
   position: absolute;
   left: 9px; /* 圆点中心列 */
-  top: 27.5px; /* 距父圆点下缘 5px（实测校准 +1） */
-  bottom: 18px; /* 延伸到末子圆点中心（36px 行：圆点中心=底上 18px） */
+  top: 27.5px; /* 距父圆点下缘 8.5px */
+  bottom: 24px; /* 距末子圆点中心 7px（36px 行：圆点中心=底上 17px） */
   width: 1px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   pointer-events: none;
+}
+/* 下钻标题/祖先壳没有可见圆点：不画自身脊柱线（否则会多出一条竖线） */
+.outline-item.outline-zoom-root[data-has-kids]::after,
+.outline-item.outline-ancestor[data-has-kids]::after {
+  content: none !important;
 }
 /* ---- web 模式自绘"选文件夹"弹窗（数据来自 dev-server fs-browse）---- */
 .fb-card {

@@ -57,13 +57,29 @@ interface DropHint {
   width: number;
 }
 
-export default function HomeView({ active }: { active: boolean }) {
+export default function HomeView({
+  active,
+  canBack = false,
+  canForward = false,
+  onBack,
+  onForward,
+}: {
+  active: boolean;
+  canBack?: boolean;
+  canForward?: boolean;
+  onBack?: () => void;
+  onForward?: () => void;
+}) {
   const { outline, directory } = useDomain();
   const { t } = useSettings();
   const [crumbs, setCrumbs] = useState<OutlineCrumb[]>([{ pos: null, text: "Workflowy" }]);
   const [query, setQuery] = useState("");
   const [hint, setHint] = useState<DropHint | null>(null);
   const [hideDone, setHideDone] = useState(false);
+  // Home 自己的缩放前进/后退栈（App 阅读历史只做兜底）
+  const [canFwd, setCanFwd] = useState(false);
+  const fwdStackRef = useRef<number[]>([]);
+  const navRef = useRef(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const ctlRef = useRef<OutlineController | null>(null);
   const loadingRef = useRef(false);
@@ -337,20 +353,64 @@ export default function HomeView({ active }: { active: boolean }) {
     ctlRef.current?.setQuery(q);
   };
 
+  // 普通下钻/面包屑跳转时清空前进栈；只有前进/后退按钮自己触发的事务保留它
+  useEffect(() => {
+    if (!navRef.current) {
+      fwdStackRef.current = [];
+      setCanFwd(false);
+    }
+    navRef.current = false;
+  }, [crumbs]);
+
   return (
     <div ref={hostRef} className={`home-view${active ? "" : " home-view-idle"}`} style={{ ["--note-ph" as string]: t("homeNotePh") }}>
       <div className="home-toolbar" contentEditable={false}>
+        <button
+          className="home-back"
+          disabled={!(crumbs.length > 1 || canBack)}
+          onClick={() => {
+            const cur = crumbs[crumbs.length - 1]?.pos ?? null;
+            if (cur != null) {
+              fwdStackRef.current.push(cur);
+              setCanFwd(true);
+              navRef.current = true;
+              ctlRef.current?.zoomOut();
+            } else {
+              onBack?.();
+            }
+          }}
+          title={t("homeBack")}
+        >
+          {I.back}
+        </button>
+        <button
+          className="home-back"
+          disabled={!(canFwd || canForward)}
+          onClick={() => {
+            const next = fwdStackRef.current.pop();
+            if (next != null) {
+              setCanFwd(fwdStackRef.current.length > 0);
+              navRef.current = true;
+              ctlRef.current?.zoomTo(next);
+            } else {
+              onForward?.();
+            }
+          }}
+          title={t("homeForward")}
+        >
+          {I.forward}
+        </button>
         <div className="home-crumb">
           <button
             className="home-crumb-btn home-crumb-home"
             onClick={() => ctlRef.current?.zoomTo(null)}
             title="Workflowy"
           >
-            {I.home}
+            {I.house}
           </button>
           {crumbs.slice(1).map((c, i) => (
             <span key={`${c.pos ?? "root"}-${i}`} className="home-crumb-item">
-              <span className="home-crumb-sep">›</span>
+              <span className="home-crumb-sep">{I.chevron}</span>
               <button
                 className="home-crumb-btn"
                 title={c.text}
@@ -389,6 +449,9 @@ export default function HomeView({ active }: { active: boolean }) {
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <path d="M2.5 8s2.2-3.8 5.5-3.8S13.5 8 13.5 8s-2.2 3.8-5.5 3.8S2.5 8 2.5 8z" stroke="currentColor" strokeWidth="1.3" />
             <circle cx="8" cy="8" r="1.6" fill="currentColor" />
+            {hideDone && (
+              <path d="M3 13.5 13 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            )}
           </svg>
         </button>
         <button

@@ -105,6 +105,8 @@ const zh: Record<string, string> = {
 
   // ---- Home 大纲（Workflowy 式） ----
   homeOpenEntry: "Workflowy 大纲（Ctrl+Shift+H）",
+  homeBack: "返回",
+  homeForward: "前进",
   homeSearchPh: "筛选大纲…",
   homeExpandAll: "全部展开",
   homeCollapseAll: "全部折叠",
@@ -459,6 +461,8 @@ const en: Record<string, string> = {
 
   // ---- Home outline (Workflowy-style) ----
   homeOpenEntry: "Workflowy outline (Ctrl+Shift+H)",
+  homeBack: "Back",
+  homeForward: "Forward",
   homeSearchPh: "Filter outline…",
   homeExpandAll: "Expand all",
   homeCollapseAll: "Collapse all",

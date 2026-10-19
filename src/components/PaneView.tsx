@@ -170,7 +170,7 @@ export default function PaneView({
             <div key={tab.id} className={`min-h-0 flex-1 ${on ? "" : "hidden"}`}>
               {tab.path === HOME_PATH ? (
                 /* Home 大纲视图（固定入口；标签保活与其他视图一致） */
-                <HomeView active={active && on} />
+                <HomeView active={active && on} canBack={canBack} canForward={canForward} onBack={onBack} onForward={onForward} />
               ) : /\.excalidraw$/i.test(tab.path) ? (
                 <Suspense
                   fallback={

@@ -10,3 +10,5 @@ server/data/
 .zcode/
 # Tauri 更新签名私钥（公钥 .pub 入库，私钥绝不提交）
 src-tauri/keys/*.key
+# 会话内后台 dev-server 的输出重定向
+.tmp-vite.*.log

@@ -60,9 +60,20 @@ function zoomAnchor(editor: Editor, today: Date): ZoomAnchor | null {
 
 function CalIcon() {
   return (
-    <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-      <rect x="1.2" y="2.5" width="11.6" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M1.2 6h11.6M4.4 1v3M9.6 1v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1.5" y="2.6" width="13" height="11.8" rx="1.8" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M1.5 5.9h13M4.7 1.2v2.9M11.3 1.2v2.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <g fill="currentColor">
+        <rect x="3.4" y="7.3" width="1.7" height="1.5" rx="0.3" />
+        <rect x="7.15" y="7.3" width="1.7" height="1.5" rx="0.3" />
+        <rect x="10.9" y="7.3" width="1.7" height="1.5" rx="0.3" />
+        <rect x="3.4" y="9.9" width="1.7" height="1.5" rx="0.3" />
+        <rect x="7.15" y="9.9" width="1.7" height="1.5" rx="0.3" />
+        <rect x="10.9" y="9.9" width="1.7" height="1.5" rx="0.3" />
+        <rect x="3.4" y="12.5" width="1.7" height="1.2" rx="0.3" />
+        <rect x="7.15" y="12.5" width="1.7" height="1.2" rx="0.3" />
+        <rect x="10.9" y="12.5" width="1.7" height="1.2" rx="0.3" />
+      </g>
     </svg>
   );
 }

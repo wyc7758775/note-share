@@ -23,7 +23,7 @@ import {
   deleteItemAt,
   ensureDayTarget,
   ensureTodayTarget,
-  getActiveOutlineController,
+  getOutlineController,
   itemAddressAt,
   itemHasTag,
   markDragSrcHl,
@@ -66,7 +66,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
 
   const classes = ["outline-item"];
   if (done) classes.push("is-done");
-  // 叶子行（无折叠箭头）：⋯ 移入箭头槽位，行首三槽位 18px 等距不空档
+  // 叶子行（无折叠箭头）：⋯ 移入最近一格，与有箭头的行同列，悬停前后不跳列
   if (!hasChildren) classes.push("no-arrow");
   // 待办条目（官方 todo）：行首复选框取代圆点常显位——点方块=切换完成（不进详情），
   // 方块后面的圆点悬停浮现，点它进节点详情（zoom）／拖它移动
@@ -96,7 +96,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
   const openMenu = (e: React.MouseEvent, x?: number, y?: number) => {
     e.preventDefault();
     e.stopPropagation();
-    const ctl = getActiveOutlineController();
+    const ctl = getOutlineController(editor);
     // Workflowy：菜单打开期间该条目 + 当前展开的子树整块高亮，关闭即熄灭。
     // 先弹菜单（内部先销毁上一个菜单、触发其清高亮回调），再点亮本行，避免误清新高亮
     showContextMenu(
@@ -243,11 +243,15 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
           data-tip={t("homeToggleCollapse")}
           onClick={(e) => {
             e.preventDefault();
-            if (pos != null) getActiveOutlineController()?.toggleCollapse(pos);
+            if (pos != null) getOutlineController(editor)?.toggleCollapse(pos);
           }}
         >
           <svg width="28" height="28" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.75 9.57a.5.5 0 0 1 0 .87l-5.25 3.03a.5.5 0 0 1 .75-.43V7.97a.5.5 0 0 1 .75-.43l5.25 3.03z" />
+            {/* 路径几何中心校正到 viewBox 中心：旋转 90° 时不偏移，盒中心即图形中心 */}
+            <path
+              transform="translate(-1.875 -0.4715)"
+              d="M13.75 9.57a.5.5 0 0 1 0 .87l-5.25 3.03a.5.5 0 0 1 .75-.43V7.97a.5.5 0 0 1 .75-.43l5.25 3.03z"
+            />
           </svg>
         </button>
       )}
@@ -299,7 +303,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
         onDragEnd={() => clearDragSrcHl()}
         onClick={(e) => {
           e.preventDefault();
-          if (pos != null) getActiveOutlineController()?.zoomTo(pos);
+          if (pos != null) getOutlineController(editor)?.zoomTo(pos);
         }}
         onContextMenu={openMenu}
       >
@@ -312,7 +316,7 @@ export function OutlineItemView({ node, getPos, editor }: NodeViewProps) {
         <HomeBoard
           editor={editor}
           rootPos={pos}
-          onLocate={(addr) => getActiveOutlineController()?.zoomToAddress(addr)}
+          onLocate={(addr) => getOutlineController(editor)?.zoomToAddress(addr)}
         />
       )}
     </NodeViewWrapper>

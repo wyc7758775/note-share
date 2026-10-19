@@ -156,6 +156,14 @@ export const I = {  chevron: (
       />
     </svg>
   ),
+  house: (
+    // 顶栏面包屑 Home 入口：参考图线框房子（含门）
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+      <path d="M2.8 8.6 10 2.9l7.2 5.7" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4.6 9.3V16a1.3 1.3 0 0 0 1.3 1.3h8.2a1.3 1.3 0 0 0 1.3-1.3V9.3" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M8.2 17.3v-4.1a.7.7 0 0 1 .7-.7h2.2a.7.7 0 0 1 .7.7v4.1" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round" />
+    </svg>
+  ),
   more: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
       <circle cx="3.4" cy="8" r="1.35" fill="currentColor" />

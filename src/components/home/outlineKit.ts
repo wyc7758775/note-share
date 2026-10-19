@@ -281,7 +281,7 @@ export function createOutlineController(editor: Editor): OutlineController {
   };
   const st = () => outlineStructureKey.getState(editor.state);
 
-  return {
+  const controller: OutlineController = {
     zoomTo(pos) {
       setMeta({ zoomPos: pos, query: null });
     },
@@ -365,6 +365,9 @@ export function createOutlineController(editor: Editor): OutlineController {
       return out;
     },
   };
+  // 同时挂到 editor 上：HMR/多模块实例时 NodeView 也能拿到当前编辑器的控制器
+  (editor as unknown as { __outlineController?: OutlineController }).__outlineController = controller;
+  return controller;
 }
 
 /** Home 编辑器全局唯一（标签全局去重）；NodeView 经此拿控制器 */
@@ -374,6 +377,13 @@ export function setActiveOutlineController(c: OutlineController | null) {
 }
 export function getActiveOutlineController(): OutlineController | null {
   return activeController;
+}
+/** 优先取挂在 editor 上的控制器（HMR/多模块实例时仍与当前编辑器一致） */
+export function getOutlineController(editor?: Editor | null): OutlineController | null {
+  return (
+    (editor as unknown as { __outlineController?: OutlineController } | null)?.__outlineController ??
+    activeController
+  );
 }
 
 /** item 里的嵌套列表及其在 item 内的偏移（没有则 null） */
@@ -508,7 +518,7 @@ function toggleDoneCommand(editor: Editor): boolean {
 
 /** Ctrl+↑ / Ctrl+↓ / Ctrl+Space：折叠 / 展开 / 切换（作用于光标条目） */
 function collapseCommand(editor: Editor, mode: "collapse" | "expand" | "toggle"): boolean {
-  const ctl = getActiveOutlineController();
+  const ctl = getOutlineController(editor);
   const hit = currentItem(editor);
   if (!ctl || !hit) return false;
   if (!nestedListOf(hit.node)) return false; // 无子级不可折叠
@@ -684,11 +694,11 @@ export const OutlineKeys = Extension.create({
       "Alt-.": () => {
         const hit = currentItem(editor);
         if (!hit) return false;
-        getActiveOutlineController()?.zoomTo(hit.start);
+        getOutlineController(editor)?.zoomTo(hit.start);
         return true;
       },
       "Alt-,": () => {
-        getActiveOutlineController()?.zoomOut();
+        getOutlineController(editor)?.zoomOut();
         return true;
       },
       // ---- 编辑与移动 ----
@@ -711,7 +721,7 @@ export const OutlineKeys = Extension.create({
       "Mod-Space": () => collapseCommand(editor, "toggle"),
       // ---- 搜索退出 ----
       Escape: () => {
-        const ctl = getActiveOutlineController();
+        const ctl = getOutlineController(editor);
         if (!ctl) return false;
         const st = outlineStructureKey.getState(editor.state);
         if (st?.query) {
@@ -956,7 +966,7 @@ export const OutlineDateChips = Extension.create({
     const editor = this.editor;
     /** Атомарное удаление chip (официальная семантика dateChip): Backspace/Delete внутри pill или вплотную справа
      *  удаляет весь заголовок разом — почастично нельзя, иначе chip незаметно выродится в сломанную дату */
-    const atomicChipDelete = (dir: "back" | "fwd"): boolean => {
+    const atomicChipDelete = (): boolean => {
       const { state } = editor;
       const { selection } = state;
       if (!selection.empty) return false;
@@ -974,8 +984,8 @@ export const OutlineDateChips = Extension.create({
       return true;
     };
     return {
-      Backspace: () => atomicChipDelete("back"),
-      Delete: () => atomicChipDelete("fwd"),
+      Backspace: () => atomicChipDelete(),
+      Delete: () => atomicChipDelete(),
     };
   },
   addProseMirrorPlugins() {
