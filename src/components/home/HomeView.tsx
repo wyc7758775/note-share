@@ -2,7 +2,7 @@
 // 顶部面包屑（zoom 路径）+ 搜索框 + 展开/折叠；正文是 TipTap 大纲编辑器。
 // 数据走 OutlineStore（Home.md 内存权威）：编辑防抖落盘、外部改写灌回；
 // 缩放/折叠/搜索是文档装饰而非切片，命令与撤销都作用于真实文档。
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -10,17 +10,24 @@ import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { useDomain } from "../../domain/provider";
 import { useSettings, currentLang, translate } from "../../i18n";
+import { backend } from "../../backend";
+import type { SearchHit } from "../../backend/types";
+import { HOME_PATH } from "../../outline/store";
 import HomeToday from "./HomeToday";
+import HomeSearchFilters, { type SearchFilter } from "./HomeSearchFilters";
 import { forEditor, forSave } from "../../lib/markdown";
 import { Wikilink, emitOpenNote } from "../WikiLink";
 import { InlineAudio, insertVoiceAfterCurrentItem } from "../AudioBlock";
 import { createSlashMenu } from "../SlashMenu";
 import type { SlashItem } from "../SlashMenu";
-import { I } from "../icons";
+import { I, Icon } from "../icons";
 import {
   consumePendingZoom,
   requestOpenHome,
   requestZoomHome,
+  NAV_BACK_EVENT,
+  NAV_FORWARD_EVENT,
+  RESET_HOME_EVENT,
   ZOOM_HOME_EVENT,
   type HomeZoomTarget,
 } from "../../outline/home-bus";
@@ -42,14 +49,18 @@ import {
   createOutlineController,
   dayEntryDate,
   ensureTodayTarget,
+  itemAddressAt,
   itemPosAround,
-  outlineStructureKey,
   resolveOutlineDropTarget,
   setActiveOutlineController,
   type OutlineController,
   type OutlineCrumb,
 } from "./outlineKit";
 import { openDateChipPicker } from "./DateChipPick";
+
+function hideTagSuggestion() {
+  document.querySelector<HTMLElement>(".outline-tag-suggest")?.removeAttribute("data-show");
+}
 
 interface DropHint {
   top: number;
@@ -73,12 +84,31 @@ export default function HomeView({
   const { outline, directory } = useDomain();
   const { t } = useSettings();
   const [crumbs, setCrumbs] = useState<OutlineCrumb[]>([{ pos: null, text: "Workflowy" }]);
-  const [query, setQuery] = useState("");
   const [hint, setHint] = useState<DropHint | null>(null);
   const [hideDone, setHideDone] = useState(false);
-  // Home 自己的缩放前进/后退栈（App 阅读历史只做兜底）
+  const [searchFocus, setSearchFocus] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
+  const [searchAnchor, setSearchAnchor] = useState<{ right: number; top: number } | null>(null);
+  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchTerm = searchQuery.trim();
+  const term = useMemo(() => {
+    if (!searchTerm) return "";
+    if (searchFilter === "tags") return "#" + searchTerm.replace(/^#+/, "");
+    if (searchFilter === "mentions") return "[[" + searchTerm.replace(/^[[|]]$/g, "") + "]]";
+    return searchTerm;
+  }, [searchTerm, searchFilter]);
+  const searching = term.length > 0;
+  const searchFieldOn = searchFocus || searchTerm.length > 0;
+  // Home 自己的 zoom 历史：以“条目树地址”为步，面包屑跳级/双击下钻/搜索定位都算一步。
+  // 位置(pos)会被上方编辑平移，地址不会；后退可精确回到上一步的层级。
+  const [canZoomBack, setCanZoomBack] = useState(false);
   const [canFwd, setCanFwd] = useState(false);
-  const fwdStackRef = useRef<number[]>([]);
+  const backStackRef = useRef<number[][]>([]);
+  const fwdStackRef = useRef<number[][]>([]);
+  const lastZoomAddrRef = useRef<number[]>([]);
   const navRef = useRef(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const ctlRef = useRef<OutlineController | null>(null);
@@ -138,6 +168,23 @@ export default function HomeView({
       attributes: { class: "outline-doc focus:outline-none", spellcheck: "false" },
       handleDOMEvents: {
         mousedown: (view, event) => {
+          // 点击 #tag 直接搜索：阻止编辑器落光标，避免同时弹出标签自动补全
+          const tagHit = (event.target as HTMLElement).closest?.(".outline-tag");
+          if (tagHit) {
+            event.preventDefault();
+            hideTagSuggestion();
+            const tag = (tagHit.textContent ?? "").replace(/^#/, "").trim();
+            const q = `#${tag}`;
+            setSearchFilter("tags");
+            setSearchQuery(q);
+            ctlRef.current?.setQuery(q);
+            setSearchFocus(true);
+            requestAnimationFrame(() => {
+              searchInputRef.current?.focus();
+              hideTagSuggestion();
+            });
+            return true;
+          }
           // 点击日期 chip（官方 dateChip）：不落光标，原地弹日期选择器
           const el = (event.target as HTMLElement).closest?.(".wf-date-chip");
           if (!el || !editor) return false;
@@ -152,12 +199,18 @@ export default function HomeView({
           // 点击 #tag（官方语义：按该标签过滤，再点同一标签退出过滤）
           const tagEl = (event.target as HTMLElement).closest?.(".outline-tag");
           if (tagEl) {
-            // 装饰文本自带 #，剥掉再拼，避免 ## 重复
+            // 点标签 = 整页立即进入该标签的搜索；顺手关掉无意义的标签补全弹窗
+            hideTagSuggestion();
             const tag = (tagEl.textContent ?? "").replace(/^#/, "").trim();
-            const cur = (outlineStructureKey.getState(_view.state)?.query ?? "").replace(/^#/, "");
-            const next = cur === tag ? "" : `#${tag}`;
-            setQuery(next);
-            ctlRef.current?.setQuery(next || null);
+            const q = `#${tag}`;
+            setSearchFilter("tags");
+            setSearchQuery(q);
+            ctlRef.current?.setQuery(q);
+            setSearchFocus(true);
+            requestAnimationFrame(() => {
+              searchInputRef.current?.focus();
+              hideTagSuggestion();
+            });
             return true;
           }
           const el = (event.target as HTMLElement).closest?.(".wikilink");
@@ -302,8 +355,23 @@ export default function HomeView({
       applyZoom(consumePendingZoom());
     });
     const onTr = () => {
-      setCrumbs(ctl.crumbs());
+      const nextCrumbs = ctl.crumbs();
+      setCrumbs(nextCrumbs);
       setHideDone(ctl.isHideCompleted());
+      // 记录 zoom 目标变化（地址不变的事务——纯编辑/移动光标——不算一步）
+      const z = nextCrumbs[nextCrumbs.length - 1]?.pos ?? null;
+      const addr = z == null ? [] : itemAddressAt(editor.state.doc, z);
+      if (!addr) return;
+      if (addr.join("/") === lastZoomAddrRef.current.join("/")) return;
+      if (navRef.current || loadingRef.current) {
+        lastZoomAddrRef.current = addr;
+        return;
+      }
+      backStackRef.current.push(lastZoomAddrRef.current);
+      lastZoomAddrRef.current = addr;
+      fwdStackRef.current = [];
+      setCanZoomBack(true);
+      setCanFwd(false);
     };
     editor.on("transaction", onTr);
     const onZoom = (e: Event) => applyZoom((e as CustomEvent<HomeZoomTarget>).detail);
@@ -348,36 +416,163 @@ export default function HomeView({
     else if (target.address) ctlRef.current?.zoomToAddress(target.address);
   }
 
-  const onQuery = (q: string) => {
-    setQuery(q);
-    ctlRef.current?.setQuery(q);
-  };
-
-  // 普通下钻/面包屑跳转时清空前进栈；只有前进/后退按钮自己触发的事务保留它
+  // 搜索是整页模式：查询直接驱动大纲过滤，结果不再弹在搜索框下面。
   useEffect(() => {
-    if (!navRef.current) {
-      fwdStackRef.current = [];
-      setCanFwd(false);
+    if (!editor) return;
+    ctlRef.current?.setQuery(term || null);
+  }, [editor, term]);
+
+  // 过滤行贴在搜索框下方（同一张卡）；位置取输入框底边，宽度固定 320。
+  useEffect(() => {
+    if (!searchFieldOn) return;
+    const r = searchBoxRef.current?.getBoundingClientRect();
+    const host = hostRef.current?.getBoundingClientRect();
+    if (r) setSearchAnchor({ right: window.innerWidth - r.right, top: r.bottom - (host?.top ?? 0) });
+  }, [searchFieldOn]);
+
+  // 非 Workflowy 的其它笔记结果：220ms 防抖，显示在过滤后的大纲下方
+  useEffect(() => {
+    if (!term) {
+      setSearchHits([]);
+      return;
+    }
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const rows = await backend.search(term);
+        if (!alive) return;
+        setSearchHits(rows.filter((h) => h.path !== HOME_PATH).slice(0, 12));
+      } catch {
+        if (alive) setSearchHits([]);
+      }
+    }, 220);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [term]);
+
+  // Ctrl+K 聚焦搜索框；搜索本身不再有弹层
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
+
+  const resetSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchFilter("all");
+    setSearchFocus(false);
+    ctlRef.current?.setQuery(null);
+    searchInputRef.current?.blur();
+    editor?.commands.focus();
+  }, [editor]);
+
+  // 点击 Home 标签/侧栏 Home/顶栏房子：清空搜索并回到原始大纲
+  useEffect(() => {
+    const onReset = () => {
+      resetSearch();
+      ctlRef.current?.zoomTo(null);
+    };
+    window.addEventListener(RESET_HOME_EVENT, onReset);
+    return () => window.removeEventListener(RESET_HOME_EVENT, onReset);
+  }, [resetSearch]);
+
+  // Home 的 zoom 步进（后退/前进）：先恢复上一步地址，再落到 App 路由历史。
+  // 失败（目标条目已被删除）时跳过该步，继续找可用的上一步。
+  const zoomHistoryBack = useCallback((): boolean => {
+    const ctl = ctlRef.current;
+    if (!ctl || backStackRef.current.length === 0) return false;
+    const cur = lastZoomAddrRef.current;
+    while (backStackRef.current.length > 0) {
+      const prev = backStackRef.current[backStackRef.current.length - 1];
+      navRef.current = true;
+      const ok = ctl.zoomToAddress(prev);
+      if (ok) {
+        backStackRef.current.pop();
+        fwdStackRef.current.push(cur);
+        lastZoomAddrRef.current = prev;
+        setCanZoomBack(backStackRef.current.length > 0);
+        setCanFwd(true);
+        queueMicrotask(() => {
+          navRef.current = false;
+        });
+        return true;
+      }
+      backStackRef.current.pop();
     }
     navRef.current = false;
-  }, [crumbs]);
+    setCanZoomBack(false);
+    return false;
+  }, []);
+
+  const zoomHistoryForward = useCallback((): boolean => {
+    const ctl = ctlRef.current;
+    if (!ctl || fwdStackRef.current.length === 0) return false;
+    while (fwdStackRef.current.length > 0) {
+      const next = fwdStackRef.current[fwdStackRef.current.length - 1];
+      const cur = lastZoomAddrRef.current;
+      navRef.current = true;
+      const ok = ctl.zoomToAddress(next);
+      if (ok) {
+        fwdStackRef.current.pop();
+        backStackRef.current.push(cur);
+        lastZoomAddrRef.current = next;
+        setCanZoomBack(true);
+        setCanFwd(fwdStackRef.current.length > 0);
+        queueMicrotask(() => {
+          navRef.current = false;
+        });
+        return true;
+      }
+      fwdStackRef.current.pop();
+    }
+    navRef.current = false;
+    setCanFwd(false);
+    return false;
+  }, []);
+
+  // 鼠标侧键先走 Home 的 zoom 历史（与顶栏后退/前进同一条路），未处理才冒泡给 App
+  useEffect(() => {
+    if (!active) return;
+    const onNavBack = (e: Event) => {
+      if (searching) {
+        e.preventDefault();
+        resetSearch();
+        return;
+      }
+      if (zoomHistoryBack()) e.preventDefault();
+    };
+    const onNavForward = (e: Event) => {
+      if (zoomHistoryForward()) e.preventDefault();
+    };
+    window.addEventListener(NAV_BACK_EVENT, onNavBack);
+    window.addEventListener(NAV_FORWARD_EVENT, onNavForward);
+    return () => {
+      window.removeEventListener(NAV_BACK_EVENT, onNavBack);
+      window.removeEventListener(NAV_FORWARD_EVENT, onNavForward);
+    };
+  }, [active, searching, resetSearch, zoomHistoryBack, zoomHistoryForward]);
 
   return (
     <div ref={hostRef} className={`home-view${active ? "" : " home-view-idle"}`} style={{ ["--note-ph" as string]: t("homeNotePh") }}>
       <div className="home-toolbar" contentEditable={false}>
         <button
           className="home-back"
-          disabled={!(crumbs.length > 1 || canBack)}
+          disabled={!(searching || canZoomBack || canBack)}
           onClick={() => {
-            const cur = crumbs[crumbs.length - 1]?.pos ?? null;
-            if (cur != null) {
-              fwdStackRef.current.push(cur);
-              setCanFwd(true);
-              navRef.current = true;
-              ctlRef.current?.zoomOut();
-            } else {
-              onBack?.();
+            if (searching) {
+              resetSearch();
+              return;
             }
+            if (!zoomHistoryBack()) onBack?.();
           }}
           title={t("homeBack")}
         >
@@ -387,14 +582,7 @@ export default function HomeView({
           className="home-back"
           disabled={!(canFwd || canForward)}
           onClick={() => {
-            const next = fwdStackRef.current.pop();
-            if (next != null) {
-              setCanFwd(fwdStackRef.current.length > 0);
-              navRef.current = true;
-              ctlRef.current?.zoomTo(next);
-            } else {
-              onForward?.();
-            }
+            if (!zoomHistoryForward()) onForward?.();
           }}
           title={t("homeForward")}
         >
@@ -403,7 +591,10 @@ export default function HomeView({
         <div className="home-crumb">
           <button
             className="home-crumb-btn home-crumb-home"
-            onClick={() => ctlRef.current?.zoomTo(null)}
+            onClick={() => {
+              resetSearch();
+              ctlRef.current?.zoomTo(null);
+            }}
             title="Workflowy"
           >
             {I.house}
@@ -422,25 +613,47 @@ export default function HomeView({
           ))}
         </div>
         <span className="flex-1" />
-        {/* 搜索框（内嵌放大镜）→ 眼睛 → 日记：搜索与日记按用户要求换位 */}
-        <span className="home-search-box">
-          <svg className="home-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+        {/* 搜索框在顶栏原位；查询直接过滤整页大纲，结果不在这里弹出 */}
+        <div
+          ref={searchBoxRef}
+          className={`home-search-trigger${searchFieldOn ? " is-on" : ""}`}
+          data-tip={t("tabSearch")}
+          onClick={() => searchInputRef.current?.focus()}
+        >
+          <Icon name="search" size="sm" className="home-search-mag" />
           <input
-            className="home-search"
-            placeholder={t("homeSearchPh")}
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
+            ref={searchInputRef}
+            className="home-search-input"
+            placeholder={t("searchPanelPh")}
+            value={searchQuery}
+            spellCheck={false}
+            aria-expanded={searchFieldOn}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocus(true)}
+            onBlur={() => setSearchFocus(false)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                (e.target as HTMLInputElement).blur();
-                editor?.commands.focus();
-              }
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              setSearchQuery("");
+              setSearchFocus(false);
+              searchInputRef.current?.blur();
+              editor?.commands.focus();
             }}
           />
-        </span>
+          {searchQuery && (
+            <button
+              className="home-search-clear"
+              title={t("searchClear")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setSearchQuery("");
+                searchInputRef.current?.focus();
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
         <button
           className={`home-tool-btn${hideDone ? " is-on" : ""}`}
           data-tip={t("homeHideDone")}
@@ -472,32 +685,76 @@ export default function HomeView({
           </svg>
         </button>
       </div>
-      <div className="home-scroll">
-        {/* 官方 Calendar ribbon：仅在 zoom 到日期条目（每日笔记）时出现在编辑区上方 */}
-        <HomeToday
-          editor={editor}
-          onLocate={(addr) => {
-            if (editor) ctlRef.current?.zoomToAddress(addr);
-          }}
-        />
-        <div className="home-editor-wrap">
-          <div className="outline-root">{editor ? <EditorContent editor={editor} /> : null}</div>
-          {/* 列表末尾的 + 快捷新建（Workflowy）：点击在当前视图层级末尾加条目 */}
-          <button
-            className="outline-add"
-            title={t("homeAddItem")}
-            style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
-            onMouseDown={(e) => e.preventDefault()} // 不抢编辑器焦点
-            onClick={() => {
-              if (!editor) return;
-              appendItemCommand(editor);
-              editor.commands.focus();
+      {searchFieldOn && (
+        <div
+          className="home-search-panel is-expanded"
+          data-open="1"
+          style={searchAnchor ?? undefined}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <HomeSearchFilters
+            value={searchFilter}
+            onChange={(f) => {
+              setSearchFilter(f);
+              searchInputRef.current?.focus();
             }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          />
+        </div>
+      )}
+      <div className="home-scroll">
+        {/* 搜索不另起页面：直接过滤真实大纲，节点/展开箭头/缩进全部沿用原样式 */}
+        {!searching && (
+          <HomeToday
+            editor={editor}
+            onLocate={(addr) => {
+              if (editor) ctlRef.current?.zoomToAddress(addr);
+            }}
+          />
+        )}
+        <div className="home-editor-wrap">
+          <div className="outline-root">
+            {editor ? <EditorContent editor={editor} /> : null}
+          </div>
+          {!searching && (
+            <button
+              className="outline-add"
+              title={t("homeAddItem")}
+              style={{ marginLeft: crumbs.length > 1 ? 32 : 0 }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (!editor) return;
+                appendItemCommand(editor);
+                editor.commands.focus();
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+          {searching && searchHits.length > 0 && (
+            <div className="home-inline-notes">
+              <div
+                className="home-search-divider"
+                role="separator"
+                aria-label={t("searchSectionNotes")}
+              >
+                <span>{t("searchSectionNotes")}</span>
+              </div>
+              {searchHits.map((h, i) => (
+                <button
+                  key={h.path}
+                  className="home-search-result home-inline-note"
+                  style={{ ["--i" as string]: i }}
+                  onClick={() => emitOpenNote(h.path, { newTab: true })}
+                >
+                  <span className="home-search-main">
+                    <span className="home-search-title">{h.title || h.path}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       {hint && (

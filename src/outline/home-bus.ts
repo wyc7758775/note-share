@@ -4,6 +4,11 @@
 
 export const OPEN_HOME_EVENT = "noteshare:open-home";
 export const ZOOM_HOME_EVENT = "noteshare:zoom-home";
+/** 全局返回/前进（鼠标侧键）：由当前激活视图先处理（Home 的 zoom），未处理再落 App 历史 */
+export const NAV_BACK_EVENT = "noteshare:nav-back";
+export const NAV_FORWARD_EVENT = "noteshare:nav-forward";
+/** 点击 Home/Workflowy 入口：清空搜索并回到原始大纲 */
+export const RESET_HOME_EVENT = "noteshare:reset-home";
 
 export interface HomeOpenOpts {
   newTab?: boolean;

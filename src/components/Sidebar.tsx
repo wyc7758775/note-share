@@ -7,9 +7,9 @@ import { downloadDataUrl } from "../lib/download";
 import { showContextMenu } from "./ContextMenu";
 import { useDomain, useOutlineVersion } from "../domain/provider";
 import { HOME_PATH, type OutlineSearchRow } from "../outline/store";
-import { requestOpenHome, requestZoomHome } from "../outline/home-bus";
+import { RESET_HOME_EVENT, requestOpenHome, requestZoomHome } from "../outline/home-bus";
 import { NODE_MIME } from "./home/outlineKit";
-import { I } from "./icons";
+import { I, Icon } from "./icons";
 import { startUpdate, updatePercent, useUpdates } from "../updater/store";
 import FileTree, { InlineInputRow, type TreeHandlers } from "./FileTree";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
@@ -326,7 +326,10 @@ export default function Sidebar(props: Props) {
         <button
           className={`side-tab side-tab-home ${currentPath === HOME_PATH ? "active" : ""}`}
           data-tip={t("homeOpenEntry")}
-          onClick={() => onOpenNote(HOME_PATH, { newTab: true })}
+          onClick={() => {
+            onOpenNote(HOME_PATH, { newTab: true });
+            window.dispatchEvent(new CustomEvent(RESET_HOME_EVENT));
+          }}
         >
           {I.home}
         </button>
@@ -342,7 +345,7 @@ export default function Sidebar(props: Props) {
           data-tip={t("tabSearch")}
           onClick={() => setTab("search")}
         >
-          {I.search}
+          <Icon name="search" size="md" />
         </button>
         <span className="flex-1" />
         <button

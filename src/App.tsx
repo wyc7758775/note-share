@@ -22,9 +22,18 @@ import { OPEN_NOTE_EVENT } from "./components/WikiLink";
 import { EDIT_SCENE_EVENT, emitEditScene } from "./components/ExcalidrawBlock";
 import { PikachuLogo, I } from "./components/icons";
 import { HOME_PATH } from "./outline/store";
-import { OPEN_HOME_EVENT } from "./outline/home-bus";
+import { OPEN_HOME_EVENT, NAV_BACK_EVENT, NAV_FORWARD_EVENT } from "./outline/home-bus";
 
 /** 一次"打开的仓库"会话：领域容器 + 仓库引用。切换仓库 = 整个 session 换新 */
+interface NavSnapshot {
+  path: string;
+  paneId: number;
+  tabId: number | null;
+}
+interface NavHistory {
+  stack: NavSnapshot[];
+  index: number;
+}
 interface VaultSession {
   domain: Domain;
   vault: VaultRef;
@@ -139,13 +148,16 @@ function VaultApp({
     localStorage.setItem("noteshare.sideCollapsed", sideCollapsed ? "1" : "0");
   }, [sideCollapsed]);
 
-  // 笔记历史（MRU 去重栈）：双链跳转（阅读链路）进历史；树/搜索点击只切活动栏不动栈
-  const [history, setHistory] = useState<{ stack: string[]; index: number }>({ stack: [], index: -1 });
+  // 应用导航历史（时间线）：每一次路由变化（树/搜索/双链/切标签/换栏）都记一步。
+  // 记录不靠各入口自己调用，而是订阅 Workspace 的活动标签变化——入口再多也不会漏。
+  const [history, setHistory] = useState<NavHistory>({ stack: [], index: -1 });
+  const historyRef = useRef<NavHistory>({ stack: [], index: -1 });
+  const navApplyingRef = useRef(false);
 
   // 打开笔记/画板：单击替换活动栏当前标签，Ctrl+点击当前栏新标签，Ctrl+Shift+点击在右侧拆新栏。
   // Home 是固定入口且全局唯一：已开则激活所在栏（不再开第二个）
   const openNote = useCallback(
-    (path: string, opts?: { viaHistory?: boolean; newTab?: boolean; newPane?: boolean }) => {
+    (path: string, opts?: { newTab?: boolean; newPane?: boolean }) => {
       if (path === HOME_PATH) {
         for (const pane of workspace.paneList) {
           const hit = pane.tabs.find((tb) => tb.path === HOME_PATH);
@@ -156,26 +168,125 @@ function VaultApp({
         }
       }
       workspace.open(path, opts?.newPane ? "newPane" : opts?.newTab ? "newTab" : "replace");
-      if (!opts?.viaHistory) return;
-      setHistory((h) => {
-        const stack = h.stack.filter((p) => p !== path); // MRU：移除旧位置
-        return { stack: [...stack, path], index: stack.length };
-      });
     },
     [workspace]
   );
 
+  const captureNav = useCallback((): NavSnapshot | null => {
+    const path = workspace.activePath;
+    if (!path) return null;
+    return { path, paneId: workspace.active.id, tabId: workspace.active.activeTabId ?? null };
+  }, [workspace]);
+
+  const commitHistory = useCallback((next: NavHistory) => {
+    historyRef.current = next;
+    setHistory(next);
+  }, []);
+
+  const pushNav = useCallback(
+    (snap: NavSnapshot) => {
+      if (navApplyingRef.current) return;
+      const h = historyRef.current;
+      const top = h.stack[h.index];
+      if (top && top.path === snap.path && top.paneId === snap.paneId && top.tabId === snap.tabId) {
+        return; // 尺寸/焦点等变化不产生新步骤
+      }
+      if (h.stack.length === 0) {
+        commitHistory({ stack: [snap], index: 0 });
+        return;
+      }
+      const stack = [...h.stack.slice(0, h.index + 1), snap]; // 回退后再操作：截断前进分支
+      commitHistory({ stack, index: stack.length - 1 });
+    },
+    [commitHistory]
+  );
+
+  const applyNav = useCallback(
+    (snap: NavSnapshot) => {
+      navApplyingRef.current = true;
+      try {
+        const pane = workspace.paneOf(snap.paneId);
+        if (pane) {
+          const exact = pane.tabs.find((t) => t.id === snap.tabId && t.path === snap.path);
+          const byPath = pane.tabs.find((t) => t.path === snap.path);
+          workspace.focus(snap.paneId);
+          if (exact) workspace.activateTab(snap.paneId, exact.id);
+          else if (byPath) workspace.activateTab(snap.paneId, byPath.id);
+          else {
+            // 原标签还在但路径已被替换：先切回原标签，再在它上面恢复路径
+            const original = pane.tabs.find((t) => t.id === snap.tabId);
+            if (original) workspace.activateTab(snap.paneId, original.id);
+            workspace.open(snap.path);
+          }
+        } else {
+          const hit = workspace.paneList
+            .flatMap((p) => p.tabs.map((tab) => ({ pane: p, tab })))
+            .find((x) => x.tab.path === snap.path);
+          if (hit) workspace.activateTab(hit.pane.id, hit.tab.id);
+          else workspace.open(snap.path);
+        }
+      } finally {
+        navApplyingRef.current = false;
+      }
+      // 恢复后校准实际 tab（目标标签已关/路径已被替换时可能是新标签）
+      const actual = captureNav();
+      if (actual) {
+        const cur = historyRef.current;
+        const top = cur.stack[cur.index];
+        if (
+          top &&
+          (top.path !== actual.path || top.paneId !== actual.paneId || top.tabId !== actual.tabId)
+        ) {
+          const stack = [...cur.stack];
+          stack[cur.index] = actual;
+          commitHistory({ ...cur, stack });
+        }
+      }
+    },
+    [workspace, captureNav, commitHistory]
+  );
+
   const jumpHistory = useCallback(
     (delta: 1 | -1) => {
-      setHistory((h) => {
-        const i = h.index + delta;
-        if (i < 0 || i >= h.stack.length) return h;
-        workspace.open(h.stack[i]); // 返回/前进作用于活动栏当前标签
-        return { ...h, index: i };
-      });
+      const h = historyRef.current;
+      const i = h.index + delta;
+      if (i < 0 || i >= h.stack.length) return;
+      const target = h.stack[i];
+      commitHistory({ ...h, index: i });
+      applyNav(target);
     },
-    [workspace]
+    [applyNav, commitHistory]
   );
+
+  // 鼠标侧键 / 浏览器后退的统一入口：Home 的 zoom 先处理，未处理再走 App 路由历史。
+  // 同一物理按键可能同时触发 DOM 事件与原生 history 后退，180ms 内去重。
+  const navAtRef = useRef(0);
+  const performNav = useCallback(
+    (dir: 1 | -1) => {
+      const now = performance.now();
+      if (now - navAtRef.current < 180) return;
+      navAtRef.current = now;
+      const ev = new CustomEvent(dir === -1 ? NAV_BACK_EVENT : NAV_FORWARD_EVENT, {
+        cancelable: true,
+      });
+      window.dispatchEvent(ev);
+      if (!ev.defaultPrevented) jumpHistory(dir);
+    },
+    [jumpHistory]
+  );
+
+  // Workspace 任何活动路由变化都同步进历史（初始化落地的那一步作为基线）
+  useEffect(() => {
+    const sync = () => {
+      const snap = captureNav();
+      if (snap) pushNav(snap);
+    };
+    sync();
+    const off = workspace.subscribe(sync);
+    return () => {
+      off();
+    };
+  }, [workspace, captureNav, pushNav]);
 
   const refreshTree = useCallback(async () => {
     setTree(await backend.tree());
@@ -215,7 +326,11 @@ function VaultApp({
         void refreshTree();
         if (e.type === "noteRenamed" || e.type === "noteMoved") {
           workspace.relocate(e.from, e.to); // 所有栏的标签路径跟随
-          setHistory((h) => ({ ...h, stack: h.stack.map((p) => (p === e.from ? e.to : p)) }));
+          const h = historyRef.current;
+          commitHistory({
+            ...h,
+            stack: h.stack.map((s) => (s.path === e.from ? { ...s, path: e.to } : s)),
+          });
         } else if (e.type === "assetMoved") {
           workspace.relocate(e.from, e.to); // 白板/手绘重命名或移动：标签路径跟随（面板按新 src 重载）
         } else if (e.type === "noteTrashed") {
@@ -224,7 +339,7 @@ function VaultApp({
       }
     );
     return off;
-  }, [bus, refreshTree, workspace]);
+  }, [bus, refreshTree, workspace, commitHistory]);
 
   useEffect(() => {
     void refreshTree();
@@ -255,30 +370,62 @@ function VaultApp({
   useEffect(() => {
     const onOpen = (e: Event) => {
       const d = (e as CustomEvent<{ path: string; newTab?: boolean; newPane?: boolean }>).detail;
-      openNote(d.path, { viaHistory: true, newTab: d.newTab, newPane: d.newPane });
+      openNote(d.path, { newTab: d.newTab, newPane: d.newPane });
     };
     window.addEventListener(OPEN_NOTE_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
   }, [openNote]);
 
-  // 鼠标侧键（X1/X2）驱动笔记历史
+  // 鼠标侧键（X1/X2）驱动完整导航历史：先让当前 Home 视图处理自己的 zoom 返回，
+  // 未处理再落 App 路由历史（树/搜索/双链/切标签都在内）。
   useEffect(() => {
     const onAux = (e: MouseEvent) => {
-      if (e.button === 3) {
-        e.preventDefault();
-        jumpHistory(-1);
-      } else if (e.button === 4) {
-        e.preventDefault();
-        jumpHistory(1);
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      performNav(e.button === 3 ? -1 : 1);
+    };
+    window.addEventListener("mousedown", onAux, true);
+    window.addEventListener("auxclick", onAux, true);
+    return () => {
+      window.removeEventListener("mousedown", onAux, true);
+      window.removeEventListener("auxclick", onAux, true);
+    };
+  }, [performNav]);
+
+  // 原生后退劫持：鼠标侧键/Alt+←/浏览器后退在 WebView 里会直接触发 history 后退，
+  // DOM mousedown 不一定收得到（实测 Chrome 会直接离开文档）。在当前位置上方
+  // 常备一层同文档 guard，后退先落到 guard，再走 App 自己的历史；每次后退后补回。
+  useEffect(() => {
+    const key = "__noteShareGuard";
+    const run = Math.random().toString(36).slice(2);
+    const carry =
+      window.history.state && typeof window.history.state === "object"
+        ? (window.history.state as Record<string, unknown>)
+        : {};
+    try {
+      window.history.replaceState({ ...carry, [key]: { run, level: 1 } }, "");
+      window.history.pushState({ ...carry, [key]: { run, level: 2 } }, "");
+    } catch {
+      return; // 非 http(s) 自定义协议等不支持 History API：仍可退回鼠标 DOM 事件
+    }
+    const onPop = (e: PopStateEvent) => {
+      const s =
+        e.state && typeof e.state === "object" ? (e.state as Record<string, unknown>) : null;
+      const g = s?.[key] as { run?: string; level?: number } | undefined;
+      if (g?.run === run) {
+        if (g.level === 1) performNav(-1);
+        else if (g.level === 2) performNav(1);
+      }
+      // 补 guard：保证下一次后退仍落在同文档，而不是退出应用/回到上一个网站
+      try {
+        window.history.pushState({ ...(s ?? {}), [key]: { run, level: 2 } }, "");
+      } catch {
+        /* ignore */
       }
     };
-    window.addEventListener("mousedown", onAux);
-    window.addEventListener("auxclick", onAux);
-    return () => {
-      window.removeEventListener("mousedown", onAux);
-      window.removeEventListener("auxclick", onAux);
-    };
-  }, [jumpHistory]);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [performNav]);
 
   // 全局快捷键：Ctrl+N 新建笔记（活动栏新标签）、Ctrl+O 打开文件（聚焦侧栏搜索）、
   // Ctrl+Shift+H 回 Home 大纲（固定入口）

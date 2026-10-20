@@ -147,16 +147,41 @@ function computeStructure(
     const visible = new Set<number>();
     doc.descendants((node, pos) => {
       if (node.type.name !== "taskItem") return true;
-      if (itemOwnText(node).toLowerCase().includes(needle)) {
+      const own = itemOwnText(node);
+      const lower = own.toLowerCase();
+      if (lower.includes(needle)) {
         visible.add(pos);
+        // 命中节点的完整子树也可见：展开箭头能显示整个节点，而不是只有匹配行
+        node.descendants((child, off) => {
+          if (child.type.name === "taskItem") visible.add(pos + 1 + off);
+          return true;
+        });
         const $ = doc.resolve(pos + 1);
         for (let d = $.depth; d > 0; d--) {
           if ($.node(d).type.name === "taskItem") visible.add($.before(d));
         }
+        // 命中词文本高亮（主视图里直接看到为什么命中）
+        const first = node.childCount ? node.child(0) : null;
+        if (first?.type.name === "paragraph" && needle) {
+          const base = pos + 2;
+          let at = lower.indexOf(needle);
+          while (at >= 0) {
+            decos.push(
+              Decoration.inline(base + at, base + at + needle.length, {
+                class: "outline-search-hit",
+              })
+            );
+            at = lower.indexOf(needle, at + needle.length);
+          }
+        }
       }
       return true;
     });
-    return { decos: DecorationSet.empty, visible: applyHideCompleted(visible), zoomAncestors: new Set() };
+    return {
+      decos: DecorationSet.create(doc, decos),
+      visible: applyHideCompleted(visible),
+      zoomAncestors: new Set(),
+    };
   }
 
   if (s.zoomPos != null) {
@@ -299,6 +324,10 @@ export function createOutlineController(editor: Editor): OutlineController {
       setMeta({ zoomPos: null });
     },
     zoomToAddress(address) {
+      if (address.length === 0) {
+        setMeta({ zoomPos: null, query: null });
+        return true;
+      }
       const pos = itemPosAtAddress(editor.state.doc, address);
       if (pos == null) return false;
       setMeta({ zoomPos: pos, query: null });

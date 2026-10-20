@@ -1,7 +1,19 @@
 // 少量手绘 16px 线框图标，避免引入图标库
+//
+// 图标主题规范（新增/改动图标按此执行，详见 docs/icon-theme.md）：
+// - 16×16 viewBox，线条图标，currentColor，圆头圆角；只有小圆点可填充。
+// - 尺寸 token：xs 12 / sm 13 / md 14 / lg 16（见 styles.css --icon-size-*）。
+// - 描边 token：hairline 1.1 / regular 1.4 / strong 1.6（--icon-stroke-*）。
+// - 渲染统一走 <Icon name size stroke />；调用处不再手写 svg 的 width/height/stroke-width。
 export const I = {  chevron: (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
       <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  /** 搜索/大纲的展开三角：实心，向右；展开时由 CSS 旋转 90° */
+  caret: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M5.5 3.5 11 8l-5.5 4.5z" />
     </svg>
   ),
   folder: (
@@ -197,6 +209,57 @@ export const I = {  chevron: (
     </svg>
   ),
 };
+
+/**
+ * 图标主题渲染器：尺寸/描边来自 styles.css 的 --icon-size-* / --icon-stroke-*。
+ * 新代码请用 <Icon name="search" size="sm" />，不要再手写 SVG 宽高/描边。
+ */
+export type IconSize = "xs" | "sm" | "md" | "lg";
+export type IconStroke = "hairline" | "regular" | "strong";
+export type IconName = keyof typeof I;
+
+const ICON_SIZE_VAR: Record<IconSize, string> = {
+  xs: "var(--icon-size-xs)",
+  sm: "var(--icon-size-sm)",
+  md: "var(--icon-size-md)",
+  lg: "var(--icon-size-lg)",
+};
+const ICON_STROKE_VAR: Record<IconStroke, string> = {
+  hairline: "var(--icon-stroke-hairline)",
+  regular: "var(--icon-stroke-regular)",
+  strong: "var(--icon-stroke-strong)",
+};
+
+export function Icon({
+  name,
+  size = "md",
+  stroke = "regular",
+  className = "",
+  title,
+}: {
+  name: IconName;
+  size?: IconSize;
+  stroke?: IconStroke;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <span
+      className={`app-icon ${className}`.trim()}
+      style={{
+        width: ICON_SIZE_VAR[size],
+        height: ICON_SIZE_VAR[size],
+        ["--icon-stroke" as string]: ICON_STROKE_VAR[stroke],
+      }}
+      role={title ? "img" : undefined}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+      title={title}
+    >
+      {I[name]}
+    </span>
+  );
+}
 
 /** 个人 logo：线条皮卡丘（单色描边，跟随主题色；眼睛高光用底色挖空） */
 export function PikachuLogo({ size = 110, className = "" }: { size?: number; className?: string }) {

@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import { useDomain, useWorkspaceVersion } from "../domain/provider";
 import { useSettings } from "../i18n";
 import { HOME_PATH } from "../outline/store";
+import { RESET_HOME_EVENT } from "../outline/home-bus";
 import { NODE_MIME } from "./home/outlineKit";
 import type { Pane } from "../domain/workspace";
 import WindowControls, { SHOW_WINDOW_CONTROLS } from "./WindowControls";
@@ -187,7 +188,10 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 }
               }}
               onDrop={handleDrop}
-              onClick={() => workspace.activateTab(pane.id, tab.id)}
+              onClick={() => {
+                workspace.activateTab(pane.id, tab.id);
+                if (isHome) window.dispatchEvent(new CustomEvent(RESET_HOME_EVENT));
+              }}
               onMouseDown={(e) => {
                 // 中键按下即关（preventDefault 压掉 Windows 自动滚动手势，auxclick 就不再来了）
                 if (e.button !== 1) return;
