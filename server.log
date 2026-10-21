@@ -1,0 +1,6 @@
+
+> note-share@0.4.0 dev:server
+> node scripts/dev-server.mjs
+
+[dev-server] vault = D:\ProgramData\NoteShare
+[dev-server] http://127.0.0.1:8787/api/health

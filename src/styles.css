@@ -1041,30 +1041,41 @@ body {
 .layout-resizer {
   flex: none;
   z-index: 15;
-  background-color: transparent;
+  /* 底 = 纸色（内容区两侧同色）；标签条高度内铺标签条色，分栏缝与邻栏同色、不露白缝 */
+  background-color: var(--paper);
   transition: background-color 0.15s ease;
 }
 .layout-resizer-col {
   width: 5px;
   cursor: col-resize;
-  background-image: linear-gradient(
-    to right,
-    transparent 2px,
-    var(--line) 2px,
-    var(--line) 3px,
-    transparent 3px
-  );
+  background-image:
+    /* 左右栏的标签条都在顶部：缝的顶部 38px 铺标签条色 */
+    linear-gradient(
+      to bottom,
+      var(--paper-side) var(--tabbar-h),
+      transparent var(--tabbar-h)
+    ),
+    linear-gradient(
+      to right,
+      transparent 2px,
+      var(--line) 2px,
+      var(--line) 3px,
+      transparent 3px
+    );
 }
 .layout-resizer-row {
   height: 5px;
   cursor: row-resize;
-  background-image: linear-gradient(
-    to bottom,
-    transparent 2px,
-    var(--line) 2px,
-    var(--line) 3px,
-    transparent 3px
-  );
+  background-image:
+    /* 上下栏：下栏标签条紧贴缝下方，缝的底部（线以下）铺标签条色，线以上保持纸色 */
+    linear-gradient(to bottom, transparent 2px, var(--paper-side) 3px),
+    linear-gradient(
+      to bottom,
+      transparent 2px,
+      var(--line) 2px,
+      var(--line) 3px,
+      transparent 3px
+    );
 }
 .layout-resizer:hover {
   background-color: rgb(var(--accent-rgb) / 0.35);
@@ -1705,15 +1716,19 @@ body {
   background: var(--surface-hover);
 }
 .tab-new {
+  position: sticky;
+  right: 0;
+  z-index: 2; /* 盖住滚动时从下方经过的标签 */
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
-  /* 全高贴缘：抵掉 bar 的上/右内边距与底边框行，分隔线纵贯整个标签条（参考样式） */
-  margin: -5px -4px -1px 0;
-  width: 34px;
-  border-left: 1px solid var(--line); /* ＋ 前的竖分隔线 */
+  align-self: flex-end;
+  height: 32px; /* 与标签同高，底边对齐 */
+  width: 26px;
+  margin-left: 8px; /* 贴住末标签：留出激活标签右凹角（5.5px）的衔接空间 */
+  border-radius: 6px;
+  background: var(--paper-side); /* 标签溢出滚动时遮住从下方滑过的标签 */
   color: var(--ink-faint);
   font-size: 16px;
   line-height: 1;

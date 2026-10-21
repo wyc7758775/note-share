@@ -485,9 +485,9 @@ function VaultApp({
           active={pane.id === activePaneId}
           titleEdge={pane.id === titlePaneId}
           vaultName={vault.name}
-          onNewNote={async (folder?: string) => {
+          onNewNote={async (paneId: number, folder?: string) => {
             const path = await noteService.create(t("untitledNote"), folder ?? "");
-            if (path) openNote(path);
+            if (path) workspace.openInPane(paneId, path, "newTab");
           }}
           onOpenHome={() => openNote(HOME_PATH)}
           onNewCanvas={async (name) => {

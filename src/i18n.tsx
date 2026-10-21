@@ -101,7 +101,6 @@ const zh: Record<string, string> = {
   saveErrorHint: "保存失败（重试 {mod}S）",
   backToNote: "← 返回笔记",
   editorPlaceholder: "开始写点什么…（# 标题 · 1. 列表 · - [ ] 待办 · ``` 代码）",
-  tagsPlaceholder: "标签，用逗号分隔",
 
   // ---- Home 大纲（Workflowy 式） ----
   homeOpenEntry: "Workflowy 大纲（Ctrl+Shift+H）",
@@ -480,7 +479,6 @@ const en: Record<string, string> = {
   saveErrorHint: "Save failed (retry {mod}S)",
   backToNote: "← Back to note",
   editorPlaceholder: "Start writing… (# heading · 1. list · - [ ] todo · ``` code)",
-  tagsPlaceholder: "Tags, comma-separated",
 
   // ---- Home outline (Workflowy-style) ----
   homeOpenEntry: "Workflowy outline (Ctrl+Shift+H)",

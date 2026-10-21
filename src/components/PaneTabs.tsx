@@ -1,5 +1,6 @@
 // 栏内标签条：一栏可叠多个标签（笔记/画板），点击切换、中键或 × 关闭、
-// 拖拽重排/拖到其他栏换位置、+ 在当前标签所在文件夹新建笔记并开新标签。
+// 拖拽重排/拖到其他栏换位置、+ 紧贴末标签（Obsidian/VSCode 同款），
+// 点击在该栏末标签旁追加新标签（新建笔记落在活动标签所在文件夹）。
 // 笔记操作菜单（⋯）在编辑器左上角的悬浮导航组里，与前进后退同行；
 // 关栏没有按钮（拖拽拆分自由布局，关掉全部标签即得空栏）。
 // 只调领域服务（Workspace / NoteService），布局渲染由 PaneView 负责。
@@ -241,23 +242,24 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
           className={`tab-drop-line${dropIndex !== null ? " on" : ""}`}
           style={{ transform: `translateX(${lineX}px)` }}
         />
+        {/* ＋ 紧贴末标签（Obsidian/VSCode 同款）；点击新建笔记并在本栏末标签旁追加新标签 */}
+        <button
+          className="tab-new"
+          data-tip={t("newNote")}
+          onClick={() => {
+            const cur =
+              pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? pane.tabs[pane.tabs.length - 1];
+            const p = cur?.path;
+            const folder =
+              p && p !== HOME_PATH && /\.md$/i.test(p) && p.includes("/")
+                ? p.slice(0, p.lastIndexOf("/"))
+                : "";
+            onNewNote(folder);
+          }}
+        >
+          +
+        </button>
       </div>
-      {/* 右端：分隔线 + 新建笔记（与标签条之间留出拖拽落区空白的观感一致） */}
-      <button
-        className="tab-new"
-        data-tip={t("newNote")}
-        onClick={() => {
-          const cur = pane.tabs.find((tb) => tb.id === pane.activeTabId) ?? pane.tabs[pane.tabs.length - 1];
-          const p = cur?.path;
-          const folder =
-            p && p !== HOME_PATH && /\.md$/i.test(p) && p.includes("/")
-              ? p.slice(0, p.lastIndexOf("/"))
-              : "";
-          onNewNote(folder);
-        }}
-      >
-        +
-      </button>
       {titleEdge && SHOW_WINDOW_CONTROLS && <WindowControls />}
     </div>
   );

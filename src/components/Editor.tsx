@@ -13,7 +13,7 @@ import { Markdown } from "tiptap-markdown";
 import { backend } from "../backend";
 import { useSettings, translate, currentLang } from "../i18n";
 import type { SlashItem } from "./SlashMenu";
-import { buildRaw, parseNote, setTags, tagsOf } from "../lib/frontmatter";
+import { buildRaw, parseNote } from "../lib/frontmatter";
 import { forEditor, forSave } from "../lib/markdown";
 import { useDomain, useDirectoryVersion } from "../domain/provider";
 import { sanitizeFileName } from "../lib/files";
@@ -77,7 +77,6 @@ export default function Editor({
   const pathRef = useRef(initialPath);
   const fmRef = useRef<Record<string, unknown>>({});
   const titleRef = useRef("");
-  const tagsRef = useRef("");
   const loadingRef = useRef(true);
   const savingRef = useRef(false);
   const timerRef = useRef<number | undefined>(undefined);
@@ -85,7 +84,6 @@ export default function Editor({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
-  const [tagsText, setTagsText] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [loaded, setLoaded] = useState(false);
   const [locked, setLocked] = useState(() => sessions.mode(initialPath) === "locked"); // 视图镜像（权威在 SessionBook）
@@ -150,7 +148,6 @@ export default function Editor({
   const slashActionsRef = useRef<{ insertImage: () => void; insertScene: () => void } | null>(null);
 
   titleRef.current = title;
-  tagsRef.current = tagsText;
 
   // 词条惰性求值：每次呼出菜单时读当前语言，切换语言即时生效且不重建编辑器
   const slashExtension = useMemo(
@@ -348,7 +345,6 @@ export default function Editor({
         }
       }
       const fm = fmRef.current;
-      setTags(fm, splitTags(tagsRef.current));
       const now = new Date().toISOString();
       if (!fm.created) fm.created = now;
       fm.updated = now;
@@ -402,7 +398,6 @@ export default function Editor({
       fmRef.current = fm;
       loadingRef.current = true;
       setTitle(initialPath.split("/").pop()?.replace(/\.md$/i, "") ?? "");
-      setTagsText(tagsOf(fm).join(", "));
       editor?.commands.setContent(forEditor(body));
       // 阅读位置恢复：setContent 同步完成后、浏览器绘制之前直接设置——
       // 首帧就在正确位置，不会出现"先顶部再跳下来"的闪动。
@@ -795,7 +790,7 @@ export default function Editor({
           )}
           <div className={`mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
             <input
-              className="serif w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-faint"
+              className="serif w-full border-none bg-transparent py-1 text-3xl font-bold outline-none placeholder:text-faint"
               placeholder={t("untitled")}
               readOnly={locked}
               value={loaded ? title : ""}
@@ -809,22 +804,7 @@ export default function Editor({
                 if (e.key === "Enter") e.currentTarget.blur();
               }}
             />
-            <div className="mt-2 flex items-center gap-2 text-[13px] text-faint">
-              <span>#</span>
-              <input
-                className="flex-1 border-none bg-transparent outline-none placeholder:text-faint"
-                placeholder={t("tagsPlaceholder")}
-                readOnly={locked}
-                value={loaded ? tagsText : ""}
-                onChange={(e) => {
-                  setTagsText(e.target.value);
-                  scheduleSave();
-                }}
-                onBlur={() => void saveNow()}
-              />
-            </div>
-
-            <div className="mt-6 pt-0">
+            <div className="mt-4">
               <EditorContent editor={editor} />
             </div>
           </div>
@@ -868,13 +848,6 @@ export default function Editor({
 }
 
 // 画板面板按需加载（体积大）
-function splitTags(s: string): string[] {
-  return s
-    .split(/[,，]/)
-    .map((t) => t.trim().replace(/^#/, ""))
-    .filter(Boolean);
-}
-
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();

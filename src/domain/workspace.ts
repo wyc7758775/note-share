@@ -125,7 +125,10 @@ export class Workspace {
     this.openInPane(this.activePaneId, path, mode);
   }
 
-  private openInPane(paneId: number, path: string, mode: "replace" | "newTab") {
+  /** 在指定栏打开（不经过活动栏判断）：newTab = 该栏末尾追加标签并激活
+   *  （已有同路径标签则只激活它）；replace = 替换该栏当前标签（空栏则新开）。
+   *  目标栏成为活动栏。 */
+  openInPane(paneId: number, path: string, mode: "replace" | "newTab") {
     const pane = this.panes.get(paneId);
     if (!pane) return;
     if (mode === "newTab") {
