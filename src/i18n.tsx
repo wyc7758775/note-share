@@ -1,34 +1,17 @@
-// 界面设置（语言 / 主题）：Context + localStorage 持久化。
-// t(key, vars) 支持模板变量替换 {name}；主题 "system" 跟随系统并监听变化。
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-
-export type Lang = "zh" | "en";
-export type Theme = "light" | "dark" | "system";
-/** 主题色配置：亮色/暗色主题各自的强调色 */
-export interface AccentColors {
-  light: string;
-  dark: string;
-}
-export const DEFAULT_ACCENT: AccentColors = { light: "#b45309", dark: "#d97706" };
+// 界面文案词典与翻译函数。
+// 语言/主题/字号等偏好的权威在 domain/preferences（Preferences 聚合），
+// 本文件的 SettingsProvider 只是它的 React 投影：订阅版本号驱动重渲染，
+// 持久化与 DOM 应用（html lang / data-theme / 字号）由 application/preferences-service 负责。
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore, useState, type ReactNode } from "react";
+import {
+  resolveDark,
+  type AccentColors,
+  type CustomTheme,
+  type Lang,
+  type ThemePref,
+} from "./domain/preferences";
+import { createPreferencesContext } from "./application/preferences-service";
 type Vars = Record<string, string | number>;
-
-function hexToRgbTriple(hex: string): string {
-  const m = hex.replace("#", "");
-  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
-  const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return "180 83 9";
-  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
-}
-
-function readAccent(): AccentColors {
-  try {
-    const raw = JSON.parse(localStorage.getItem("noteshare.accent") ?? "null");
-    if (raw && typeof raw.light === "string" && typeof raw.dark === "string") return raw;
-  } catch {
-    /* 用默认 */
-  }
-  return { ...DEFAULT_ACCENT };
-}
 
 const zh: Record<string, string> = {
   // ---- 通用 ----
@@ -384,6 +367,31 @@ const zh: Record<string, string> = {
   // ---- 设置弹窗 ----
   settingsLanguage: "界面语言",
   settingsTheme: "主题",
+  settingsUiFont: "界面字号",
+  settingsEditorFont: "正文字号",
+  settingsFontReset: "默认",
+  themeScheme: "主题方案",
+  themeBuiltin: "内置主题",
+  themeNew: "新建主题",
+  themeImport: "导入",
+  themeExport: "复制",
+  themeCopied: "已复制",
+  themeRename: "重命名",
+  themeDelete: "删除",
+  themeBaseLight: "亮色",
+  themeBaseDark: "暗色",
+  themeNamePh: "未命名主题",
+  themeNotActive: "当前模式不生效",
+  themeImportPh: "粘贴主题 JSON（对象或数组）：\n{ \"name\": \"…\", \"base\": \"light\", \"tokens\": { \"--paper\": \"#fff\" } }",
+  settingsCaret: "光标",
+  caretWidth: "粗细",
+  caretLength: "长短（占行高 %）",
+  caretColorLabel: "颜色",
+  caretColorAccent: "主题色",
+  caretColorInk: "文字色",
+  caretColorCustom: "自定义",
+  caretTypewriter: "打字机模式（光标垂直居中）",
+  caretAnimate: "移动动画（跨行长跳）",
   themeLight: "明亮",
   themeDark: "黑色",
   themeSystem: "跟随系统",
@@ -755,6 +763,31 @@ const en: Record<string, string> = {
 
   settingsLanguage: "Language",
   settingsTheme: "Theme",
+  settingsUiFont: "Interface font size",
+  settingsEditorFont: "Editor font size",
+  settingsFontReset: "Default",
+  themeScheme: "Theme scheme",
+  themeBuiltin: "Built-in",
+  themeNew: "New theme",
+  themeImport: "Import",
+  themeExport: "Copy",
+  themeCopied: "Copied",
+  themeRename: "Rename",
+  themeDelete: "Delete",
+  themeBaseLight: "Light",
+  themeBaseDark: "Dark",
+  themeNamePh: "Untitled theme",
+  themeNotActive: "Inactive in current mode",
+  themeImportPh: "Paste theme JSON (object or array):\n{ \"name\": \"…\", \"base\": \"light\", \"tokens\": { \"--paper\": \"#fff\" } }",
+  settingsCaret: "Caret",
+  caretWidth: "Width",
+  caretLength: "Length (% of line)",
+  caretColorLabel: "Color",
+  caretColorAccent: "Accent",
+  caretColorInk: "Text",
+  caretColorCustom: "Custom",
+  caretTypewriter: "Typewriter mode (center caret)",
+  caretAnimate: "Move animation (long jumps)",
   themeLight: "Light",
   themeDark: "Dark",
   themeSystem: "System",
@@ -783,6 +816,13 @@ const en: Record<string, string> = {
 
 const dicts: Record<Lang, Record<string, string>> = { zh, en };
 
+// 应用级单例（main.tsx 挂 SettingsProvider 时装配；与 vault 生命周期无关）
+const { prefs, service: prefsService } = createPreferencesContext();
+export { prefs as preferences };
+
+export { DEFAULT_ACCENT, type AccentColors, type CustomTheme, type Lang } from "./domain/preferences";
+export type Theme = ThemePref;
+
 interface Settings {
   lang: Lang;
   setLang: (l: Lang) => void;
@@ -791,6 +831,30 @@ interface Settings {
   /** 主题色（亮/暗各自定义），即时生效并持久化 */
   accent: AccentColors;
   setAccent: (a: AccentColors) => void;
+  /** 界面字号（rem 基准，13~17px），全局 UI 跟随缩放 */
+  uiFontSize: number;
+  setUiFontSize: (n: number) => void;
+  /** 编辑器正文字号（14~22px），只作用于 ProseMirror 正文 */
+  editorFontSize: number;
+  setEditorFontSize: (n: number) => void;
+  /** 当前主题方案：null = 内置；否则指向自定义主题 id */
+  themeId: string | null;
+  setThemeId: (id: string | null) => void;
+  customThemes: CustomTheme[];
+  saveTheme: (t: CustomTheme) => void;
+  removeTheme: (id: string) => void;
+  nextThemeId: () => string;
+  /** 光标外观与行为 */
+  caretWidth: number;
+  setCaretWidth: (n: number) => void;
+  caretRatio: number;
+  setCaretRatio: (n: number) => void;
+  caretColor: string;
+  setCaretColor: (c: string) => void;
+  typewriter: boolean;
+  setTypewriter: (v: boolean) => void;
+  caretAnimate: boolean;
+  setCaretAnimate: (v: boolean) => void;
   /** 主题已解析：当前是否暗色（system 跟随时实时变化） */
   dark: boolean;
   t: (key: string, vars?: Vars) => string;
@@ -805,7 +869,7 @@ export function translate(lang: Lang, key: string, vars?: Vars) {
   return s;
 }
 
-/** 在 React 外读当前语言（Provider 会把它同步到 <html lang>） */
+/** 在 React 外读当前语言（PreferencesService 会把 config.lang 同步到 <html lang>） */
 export function currentLang(): Lang {
   return document.documentElement.lang === "en" ? "en" : "zh";
 }
@@ -816,52 +880,65 @@ export function useSettings() {
   return s;
 }
 
-const THEMES: Theme[] = ["light", "dark", "system"];
-
+/** Settings 上下文 = 偏好的 React 投影：订阅偏好版本驱动重渲染；
+ *  IO 与 DOM 应用全部在 PreferencesService，这里只读聚合 + 发命令。 */
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>(() =>
-    localStorage.getItem("noteshare.lang") === "en" ? "en" : "zh"
-  );
-  const [theme, setTheme] = useState<Theme>(() => {
-    const v = localStorage.getItem("noteshare.theme") as Theme | null;
-    return v && THEMES.includes(v) ? v : "system";
-  });
-  const [accent, setAccentState] = useState<AccentColors>(readAccent);
-  const [dark, setDark] = useState(() =>
-    typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)").matches : false
-  );
+  useSyncExternalStore(prefs.subscribe, prefs.getVersion, prefs.getVersion);
 
   useEffect(() => {
-    localStorage.setItem("noteshare.lang", lang);
-    document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
-  }, [lang]);
-
-  useEffect(() => {
-    localStorage.setItem("noteshare.theme", theme);
-    const apply = () => {
-      const d = theme === "system" ? window.matchMedia("(prefers-color-scheme: dark)").matches : theme === "dark";
-      setDark(d);
-      document.documentElement.dataset.theme = d ? "dark" : "light";
-      // 主题色按当前亮/暗取对应配置注入（CSS 内所有 accent 派生色随变量联动）
-      const hex = d ? accent.dark : accent.light;
-      document.documentElement.style.setProperty("--accent", hex);
-      document.documentElement.style.setProperty("--accent-rgb", hexToRgbTriple(hex));
-    };
-    apply();
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, [theme, accent]);
-
-  const setAccent = useCallback((a: AccentColors) => {
-    localStorage.setItem("noteshare.accent", JSON.stringify(a));
-    setAccentState(a);
+    prefsService.bootstrap();
+    return () => prefsService.dispose();
   }, []);
 
-  const t = useCallback((key: string, vars?: Vars) => translate(lang, key, vars), [lang]);
+  // system 主题跟随系统（投影侧监听；service 监听同一事件刷新 data-theme）
+  const [systemDark, setSystemDark] = useState(() =>
+    typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+      : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setSystemDark(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const cfg = prefs.get();
+  const t = useCallback((key: string, vars?: Vars) => translate(prefs.get().lang, key, vars), []);
 
   return (
-    <Ctx.Provider value={{ lang, setLang, theme, setTheme, accent, setAccent, dark, t }}>
+    <Ctx.Provider
+      value={{
+        lang: cfg.lang,
+        setLang: (l) => prefs.set({ lang: l }),
+        theme: cfg.theme,
+        setTheme: (th) => prefs.set({ theme: th }),
+        accent: { ...cfg.accent },
+        setAccent: (a) => prefs.set({ accent: a }),
+        uiFontSize: cfg.uiFontSize,
+        setUiFontSize: (n) => prefs.set({ uiFontSize: n }),
+        editorFontSize: cfg.editorFontSize,
+        setEditorFontSize: (n) => prefs.set({ editorFontSize: n }),
+        themeId: cfg.themeId,
+        setThemeId: (id) => prefs.setThemeId(id),
+        customThemes: cfg.customThemes,
+        saveTheme: (th) => prefs.saveTheme(th),
+        removeTheme: (id) => prefs.removeTheme(id),
+        nextThemeId: () => prefs.nextThemeId(),
+        caretWidth: cfg.caretWidth,
+        setCaretWidth: (n) => prefs.set({ caretWidth: n }),
+        caretRatio: cfg.caretRatio,
+        setCaretRatio: (n) => prefs.set({ caretRatio: n }),
+        caretColor: cfg.caretColor,
+        setCaretColor: (c) => prefs.set({ caretColor: c }),
+        typewriter: cfg.typewriter,
+        setTypewriter: (v) => prefs.set({ typewriter: v }),
+        caretAnimate: cfg.caretAnimate,
+        setCaretAnimate: (v) => prefs.set({ caretAnimate: v }),
+        dark: resolveDark(cfg.theme, systemDark),
+        t,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

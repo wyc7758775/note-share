@@ -63,7 +63,7 @@ export default function VaultMenu({ service, current, onSwitch, onManage }: Prop
                 <span className="vm-check">{isCurrent ? I.check : null}</span>
                 <span className="min-w-0 flex-1 text-left">
                   <span className="block truncate">{v.name}</span>
-                  <span className="block truncate text-[11px] text-faint">
+                  <span className="block truncate text-[0.733rem] text-faint">
                     {v.exists ? v.path : `${t("vaultMissing")} · ${v.path}`}
                   </span>
                 </span>

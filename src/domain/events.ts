@@ -60,6 +60,11 @@ export interface LockToggled {
   path: string;
   mode: "editing" | "locked";
 }
+/** 偏好（语言/字号/主题/主题色）变更；载荷为完整 config（订阅方无需回查聚合） */
+export interface PreferencesChanged {
+  type: "preferencesChanged";
+  config: import("./preferences").PreferencesConfig;
+}
 
 export type DomainEvent =
   | NoteCreated
@@ -73,7 +78,8 @@ export type DomainEvent =
   | PaneOpened
   | PaneClosed
   | SceneSaved
-  | LockToggled;
+  | LockToggled
+  | PreferencesChanged;
 export type DomainEventType = DomainEvent["type"];
 
 export class EventBus {

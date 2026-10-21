@@ -101,7 +101,7 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
       <header className="vs-head">
         <div className="flex items-center gap-2.5">
           <PikachuLogo size={26} className="text-ink" />
-          <span className="serif text-[17px] font-semibold text-ink">NoteShare</span>
+          <span className="serif text-[1.133rem] font-semibold text-ink">NoteShare</span>
         </div>
         {onBack && (
           <button className="vs-back" onClick={onBack}>
@@ -244,7 +244,7 @@ export default function VaultSwitcher({ service, onOpen, onBack }: Props) {
               <span className="shrink-0 text-faint">{I.folder}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{v.name}</span>
-                <span className="block truncate text-[11px] text-faint" title={v.path}>
+                <span className="block truncate text-[0.733rem] text-faint" title={v.path}>
                   {v.path}
                 </span>
               </span>

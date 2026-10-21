@@ -1,6 +1,7 @@
 // 设置弹窗：语言 / 主题 / 主题色 / 版本与更新。遮罩 + 居中卡片 + 缩放淡入；Esc 或点遮罩关闭。
 import { useEffect } from "react";
 import { useSettings, DEFAULT_ACCENT, type AccentColors, type Lang, type Theme } from "../i18n";
+import ThemeManager from "./ThemeManager";
 import {
   checkForUpdates,
   clearHotUpdate,
@@ -35,8 +36,92 @@ function Segment<T extends string>({
   );
 }
 
+/** 字号/光标 stepper（±step，可连点；范围已在领域层钳制） */
+function FontStepper({
+  label,
+  value,
+  range,
+  defaultValue,
+  resetLabel,
+  step = 1,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  range: [number, number];
+  defaultValue: number;
+  resetLabel: string;
+  step?: number;
+  onChange: (n: number) => void;
+}) {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          className="top-icon-btn !h-6 !w-6 text-[0.867rem]"
+          disabled={value <= range[0]}
+          onClick={() => onChange(round(value - step))}
+        >
+          −
+        </button>
+        <span className="w-12 text-center text-[0.833rem] tabular-nums" style={{ color: "var(--ink)" }}>
+          {round(value)}px
+        </span>
+        <button
+          className="top-icon-btn !h-6 !w-6 text-[0.867rem]"
+          disabled={value >= range[1]}
+          onClick={() => onChange(round(value + step))}
+        >
+          +
+        </button>
+        <button
+          className="ml-1 text-[0.733rem] text-faint hover:text-soft"
+          onClick={() => onChange(defaultValue)}
+        >
+          {resetLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 开关（布尔项） */
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
+        {label}
+      </span>
+      <button
+        role="switch"
+        aria-checked={value}
+        className="relative h-[1.2rem] w-[2.133rem] flex-none rounded-full transition-colors"
+        style={{ background: value ? "var(--accent)" : "var(--line-strong)" }}
+        onClick={() => onChange(!value)}
+      >
+        <span
+          className="absolute top-[0.133rem] h-[0.933rem] w-[0.933rem] rounded-full bg-white transition-all"
+          style={{ left: value ? "1.067rem" : "0.133rem", boxShadow: "0 1px 2px rgb(0 0 0 / .25)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { t, lang, setLang, theme, setTheme, accent, setAccent } = useSettings();
+  const { t, lang, setLang, theme, setTheme, accent, setAccent, uiFontSize, setUiFontSize, editorFontSize, setEditorFontSize, caretWidth, setCaretWidth, caretRatio, setCaretRatio, caretColor, setCaretColor, typewriter, setTypewriter, caretAnimate, setCaretAnimate } = useSettings();
   const upd = useUpdates();
   const busy =
     upd.phase === "checking" || upd.phase === "downloading" || upd.phase === "installing";
@@ -100,17 +185,85 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div className="grid gap-2">
+            <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>{t("themeScheme")}</span>
+            <ThemeManager />
+          </div>
+          <div className="grid gap-2">
+            <FontStepper
+              label={t("settingsUiFont")}
+              value={uiFontSize}
+              range={[13, 17]}
+              defaultValue={15}
+              resetLabel={t("settingsFontReset")}
+              onChange={setUiFontSize}
+            />
+            <FontStepper
+              label={t("settingsEditorFont")}
+              value={editorFontSize}
+              range={[14, 22]}
+              defaultValue={16}
+              resetLabel={t("settingsFontReset")}
+              onChange={setEditorFontSize}
+            />
+          </div>
+          <div className="grid gap-2">
+            <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
+              {t("settingsCaret")}
+            </span>
+            <FontStepper
+              label={t("caretWidth")}
+              value={caretWidth}
+              range={[1, 6]}
+              defaultValue={3}
+              resetLabel={t("settingsFontReset")}
+              onChange={setCaretWidth}
+            />
+            <FontStepper
+              label={t("caretLength")}
+              value={Math.round(caretRatio * 100)}
+              range={[45, 100]}
+              defaultValue={62}
+              step={5}
+              resetLabel={t("settingsFontReset")}
+              onChange={(n) => setCaretRatio(n / 100)}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>
+                {t("caretColorLabel")}
+              </span>
+              <div className="flex items-center gap-2">
+                <Segment<string>
+                  value={caretColor === "accent" || caretColor === "ink" ? caretColor : "custom"}
+                  onChange={(v) => setCaretColor(v === "custom" ? "#b45309" : v)}
+                  options={[
+                    { value: "accent", label: t("caretColorAccent") },
+                    { value: "ink", label: t("caretColorInk") },
+                    { value: "custom", label: t("caretColorCustom") },
+                  ]}
+                />
+                <input
+                  type="color"
+                  value={caretColor.startsWith("#") ? caretColor : "#b45309"}
+                  onChange={(e) => setCaretColor(e.target.value)}
+                  className="h-6 w-9 cursor-pointer rounded border-none bg-transparent p-0"
+                />
+              </div>
+            </div>
+            <Toggle label={t("caretTypewriter")} value={typewriter} onChange={setTypewriter} />
+            <Toggle label={t("caretAnimate")} value={caretAnimate} onChange={setCaretAnimate} />
+          </div>
+          <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>{t("settingsAccent")}</span>
               <button
-                className="text-[11px] text-faint hover:text-soft"
+                className="text-[0.733rem] text-faint hover:text-soft"
                 onClick={() => setAccent({ ...DEFAULT_ACCENT })}
               >
                 {t("accentReset")}
               </button>
             </div>
             <div className="seg" style={{ padding: "6px 10px", gap: 14 }}>
-              <label className="flex flex-1 items-center justify-between gap-2 text-[12.5px] text-soft">
+              <label className="flex flex-1 items-center justify-between gap-2 text-[0.833rem] text-soft">
                 {t("accentLight")}
                 <input
                   type="color"
@@ -119,7 +272,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   className="h-6 w-9 cursor-pointer rounded border-none bg-transparent p-0"
                 />
               </label>
-              <label className="flex flex-1 items-center justify-between gap-2 text-[12.5px] text-soft">
+              <label className="flex flex-1 items-center justify-between gap-2 text-[0.833rem] text-soft">
                 {t("accentDark")}
                 <input
                   type="color"
@@ -136,11 +289,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 {t("versionSection")}
               </span>
               <div className="grid gap-1.5">
-                <div className="flex items-center justify-between text-[12.5px]">
+                <div className="flex items-center justify-between text-[0.833rem]">
                   <span className="text-soft">{t("versionClient")}</span>
                   <span className="text-ink">{upd.appVersion ? `v${upd.appVersion}` : "—"}</span>
                 </div>
-                <div className="flex items-center justify-between text-[12.5px]">
+                <div className="flex items-center justify-between text-[0.833rem]">
                   <span className="text-soft">{t("versionHot")}</span>
                   <span className="text-ink">
                     {upd.installedHot
@@ -157,19 +310,19 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                   {upd.phase === "checking" && (
-                    <div className="text-[12px] text-faint">{t("updateChecking")}</div>
+                    <div className="text-[0.8rem] text-faint">{t("updateChecking")}</div>
                   )}
                   {upd.phase === "uptodate" && (
-                    <div className="text-[12px] text-faint">{t("updateUpToDate")}</div>
+                    <div className="text-[0.8rem] text-faint">{t("updateUpToDate")}</div>
                   )}
                   {upd.phase === "error" && (
-                    <div className="text-[12px]" style={{ color: "#dc2626" }}>
+                    <div className="text-[0.8rem]" style={{ color: "#dc2626" }}>
                       {t("updateError")}
                       {upd.error ? `：${upd.error}` : ""}
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[12px] text-faint">
+                    <span className="text-[0.8rem] text-faint">
                       {upd.phase === "downloading"
                         ? `${t("updateDownloading")}${
                             updatePercent(upd) !== null ? ` ${updatePercent(upd)}%` : ""
@@ -179,14 +332,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                           : ""}
                     </span>
                     {ready ? (
-                      <button className="btn-primary text-[12.5px]" disabled={busy} onClick={startUpdate}>
+                      <button className="btn-primary text-[0.833rem]" disabled={busy} onClick={startUpdate}>
                         {upd.clientVersion
                           ? `${t("updateDownload")} v${upd.clientVersion}`
                           : `${t("updateHotApply")} v${upd.hotVersion}`}
                       </button>
                     ) : (
                       <button
-                        className="btn-outline text-[12.5px]"
+                        className="btn-outline text-[0.833rem]"
                         disabled={upd.phase === "checking"}
                         onClick={() => void checkForUpdates()}
                       >
@@ -196,7 +349,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                   {upd.installedHot && (
                     <button
-                      className="text-left text-[11px] text-faint hover:text-soft"
+                      className="text-left text-[0.733rem] text-faint hover:text-soft"
                       onClick={() => void clearHotUpdate()}
                     >
                       {t("updateHotClear")}
@@ -204,7 +357,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   )}
                 </>
               ) : (
-                <div className="text-[12px] text-faint">{t("updateMacManual")}</div>
+                <div className="text-[0.8rem] text-faint">{t("updateMacManual")}</div>
               )}
             </div>
           )}

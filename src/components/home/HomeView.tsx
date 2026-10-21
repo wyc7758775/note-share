@@ -11,6 +11,7 @@ import { Markdown } from "tiptap-markdown";
 import { useDomain } from "../../domain/provider";
 import { useSettings, currentLang, translate } from "../../i18n";
 import { backend } from "../../backend";
+import { useCustomCaret } from "../editorCaret";
 import type { SearchHit } from "../../backend/types";
 import { HOME_PATH } from "../../outline/store";
 import HomeToday from "./HomeToday";
@@ -290,6 +291,9 @@ export default function HomeView({
       setCrumbs(ctlRef.current?.crumbs() ?? [{ pos: null, text: "Workflowy" }]);
     },
   });
+
+  // 自定义光标（与笔记编辑器同一套：3px 圆角短条）；大纲常驻可编辑
+  const { caret, wrapRef: caretWrapRef, solid } = useCustomCaret(editor, false);
 
   // 拖放提示兜底清理：drop 落在编辑器外（工具栏/+按钮/别的分栏）时 PM 的
   // handleDrop 收不到事件，线与源高亮会残留——挂 window 捕获层，落到哪都熄
@@ -711,7 +715,21 @@ export default function HomeView({
             }}
           />
         )}
-        <div className="home-editor-wrap">
+        <div ref={caretWrapRef} className="relative home-editor-wrap">
+          {caret && (
+            <div
+              className="caret-custom"
+              style={{
+                top: caret.top,
+                left: caret.left,
+                width: caret.width,
+                height: caret.height,
+                background: caret.color,
+                transition: caret.transition || undefined,
+                animation: solid ? "none" : undefined,
+              }}
+            />
+          )}
           <div className="outline-root">
             {editor ? <EditorContent editor={editor} /> : null}
           </div>

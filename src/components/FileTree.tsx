@@ -33,7 +33,7 @@ export function InlineInputRow({
     <div className="row-in px-1 py-0.5" style={{ paddingLeft: 10 + depth * 14 }}>
       <input
         ref={ref}
-        className="w-full rounded-md border border-amber-600/40 bg-surface px-2 py-1 text-[13px] outline-none focus:border-amber-700/70 focus:ring-2 focus:ring-amber-700/10"
+        className="w-full rounded-md border border-amber-600/40 bg-surface px-2 py-1 text-[0.867rem] outline-none focus:border-amber-700/70 focus:ring-2 focus:ring-amber-700/10"
         value={v}
         placeholder={placeholder}
         onChange={(e) => setV(e.target.value)}
@@ -147,7 +147,7 @@ function TreeRow({
 
   // 行高固定 30px，主按钮 h-full 撑满——整行高度都可点击
   const rowCls =
-    "tree-row group flex h-[30px] w-full items-center gap-1.5 rounded-md pr-1 text-left text-[13px]";
+    "tree-row group flex h-[30px] w-full items-center gap-1.5 rounded-md pr-1 text-left text-[0.867rem]";
   const pad = { paddingLeft: 4 + depth * 9 };
   const exitCls = exiting ? "tree-row-exiting" : "";
 

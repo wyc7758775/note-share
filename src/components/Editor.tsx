@@ -11,6 +11,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import { backend } from "../backend";
+import { useCustomCaret } from "./editorCaret";
 import { useSettings, translate, currentLang } from "../i18n";
 import type { SlashItem } from "./SlashMenu";
 import { buildRaw, parseNote } from "../lib/frontmatter";
@@ -392,6 +393,7 @@ export default function Editor({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       const { raw } = await backend.readNote(initialPath);
       if (cancelled) return;
       const { fm, body } = parseNote(raw);
@@ -408,6 +410,7 @@ export default function Editor({
         for (const delay of [300, 1200]) {
           window.setTimeout(() => {
             if (!cancelled && scrollRef.current) scrollRef.current.scrollTop = target;
+            updateCaret(); // 异步资源撑高后光标坐标同步校正
           }, delay);
         }
       }
@@ -437,7 +440,11 @@ export default function Editor({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPath, editor]);
+
+  // 自定义光标（3px 圆角短条，替代系统细光标）：见 editorCaret.ts
+  const { caret, wrapRef: caretWrapRef, updateCaret, solid } = useCustomCaret(editor, locked);
 
   // 阅读位置记忆：滚动时实时写入内存 Map（不依赖卸载时序），刷新页面自然清空
 
@@ -788,7 +795,21 @@ export default function Editor({
               </button>
             </div>
           )}
-          <div className={`mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
+          <div ref={caretWrapRef} className={`relative mx-auto max-w-3xl px-8 py-10 ${locked ? "read-mode" : ""}`}>
+            {caret && (
+              <div
+                className="caret-custom"
+                style={{
+                  top: caret.top,
+                  left: caret.left,
+                  width: caret.width,
+                  height: caret.height,
+                  background: caret.color,
+                  transition: caret.transition || undefined,
+                  animation: solid ? "none" : undefined,
+                }}
+              />
+            )}
             <input
               className="serif w-full border-none bg-transparent py-1 text-3xl font-bold outline-none placeholder:text-faint"
               placeholder={t("untitled")}

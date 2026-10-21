@@ -472,13 +472,13 @@ export default function Sidebar(props: Props) {
                 })
               }
             >
-              <div className="truncate text-[13px] text-ink">{h.title}</div>
-              <div className="truncate text-[11px] text-faint">{h.snippet}</div>
+              <div className="truncate text-[0.867rem] text-ink">{h.title}</div>
+              <div className="truncate text-[0.733rem] text-faint">{h.snippet}</div>
             </button>
           ))}
           {homeRows && homeRows.length > 0 && (
             <div className="mt-2">
-              <div className="px-2 py-1 text-[11px] font-medium text-faint">{t("homeNodes")}</div>
+              <div className="px-2 py-1 text-[0.733rem] font-medium text-faint">{t("homeNodes")}</div>
               {homeRows.map((row) => (
                 <div
                   key={row.node.address.join("/")}
@@ -498,11 +498,11 @@ export default function Sidebar(props: Props) {
                     requestZoomHome({ address: row.node.address });
                   }}
                 >
-                  <div className="truncate text-[13px] text-ink">
+                  <div className="truncate text-[0.867rem] text-ink">
                     {row.node.done ? <s className="text-faint">{row.node.text.split("\n")[0]}</s> : row.node.text.split("\n")[0]}
                   </div>
                   {row.path.length > 0 && (
-                    <div className="truncate text-[11px] text-faint">{row.path.join(" / ")}</div>
+                    <div className="truncate text-[0.733rem] text-faint">{row.path.join(" / ")}</div>
                   )}
                 </div>
               ))}

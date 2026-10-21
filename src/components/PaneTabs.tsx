@@ -12,7 +12,6 @@ import { RESET_HOME_EVENT } from "../outline/home-bus";
 import { NODE_MIME } from "./home/outlineKit";
 import type { Pane } from "../domain/workspace";
 import WindowControls, { SHOW_WINDOW_CONTROLS } from "./WindowControls";
-import { I } from "./icons";
 
 /** 标签拖拽的 dataTransfer 类型（栏内重排、跨栏移动与拆分落区共用） */
 export const TAB_MIME = "application/x-noteshare-tab";
@@ -128,9 +127,6 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
       >
         {pane.tabs.map((tab, idx) => {
           const on = tab.id === pane.activeTabId;
-          const isScene = /\.excalidraw$/i.test(tab.path);
-          const isCanvas = /\.canvas$/i.test(tab.path);
-          const isPdf = /\.pdf$/i.test(tab.path);
           const isHome = tab.path === HOME_PATH;
           // 凹角只画在有邻居的一侧：首/末标签贴边时白底直接顶到栏缘，无需过渡
           const hasLeft = idx > 0;
@@ -200,29 +196,18 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              {/* 激活标签的底部外圆角：内联 SVG 直切斜边 + 轻微软化
-                  （Obsidian 实测剖面 ≈ 45° 直切，仅 1px 弧度）。fillet-l 在左、fillet-r 镜像。 */}
+              {/* 激活标签的底部凹角（内圆角）：四分之一椭圆，外接黄金矩形 1:1.618（宽 5.5 × 高 8.9），
+                  曲线从标签侧壁向下扫到内容线。fillet-l 在左、fillet-r 镜像。 */}
               {on && hasLeft && (
-                <svg className="tab-fillet tab-fillet-l" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
-                  <path d="M5.5 0 Q2.1 2.1 0 5.5 L5.5 5.5 Z" fill="var(--paper)" />
+                <svg className="tab-fillet tab-fillet-l" width="5.5" height="8.9" viewBox="0 0 5.5 8.9" aria-hidden>
+                  <path d="M5.5 0 A5.5 8.9 0 0 0 0 8.9 L5.5 8.9 Z" fill="var(--paper)" />
                 </svg>
               )}
               {on && hasRight && (
-                <svg className="tab-fillet tab-fillet-r" width="5.5" height="5.5" viewBox="0 0 5.5 5.5" aria-hidden>
-                  <path d="M0 0 Q3.4 2.1 5.5 5.5 L0 5.5 Z" fill="var(--paper)" />
+                <svg className="tab-fillet tab-fillet-r" width="5.5" height="8.9" viewBox="0 0 5.5 8.9" aria-hidden>
+                  <path d="M0 0 A5.5 8.9 0 0 1 5.5 8.9 L0 8.9 Z" fill="var(--paper)" />
                 </svg>
               )}
-              <span className={`tab-ico ${isScene ? "tab-ico-scene" : ""}`}>
-                {isHome
-                  ? I.home
-                  : isScene
-                    ? I.pen
-                    : isCanvas
-                      ? I.canvas
-                      : isPdf
-                        ? I.pdf
-                        : I.note}
-              </span>
               <span className="tab-label">{tabLabel(tab.path)}</span>
               <button
                 className="tab-close"
