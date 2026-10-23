@@ -208,6 +208,42 @@ export const I = {  chevron: (
       </g>
     </svg>
   ),
+  palette: (
+    // 设置弹窗「外观」：斜笔刷
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M9.6 2.7l3.7 3.7-6.2 6.2a2.05 2.05 0 0 1-2.9 0l-1.1-1.1a2.05 2.05 0 0 1 0-2.9z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path d="M7.9 4.4l3.7 3.7" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  ),
+  caretThick: (
+    // 设置弹窗「光标」：两行文字之间的插入光标
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M3 3.3h7M3 12.7h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="6.85" y="5.6" width="1.9" height="5.2" rx="0.95" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  ),
+  swatch: (
+    // 设置弹窗「主题方案」：明暗对半圆
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="5.75" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M8 2.25v11.5" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="5.5" cy="8" r="1.05" fill="currentColor" />
+      <circle cx="10.5" cy="8" r="1.05" fill="currentColor" />
+    </svg>
+  ),
+  info: (
+    // 设置弹窗「关于」：圆圈 i
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="5.75" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="5.4" r="0.95" fill="currentColor" />
+      <path d="M8 7.8v3.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 /**

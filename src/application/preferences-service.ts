@@ -45,33 +45,43 @@ function systemDark(): boolean {
 
 export class PreferencesService {
   private persistTimer: number | undefined;
-  private off: () => void;
+  private offBus: (() => void) | null = null;
+  private offMedia: (() => void) | null = null;
 
   constructor(
     private bus: EventBus,
     private prefs: Preferences
-  ) {
-    this.off = bus.on("preferencesChanged", (e) => {
-      if (e.type !== "preferencesChanged") return;
-      this.apply(e.config);
-      this.schedulePersist(e.config);
-    });
-  }
+  ) {}
 
-  /** 启动：装载持久化配置 → 重建 DOM 投影 → 监听系统暗色变化 */
+  /** 启动：装载持久化配置 → 重建 DOM 投影 → 订阅变更事件与系统暗色变化。
+   *  幂等：React StrictMode（开发模式）会 mount → unmount → mount，
+   *  bootstrap 可能被调用多次，订阅不允许叠加、也不允许在 dispose 后失联。
+   *  （旧实现把订阅放构造函数、dispose 只退订不重订：StrictMode 第二次
+   *  bootstrap 后事件流断裂，主题/语言/字号切换全部失效，只能刷新页面。） */
   bootstrap() {
+    if (!this.offBus) {
+      this.offBus = this.bus.on("preferencesChanged", (e) => {
+        if (e.type !== "preferencesChanged") return;
+        this.apply(e.config);
+        this.schedulePersist(e.config);
+      });
+    }
     const raw = readStorage();
     if (raw) this.prefs.load(raw);
     this.apply(this.prefs.get());
-    if (typeof window.matchMedia === "function") {
-      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-        this.apply(this.prefs.get());
-      });
+    if (typeof window.matchMedia === "function" && !this.offMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const onChange = () => this.apply(this.prefs.get());
+      mq.addEventListener("change", onChange);
+      this.offMedia = () => mq.removeEventListener("change", onChange);
     }
   }
 
   dispose() {
-    this.off();
+    this.offBus?.();
+    this.offBus = null;
+    this.offMedia?.();
+    this.offMedia = null;
     window.clearTimeout(this.persistTimer);
   }
 

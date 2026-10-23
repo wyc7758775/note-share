@@ -34,10 +34,16 @@ function ThemeRow({
         }}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12.5px]" style={{ color: "var(--ink)" }}>
+        <span
+          className="block text-[12.5px] leading-snug"
+          style={{ color: "var(--ink)", overflowWrap: "anywhere" }}
+        >
           {label}
         </span>
-        <span className="block truncate text-[11px]" style={{ color: "var(--ink-faint)" }}>
+        <span
+          className="block text-[11px] leading-snug"
+          style={{ color: "var(--ink-faint)", overflowWrap: "anywhere" }}
+        >
           {sub}
         </span>
       </span>
