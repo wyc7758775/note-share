@@ -1593,10 +1593,13 @@ body {
   justify-content: space-between;
   gap: 4px;
   height: var(--tabbar-h);
-  padding: 5px 4px 0 0;
+  /* 左留 8px：首标签不贴栏缘（目标同款）；上 5px 为标签上沿留白 */
+  padding: 5px 4px 0 0.533rem;
   background: var(--paper-side);
-  /* 无底边线（Obsidian 同款）：条与内容仅靠颜色差分隔，激活标签的凹角衔接才自然；
-     左内边距为 0：首个标签直接顶住侧栏边缘 */
+  /* 底边 1px 分隔线（目标同款）：画在背景上、子元素下，
+     激活标签的白底自然盖住它 → 线在标签处断开、标签与内容连通 */
+  box-shadow: inset 0 -1px 0 var(--line);
+  /* 无边框线（与目标一致）：条与内容仅靠颜色差 + 底线分隔 */
 }
 
 /* ---------- 自绘窗口按钮（Windows/Linux 无原生标题栏，挂右上角栏的标签条右端） ---------- */
@@ -1765,13 +1768,10 @@ body {
   color: var(--ink-soft);
   font-size: 1.067rem;
   line-height: 1;
-  /* 常态隐身（目标同款）：悬停标签条才出现 */
-  opacity: 0;
-  transition: opacity 0.12s ease;
 }
-.tab-bar:hover .tab-new,
 .tab-new:hover {
-  opacity: 1;
+  color: var(--ink);
+  background: var(--surface-hover);
 }
 .tab-new:hover {
   color: var(--ink);

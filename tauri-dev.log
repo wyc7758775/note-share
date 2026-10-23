@@ -1,0 +1,20 @@
+
+> note-share@0.4.0 tauri
+> tauri dev
+
+     Running BeforeDevCommand (`npm run dev`)
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching D:\programer\note-share\src-tauri for changes...
+
+> note-share@0.4.0 dev
+> vite
+
+[1m[92m    Finished[0m ]8;;https://doc.rust-lang.org/cargo/reference/profiles.html#default-profiles\`dev` profile [unoptimized + debuginfo]]8;;\ target(s) in 0.42s
+[1m[92m     Running[0m `target\debug\note-share.exe`
+Port 5188 is in use, trying another one...
+
+  [32m[1mVITE[22m v6.4.4[39m  [2mready in [0m[1m320[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5189[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+       Error The "beforeDevCommand" terminated with a non-zero status code.
