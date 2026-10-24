@@ -12,6 +12,7 @@ import { RESET_HOME_EVENT } from "../outline/home-bus";
 import { NODE_MIME } from "./home/outlineKit";
 import type { Pane } from "../domain/workspace";
 import WindowControls, { SHOW_WINDOW_CONTROLS } from "./WindowControls";
+import { Icon } from "./icons";
 
 /** 标签拖拽的 dataTransfer 类型（栏内重排、跨栏移动与拆分落区共用） */
 export const TAB_MIME = "application/x-noteshare-tab";
@@ -125,12 +126,9 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
           if (delta && el.scrollWidth > el.clientWidth) el.scrollLeft += delta;
         }}
       >
-        {pane.tabs.map((tab, idx) => {
+        {pane.tabs.map((tab) => {
           const on = tab.id === pane.activeTabId;
           const isHome = tab.path === HOME_PATH;
-          // 凹角只画在有邻居的一侧：首/末标签贴边时白底直接顶到栏缘，无需过渡
-          const hasLeft = idx > 0;
-          const hasRight = idx < pane.tabs.length - 1;
           return (
             <div
               key={tab.id}
@@ -196,18 +194,7 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              {/* 激活标签的底部凹角（内圆角）：四分之一椭圆，外接黄金矩形 1:1.618（宽 5.5 × 高 8.9），
-                  曲线从标签侧壁向下扫到内容线。fillet-l 在左、fillet-r 镜像。 */}
-              {on && hasLeft && (
-                <svg className="tab-fillet tab-fillet-l" width="5.5" height="8.9" viewBox="0 0 5.5 8.9" aria-hidden>
-                  <path d="M5.5 0 A5.5 8.9 0 0 0 0 8.9 L5.5 8.9 Z" fill="var(--paper)" />
-                </svg>
-              )}
-              {on && hasRight && (
-                <svg className="tab-fillet tab-fillet-r" width="5.5" height="8.9" viewBox="0 0 5.5 8.9" aria-hidden>
-                  <path d="M0 0 A5.5 8.9 0 0 1 5.5 8.9 L0 8.9 Z" fill="var(--paper)" />
-                </svg>
-              )}
+              <Icon name={isHome ? "home" : "note"} size="lg" className="tab-icon" />
               <span className="tab-label">{tabLabel(tab.path)}</span>
               <button
                 className="tab-close"
@@ -217,7 +204,9 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                   workspace.closeTab(pane.id, tab.id);
                 }}
               >
-                ✕
+                <svg className="tab-x" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path d="M4.3 4.3l7.4 7.4M11.7 4.3l-7.4 7.4" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
           );
@@ -227,7 +216,7 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
           className={`tab-drop-line${dropIndex !== null ? " on" : ""}`}
           style={{ transform: `translateX(${lineX}px)` }}
         />
-        {/* ＋ 紧贴末标签（Obsidian/VSCode 同款）；点击新建笔记并在本栏末标签旁追加新标签 */}
+        {/* ＋ 新建标签：紧贴末标签之后，随标签一起滚动（不 sticky） */}
         <button
           className="tab-new"
           data-tip={t("newNote")}
@@ -242,7 +231,9 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
             onNewNote(folder);
           }}
         >
-          +
+          <svg className="tab-plus" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <path d="M8 3.4v9.2M3.4 8h9.2" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
       {titleEdge && SHOW_WINDOW_CONTROLS && <WindowControls />}

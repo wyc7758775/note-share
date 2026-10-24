@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>标签页形状草图 · D 组（四角圆角对照）</title>
+<style>
+  :root{
+    --paper:#ffffff; --paper-side:#f6f6f6; --line:#e4e4e4;
+    --ink:#292524; --ink-soft:#78716c; --ink-faint:#a8a29e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 28px 60px;background:#ece9e6;color:var(--ink);
+    font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  h1{font-size:15px;margin:0 0 4px}
+  .note{font-size:12px;color:#57534e;margin:0 0 8px}
+  .demo{margin:20px 0 0}
+  .cap{display:flex;align-items:baseline;gap:10px;margin:0 0 8px;flex-wrap:wrap}
+  .cap b{font-size:12.5px}
+  .cap em{font-style:normal;font-size:11.5px;color:#7c2d12;background:#f5d8c8;border-radius:4px;padding:1px 6px}
+  .cap code{font-size:11.5px;color:#44403c;background:#ddd8d3;border-radius:4px;padding:1px 6px}
+  .frame{background:#e4e0dc;padding:14px 14px 0;border-radius:10px}
+
+  /* 标签条：条高 38 / 标签高 32 / 固定宽 200（与原版一致） */
+  .tabbar{display:flex;align-items:flex-end;justify-content:space-between;
+    height:38px;padding:5px 4px 0 8px;background:var(--paper-side);
+    box-shadow:inset 0 -1px 0 var(--line)}
+  .tabs{display:flex;align-items:flex-end;min-width:0;flex:1;padding-right:7px}
+  .tab{position:relative;display:flex;align-items:center;gap:6px;flex:none;
+    width:200px;height:32px;padding:0 7px 0 10px;font-size:12.5px;color:var(--ink-soft)}
+  .tab .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tab .x{flex:none;width:16px;height:16px;border-radius:4px;display:flex;
+    align-items:center;justify-content:center;font-size:11px;color:var(--ink-faint)}
+  .tab.on{background:var(--paper);color:var(--ink);z-index:1}
+  .plus{flex:none;display:flex;align-items:center;justify-content:center;
+    width:26px;height:32px;margin-left:8px;border-radius:6px;
+    color:var(--ink-soft);font-size:16px}
+  .content{background:var(--paper);height:50px;padding:11px 15px;font-size:12px;
+    color:var(--ink-faint);border-radius:0 0 10px 10px}
+
+  /* D1：四角凸圆角，底边与内容线齐平（底角留极小灰缝） */
+  .d1 .tab.on{border-radius:10px}
+  /* D2：四角凸圆角，标签下压 3px 叠进内容（灰缝消失，纯白连通） */
+  .d2 .tab.on{border-radius:10px;height:35px;margin-bottom:-3px}
+  /* D3：之前方案（底角外张的凹角）—— 作废对照 */
+  .d3 .tab.on{border-radius:10px 10px 0 0}
+  .d3 .fillet{position:absolute;bottom:0;display:block;pointer-events:none}
+  .d3 .fillet.l{left:-8px}
+  .d3 .fillet.r{right:-8px}
+  /* D4：悬浮圆角卡片（原图同款：四角圆角，底边离内容线 6px） */
+  .d4 .tab.on{border-radius:10px;height:32px;margin-bottom:0;align-self:flex-start;margin-top:1px}
+
+  .zoom-wrap{position:relative;width:300px;height:140px;overflow:hidden;
+    background:#e4e0dc;border-radius:10px}
+  .zoom{position:absolute;left:10px;top:10px;transform:scale(4);transform-origin:top left}
+  .row{display:flex;gap:18px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<h1>标签页 · D 组：底角方向对照</h1>
+<p class="note">
+  根据你的反馈：<b>上方圆角方向是对的</b>，<b>下方两个圆角方向反了</b> —— 原图四个角都是往「里」收的<b>凸圆角</b>（像圆角卡片），我之前做成了往外张的凹角。<br>
+  下面 4 种底角处理并排，直接指哪个对。颜色仍不同步，只用浅色。
+</p>
+
+<!-- D1 -->
+<div class="demo d1">
+  <div class="cap"><b>D1 · 底角内收</b><em>四角圆角，底边与内容线齐平</em>
+    <code>圆角 10px</code><code>条高 38 / 标签 32</code></div>
+  <div class="frame">
+    <div class="tabbar">
+      <div class="tabs">
+        <div class="tab"><span class="label">很长的笔记标题会显示省略号…</span></div>
+        <div class="tab on"><span class="label">当前笔记</span><span class="x">✕</span></div>
+        <div class="tab"><span class="label">另一篇笔记</span></div>
+      </div>
+      <div class="plus">＋</div>
+    </div>
+    <div class="content">内容区（白底）· 底角两侧各留一点灰缝，分隔线从圆角下继续</div>
+  </div>
+</div>
+
+<!-- D2 -->
+<div class="demo d2">
+  <div class="cap"><b>D2 · 底角内收 + 下压 3px</b><em>灰缝消失，白底与内容完全连成一片</em>
+    <code>圆角 10px</code><code>标签 35 高（压进内容 3px）</code></div>
+  <div class="frame">
+    <div class="tabbar">
+      <div class="tabs">
+        <div class="tab"><span class="label">很长的笔记标题会显示省略号…</span></div>
+        <div class="tab on"><span class="label">当前笔记</span><span class="x">✕</span></div>
+        <div class="tab"><span class="label">另一篇笔记</span></div>
+      </div>
+      <div class="plus">＋</div>
+    </div>
+    <div class="content">内容区（白底）· 底角叠进内容区，看不见缝，读作一个整体</div>
+  </div>
+</div>
+
+<!-- D3 -->
+<div class="demo d3">
+  <div class="cap"><b>D3 · 底角外张（之前方案）</b><em>作废对照：白底向外张开接住内容线</em>
+    <code>圆角 10px + 凹角 8×12</code></div>
+  <div class="frame">
+    <div class="tabbar">
+      <div class="tabs">
+        <div class="tab"><span class="label">很长的笔记标题会显示省略号…</span></div>
+        <div class="tab on">
+          <svg class="fillet l" width="8" height="12" viewBox="0 0 8 12"><path d="M8 0 A8 12 0 0 0 0 12 L8 12 Z" fill="#fff"/></svg>
+          <span class="label">当前笔记</span><span class="x">✕</span>
+          <svg class="fillet r" width="8" height="12" viewBox="0 0 8 12"><path d="M0 0 A8 12 0 0 1 8 12 L0 12 Z" fill="#fff"/></svg>
+        </div>
+        <div class="tab"><span class="label">另一篇笔记</span></div>
+      </div>
+      <div class="plus">＋</div>
+    </div>
+    <div class="content">内容区（白底）· 这就是你说「下面两个圆角不对」的那种</div>
+  </div>
+</div>
+
+<!-- D4 -->
+<div class="demo d4">
+  <div class="cap"><b>D4 · 悬浮圆角卡片</b><em>最贴近原图：四角圆角，底边离内容线留 6px</em>
+    <code>圆角 10px</code><code>不连内容</code></div>
+  <div class="frame">
+    <div class="tabbar">
+      <div class="tabs" style="padding-bottom:6px">
+        <div class="tab"><span class="label">很长的笔记标题会显示省略号…</span></div>
+        <div class="tab on"><span class="label">当前笔记</span><span class="x">✕</span></div>
+        <div class="tab"><span class="label">另一篇笔记</span></div>
+      </div>
+      <div class="plus" style="margin-bottom:6px">＋</div>
+    </div>
+    <div class="content">内容区（白底）· 标签像卡片浮在条上，与内容之间有一道条底色的缝</div>
+  </div>
+</div>
+
+<!-- 放大对照 -->
+<div class="demo">
+  <div class="cap"><b>4× 放大 · 左下角对比</b><code>D1 留缝</code><code>D2 无缝</code></div>
+  <div class="row">
+    <div class="zoom-wrap">
+      <div class="zoom">
+        <div class="tabbar" style="width:200px">
+          <div class="tabs">
+            <div class="tab on" style="width:200px"><span class="label">当前笔记</span></div>
+          </div>
+        </div>
+        <div class="content" style="width:200px"></div>
+      </div>
+    </div>
+    <div class="zoom-wrap">
+      <div class="zoom">
+        <div class="tabbar" style="width:200px;overflow:visible">
+          <div class="tabs">
+            <div class="tab on" style="width:200px;height:35px;margin-bottom:-3px;border-radius:10px"><span class="label">当前笔记</span></div>
+          </div>
+        </div>
+        <div class="content" style="width:200px"></div>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:8px">左：D1（圆角下方还能看到 1px 分隔线与灰缝）　右：D2（标签压进内容，缝消失）</p>
+</div>
+
+<p class="note" style="margin-top:22px">
+  确认后我只改这一处（底角方向 + 圆角数值），其余原版细节不动。
+</p>
+
+</body>
+</html>

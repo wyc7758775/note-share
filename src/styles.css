@@ -16,6 +16,8 @@
   --accent-rgb: 180 83 9;
   --active-bg: rgb(var(--accent-rgb) / 0.12);
   --active-bg-hover: rgb(var(--accent-rgb) / 0.18);
+  /* 标签条底色：由文本色×纸色派生（自定义主题自动跟随），比纸色深一档以保证白标签对比 */
+  --tabbar-bg: color-mix(in srgb, var(--ink) 13%, var(--paper));
   --btn-bg: #292524;
   --btn-bg-hover: #44403c;
   --btn-fg: #fafaf9;
@@ -68,6 +70,7 @@ html[data-theme="dark"] {
   --accent-rgb: 217 119 6;
   --active-bg: rgb(var(--accent-rgb) / 0.25);
   --active-bg-hover: rgb(var(--accent-rgb) / 0.35);
+  --tabbar-bg: color-mix(in srgb, var(--ink) 16%, var(--paper));
   --btn-bg: #e7e5e4;
   --btn-bg-hover: #d6d3d1;
   --btn-fg: #1c1917;
@@ -133,14 +136,19 @@ html[data-theme="dark"] ::selection {
   display: flex;
   flex-direction: column;
   background: var(--paper-side);
-  border-right: 1px solid var(--line);
+  /* 竖分割线：从文本色派生（顶部深色带 + 下方浅色主体上都可见） */
+  border-right: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
   overflow: hidden;
 }
+/* 侧栏顶栏：高度与标签条严格一致（--tabbar-h），顶部连成一条同高同色的带 */
 .side-tabs {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 10px 6px;
+  height: var(--tabbar-h);
+  padding: 0 0.667rem;
+  /* 与标签条同底色：顶部连成一条完整的带（只靠底色区分，不画分割线） */
+  background: var(--tabbar-bg);
 }
 .side-tab {
   display: flex;
@@ -164,7 +172,15 @@ html[data-theme="dark"] ::selection {
   color: var(--ink);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
-.side-tab .tab-label {
+.side-tab /* 标签图标（目标同款：16px 图标块，距左 8px） */
+.tab-icon {
+  flex: none;
+  color: var(--ink-faint);
+}
+.tab-item-on .tab-icon {
+  color: var(--ink-soft);
+}
+.tab-label {
   font-weight: 500;
 }
 .side-scroll {
@@ -1576,6 +1592,13 @@ body {
 /* 非主题常量：尺寸/描边/动画索引（亮暗共用，放在独立 :root 里，避免被主题色门禁要求暗色覆盖） */
 :root {
   --tabbar-h: 2.533rem;
+  /* 标签圆角规范：凸角（标签顶两角、悬停底色的四角）与凹角（激活标签底部外张）
+     共用同一个半径，改一处全局生效 */
+  --tab-radius: 0.6rem;
+  /* 标签条图标色：✕ 与 ＋ 共用（--tab-glyph 常态、--tab-glyph-strong 粗一档），
+     两处不再各写一遍透明度，避免以后一边改了一边没改 */
+  --tab-glyph: color-mix(in srgb, var(--ink) 45%, transparent);
+  --tab-glyph-strong: color-mix(in srgb, var(--ink) 70%, transparent);
   --icon-size-xs: 0.8rem;
   --icon-size-sm: 0.867rem;
   --icon-size-md: 0.933rem;
@@ -1593,13 +1616,11 @@ body {
   justify-content: space-between;
   gap: 4px;
   height: var(--tabbar-h);
-  /* 左留 8px：首标签不贴栏缘（目标同款）；上 5px 为标签上沿留白 */
-  padding: 5px 4px 0 0.533rem;
-  background: var(--paper-side);
-  /* 底边 1px 分隔线（目标同款）：画在背景上、子元素下，
-     激活标签的白底自然盖住它 → 线在标签处断开、标签与内容连通 */
-  box-shadow: inset 0 -1px 0 var(--line);
-  /* 无边框线（与目标一致）：条与内容仅靠颜色差 + 底线分隔 */
+  /* 左侧留白交给 .tab-strip 的内边距（给首标签的凹角留出外扩空间） */
+  padding: 5px 4px 0 0;
+  background: var(--tabbar-bg);
+  /* 不画底部分隔线：栏与内容只靠底色深浅区分（--tabbar-bg vs --paper），
+     激活标签的纸色底因此与内容直接连成一片 */
 }
 
 /* ---------- 自绘窗口按钮（Windows/Linux 无原生标题栏，挂右上角栏的标签条右端） ---------- */
@@ -1642,63 +1663,97 @@ body {
   position: relative; /* 落点指示线的定位上下文（offsetParent 与绝对定位锚点） */
   display: flex;
   align-items: flex-end;
-  gap: 0; /* 标签互相贴住（Obsidian 同款）：激活标签的凹角以 z-index 盖在邻居上 */
+  gap: 0.4rem; /* 标签之间 6px（目标同款：缝隙里放 1px 分隔线） */
   min-width: 0;
   flex: 1;
-  /* 左 0：首标签顶住栏缘（首标签激活时不画左凹角，无裁剪问题）；
-     右留 7px：末标签激活时右凹角悬在条目外，防滚动容器裁剪 */
-  padding: 0 0.467rem 0 0;
+  /* 左右各留一个圆角半径（= 凹角尺寸）：不管首/末标签有没有邻居，
+     两侧凹角都画在标签外侧，不被滚动容器裁掉 */
+  padding: 0 var(--tab-radius);
   overflow-x: auto;
   scrollbar-width: none;
 }
 .tab-strip::-webkit-scrollbar {
   display: none;
 }
+/* 标签 = 目标同款（Chrome 式）：
+   高 33 / 宽 232 / 上两角 = --tab-radius / 底部凹角同半径 / 图标 16（距左 8）/ 文字距左 32 / ✕ 距右 12 */
 .tab-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.533rem; /* 图标与文字间距 8 */
   flex: none;
-  height: 2.133rem;
-  width: 13.333rem; /* 固定宽标签（目标同款）：文字左对齐省略，✕ 钉右侧 */
-  padding: 0 0.467rem 0 0.667rem;
-  border-radius: 0.533rem 0.533rem 0 0;
-  font-size: 0.833rem;
+  height: calc(var(--tabbar-h) - 0.333rem); /* 38 - 5 = 33 */
+  width: 15.467rem; /* 232 */
+  padding: 0 0.467rem 5px 0.533rem; /* 左 8 / 右 7 / 下 5：下方 5px 就是悬停卡片让出的那道缝，
+                                      图标与文字在卡片那块高度内居中（参考图里图标/文字＋ 都在卡片中线上） */
+  border-radius: var(--tab-radius) var(--tab-radius) 0 0; /* 上两角圆、下两角方（底边贴栏底） */
+  font-size: 0.8rem; /* 12 */
   color: var(--ink-soft);
   cursor: pointer;
   user-select: none;
+  /* 隔离成层叠上下文：悬停卡片（::after，z-index:-1）才能只垫在标签自身内容之下，
+     而不会掉到标签条背景后面 */
+  isolation: isolate;
 }
-/* 非激活标签悬停：只加深文字，不刷底色——灰色胶囊与参考样式不符；
+/* 相邻两个未激活标签之间的 1px 分隔线（目标同款：高 16，居中在 6px 缝隙里） */
+.tab-item:not(.tab-item-on) + .tab-item:not(.tab-item-on)::before {
+  content: "";
+  position: absolute;
+  left: -0.2rem;
+  top: 50%;
+  width: 1px;
+  height: 1.067rem;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, var(--ink) 26%, transparent);
+  pointer-events: none;
+}
+/* 非激活标签悬停：文字加深 + 一块「悬浮卡片」底色。
+   卡片四角同半径，左右各内缩 2px、底边离栏底 5px —— 贴底只属于激活标签，
+   悬停时留一道缝才不会读成「已经切过去了」。
    :not() 同时压低特异性，避免 hover 盖过激活态背景 */
 .tab-item:hover:not(.tab-item-on) {
   color: var(--ink);
 }
+/* 卡片画在 ::after（非激活标签的 ::before 已被那条 1px 分隔线占用）；
+   z-index:-1 让它垫在图标/文字下面（靠 .tab-item 的 isolation 兜住） */
+.tab-item:hover:not(.tab-item-on)::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px 5px; /* 上齐顶 / 左右各内缩 2 / 底边离栏底 5 */
+  z-index: -1;
+  border-radius: var(--tab-radius);
+  background: var(--surface-hover);
+  pointer-events: none;
+}
+/* 激活标签：上两角朝里收（凸），下两角朝外张（凹）—— 同一个半径只是镜像到另一侧：
+   上角挖掉标签自己的角，下角则把纸色补到标签外侧，弧线由竖直侧壁扫到底边，
+   与内容区的水平线接住（凹角半径 = --tab-radius = .tab-strip 左右留白，首/末标签也不被裁）。 */
 .tab-item-on {
   color: var(--ink);
   background: var(--paper);
-  z-index: 1; /* 圆角片盖过相邻标签的 hover 底色，衔接弧线保持完整 */
+  border-radius: var(--tab-radius) var(--tab-radius) 0 0;
+  z-index: 1; /* 高于邻居：底部凹角要压过标签缝隙和相邻标签的悬停卡片 */
 }
-/* 激活标签底部外圆角（凹角）：圆角片贴在标签两外侧、底部与内容区齐平。
-   填充层 = 纸色，mask 在背离标签的底角挖去 8px 四分之一圆（挖孔圆心：
-   左片 0% 100%、右片 100% 100%——即靠缝隙的一侧，保留贴标签的一角）；
-   ::before = 底线色，环状 mask 只留沿弧线的 ~1px 描边。
-   两层同一圆心，横线行至标签两侧沿弧线上收，与内容区呈水桶形衔接。 */
-/* 凹角圆角片：内联 SVG（PaneTabs.tsx 中绘制 5.5×5.5 直切软斜边），这里只定位。
-   左片贴标签左缘、右片贴右缘，底边与内容区顶对齐。 */
-.tab-fillet {
+/* 底部凹角：一个半径见方的方块贴在标签左右下角的外侧，方块内以「外侧上角」为圆心
+   挖去四分之一圆 → 纸色只剩贴标签的一侧与底边；外张弧线不描边，
+   与内容区无色差、无分隔线，直接接住。 */
+.tab-item-on::before,
+.tab-item-on::after {
+  content: "";
   position: absolute;
   bottom: 0;
-  width: 0.367rem;
-  height: 0.593rem; /* 黄金矩形 1:1.618（宽 5.5 × 高 8.9 @15px 基准） */
+  width: var(--tab-radius);
+  height: var(--tab-radius);
   pointer-events: none;
-  display: block;
 }
-.tab-fillet-l {
-  left: -0.367rem;
+.tab-item-on::before {
+  left: calc(-1 * var(--tab-radius));
+  background: radial-gradient(circle at 0 0, #0000 var(--tab-radius), var(--paper) var(--tab-radius));
 }
-.tab-fillet-r {
-  right: -0.367rem;
+.tab-item-on::after {
+  right: calc(-1 * var(--tab-radius));
+  background: radial-gradient(circle at 100% 0, #0000 var(--tab-radius), var(--paper) var(--tab-radius));
 }
 .tab-item-drag {
   opacity: 0.45;
@@ -1728,23 +1783,29 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tab-x,
+.tab-plus {
+  display: block;
+  width: 0.733rem; /* 11px：比原 10px 字形更粗更实 */
+  height: 0.733rem;
+}
 .tab-close {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.067rem;
-  height: 1.067rem;
-  border-radius: 0.267rem;
-  font-size: 0.733rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.2rem;
+  font-size: 0.667rem; /* 字形 10（比之前大 2px） */
   line-height: 1;
-  color: var(--ink-faint);
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  color: var(--tab-glyph); /* 更淡 */
+  opacity: 1;
+  transition: color 0.12s ease, background-color 0.12s ease;
 }
 .tab-item:hover .tab-close,
 .tab-item-on .tab-close {
-  opacity: 0.75;
+  color: var(--tab-glyph-strong);
 }
 .tab-close:hover {
   opacity: 1 !important;
@@ -1752,30 +1813,27 @@ body {
   background: var(--surface-hover);
 }
 .tab-new {
-  position: sticky;
-  right: 0;
-  z-index: 2; /* 盖住滚动时从下方经过的标签 */
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: flex-end;
-  height: 2.133rem; /* 与标签同高，底边对齐 */
+  align-self: center; /* 与 ✕ 同一水平中线 */
+  margin-bottom: 5px; /* 标签内容上移的同一个量：保持在同一条中线上（卡片中心） */
+  height: 1.733rem; /* 26×26 方块：hover 底更紧凑 */
   width: 1.733rem;
-  margin-left: 0.533rem; /* 贴住末标签：留出激活标签右凹角（0.367rem）的衔接空间 */
-  border-radius: 0.4rem;
-  background: var(--paper-side); /* 标签溢出滚动时遮住从下方滑过的标签 */
-  color: var(--ink-soft);
+  margin-left: 0.4rem;
+  border-radius: 0.4rem; /* hover 时的圆角底 */
+  background: transparent;
+  /* 与激活/悬停标签上的 ✕ 同色（同一个 --tab-glyph-strong），再不受所在标签状态影响 */
+  color: var(--tab-glyph-strong);
   font-size: 1.067rem;
   line-height: 1;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 .tab-new:hover {
-  color: var(--ink);
-  background: var(--surface-hover);
-}
-.tab-new:hover {
-  color: var(--ink);
-  background: var(--surface-hover);
+  /* 图标颜色保持不变（只换底色），否则 hover 会和 ✕ 拉开色差 */
+  color: var(--tab-glyph-strong);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 /* 滚动条（全局统一，Workflowy 式：极细、半透明、轨道透明、悬停加深；不写描边避免"白底"）。

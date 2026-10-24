@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>标签页形状调参器</title>
+<style>
+  :root{ --paper:#fff; --side:#f6f6f6; --line:#e4e4e4; --ink:#292524; --soft:#78716c; --faint:#a8a29e; }
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px 24px 60px;background:#ece9e6;color:var(--ink);
+    font:13px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  h1{font-size:15px;margin:0 0 6px}
+  .lead{font-size:12.5px;color:#44403c;margin:0 0 4px}
+  .lead b{color:#7c2d12}
+  .cols{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;margin-top:16px}
+  .panel{background:#fff;border:1px solid #d8d3cd;border-radius:10px;padding:14px}
+  .panel h2{font-size:12.5px;margin:0 0 10px;color:#57534e;font-weight:600}
+  .ref img{display:block;width:500px;image-rendering:auto;border-radius:6px}
+  .ref p{font-size:11.5px;color:#7c7972;margin:8px 0 0}
+
+  /* 预览用的真实标签条 */
+  .frame{background:#e4e0dc;padding:14px 14px 0;border-radius:8px}
+  .tabbar{position:relative;display:flex;align-items:flex-end;justify-content:space-between;
+    height:38px;padding:5px 4px 0 8px;background:var(--side);box-shadow:inset 0 -1px 0 var(--line)}
+  .tabs{display:flex;align-items:flex-end;min-width:0;flex:1;padding-right:7px}
+  .tab{position:relative;display:flex;align-items:center;gap:6px;flex:none;
+    width:200px;height:32px;padding:0 7px 0 10px;font-size:12.5px;color:var(--soft)}
+  .tab .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tab .x{flex:none;width:16px;height:16px;border-radius:4px;display:flex;
+    align-items:center;justify-content:center;font-size:11px;color:var(--faint)}
+  .tab.on{color:var(--ink);z-index:1}
+  .tab.on svg.shape{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+  .tab.on .inner{position:relative;display:flex;align-items:center;gap:6px;width:100%}
+  .plus{flex:none;display:flex;align-items:center;justify-content:center;
+    width:26px;height:32px;margin-left:8px;border-radius:6px;color:var(--soft);font-size:16px}
+  .content{background:var(--paper);height:52px;padding:11px 15px;font-size:12px;color:var(--faint);border-radius:0 0 8px 8px}
+
+  /* 控件 */
+  .ctrls{min-width:330px}
+  .row{display:flex;align-items:center;gap:10px;margin:0 0 9px}
+  .row label{width:74px;font-size:12px;color:var(--soft)}
+  .row input[type=range]{flex:1;accent-color:#b45309}
+  .row .val{width:46px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink)}
+  .note{font-size:11.5px;color:#7c7972;margin:10px 0 0;line-height:1.7}
+  .out{margin-top:12px;padding:9px 11px;background:#f6f4f2;border:1px solid #ddd8d3;border-radius:8px;
+    font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#292524;word-break:break-all}
+  .hint{font-size:11.5px;color:#9a948c;margin:6px 0 0}
+</style>
+</head>
+<body>
+
+<h1>标签页形状调参器</h1>
+<p class="lead">上面是你的原图；下面是<b>可拖动</b>的实时预览。请拖到「和原图一样」为止，然后把最底下的数字发我。</p>
+<p class="lead" style="color:#7c2d12">四个角的数值含义：<b>正数</b> = 往标签里面收的圆弧（凸角）；<b>负数</b> = 往外张开的圆弧（凹角，白底扩出去）；<b>0</b> = 直角。</p>
+
+<div class="cols">
+  <div class="panel ref">
+    <h2>你的原图（参考）</h2>
+    <img src="ref-target.png" alt="目标参考图">
+    <p>只对齐形状，颜色不同步。</p>
+  </div>
+
+  <div class="panel ctrls">
+    <h2>实时预览</h2>
+    <div class="frame">
+      <div class="tabbar">
+        <div class="tabs">
+          <div class="tab"><span class="label">很长的笔记标题会显示省略号…</span></div>
+          <div class="tab on" id="activeTab">
+            <svg class="shape" id="shape"></svg>
+            <span class="inner"><span class="label">当前笔记</span><span class="x">✕</span></span>
+          </div>
+          <div class="tab"><span class="label">另一篇笔记</span></div>
+        </div>
+        <div class="plus" id="plus">＋</div>
+      </div>
+      <div class="content" id="content">内容区（白底）</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="row"><label>左上角</label><input type="range" id="tl" min="-22" max="22" step="1" value="12"><span class="val" id="tlV">12</span></div>
+      <div class="row"><label>右上角</label><input type="range" id="tr" min="-22" max="22" step="1" value="12"><span class="val" id="trV">12</span></div>
+      <div class="row"><label>左下角</label><input type="range" id="bl" min="-22" max="22" step="1" value="12"><span class="val" id="blV">12</span></div>
+      <div class="row"><label>右下角</label><input type="range" id="br" min="-22" max="22" step="1" value="12"><span class="val" id="brV">12</span></div>
+      <div class="row"><label>标签下压</label><input type="range" id="dip" min="0" max="12" step="1" value="0"><span class="val" id="dipV">0</span></div>
+      <div class="row"><label>标签宽</label><input type="range" id="tw" min="120" max="280" step="4" value="200"><span class="val" id="twV">200</span></div>
+    </div>
+
+    <div class="out" id="out"></div>
+    <p class="hint">拖动后把这行数字整段复制发我即可（或只发四个角的值 + 下压）。</p>
+  </div>
+</div>
+
+<script>
+const ids = ["tl","tr","bl","br","dip","tw"];
+const el = (id) => document.getElementById(id);
+const activeTab = el("activeTab"), shape = el("shape");
+
+/** 按四个带符号圆角值生成标签形状路径（采样成折线，避免 arc 旗标方向出错） */
+function buildPath(W, H, tl, tr, br, bl) {
+  const PAD = 24;                       // 允许负角向外扩
+  const x0 = PAD, y0 = PAD, x1 = PAD + W, y1 = PAD + H;
+  const pts = [];
+  const arc = (cx, cy, r, a0, a1, steps = 20) => {
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + (a1 - a0) * (i / steps);
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  };
+  // 左上：从左边 y=+r 处到顶边 x=+r 处
+  if (tl <= 0) pts.push([x0, y0]);
+  else arc(x0 + tl, y0 + tl, tl, Math.PI, Math.PI * 1.5);
+  // 右上
+  if (tr <= 0) pts.push([x1, y0]);
+  else arc(x1 - tr, y0 + tr, tr, Math.PI * 1.5, Math.PI * 2);
+  // 右下：正值=内收圆角；负值=外张凹角（白底向右扩出 R）
+  if (br === 0) pts.push([x1, y1]);
+  else if (br > 0) arc(x1 - br, y1 - br, br, 0, Math.PI / 2);
+  else { const R = -br; arc(x1 + R, y1 - R, R, Math.PI, Math.PI / 2); }
+  // 左下：正值=内收圆角；负值=外张凹角（白底向左扩出 R）
+  if (bl === 0) pts.push([x0, y1]);
+  else if (bl > 0) arc(x0 + bl, y1 - bl, bl, Math.PI / 2, Math.PI);
+  else { const R = -bl; arc(x0 - R, y1 - R, R, 0, Math.PI / 2); }
+
+  const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ") + " Z";
+  return { d, minX: Math.min(...pts.map(p => p[0])), minY: Math.min(...pts.map(p => p[1])),
+           maxX: Math.max(...pts.map(p => p[0])), maxY: Math.max(...pts.map(p => p[1])) };
+}
+
+function render() {
+  const v = {};
+  ids.forEach((id) => { v[id] = Number(el(id).value); el(id + "V").textContent = el(id).value; });
+  const W = v.tw;
+  // 标签高度 = 条高 38 - 上留白 5 + 下压
+  const H = 33 + v.dip;
+  activeTab.style.width = W + "px";
+  activeTab.style.height = H + "px";
+  activeTab.style.marginBottom = v.dip ? -v.dip + "px" : "0";
+  const p = buildPath(W, H, v.tl, v.tr, v.br, v.bl);
+  const SW = W + 48, SH = H + 48;   // 48 = 两侧各 24px 余量，容负角外扩
+  shape.setAttribute("width", SW);
+  shape.setAttribute("height", SH);
+  shape.setAttribute("viewBox", `0 0 ${SW} ${SH}`);
+  shape.style.width = SW + "px";
+  shape.style.height = SH + "px";
+  shape.style.left = "-24px";
+  shape.style.top = "-24px";
+  shape.innerHTML = `<path d="${p.d}" fill="#fff" stroke="#e4e4e4" stroke-width="0"/>`;
+  el("out").textContent = `tl=${v.tl}  tr=${v.tr}  bl=${v.bl}  br=${v.br}  dip=${v.dip}  width=${v.tw}`;
+}
+ids.forEach((id) => el(id).addEventListener("input", render));
+render();
+</script>
+</body>
+</html>
