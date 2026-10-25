@@ -70,6 +70,8 @@ export interface Backend {
   /** 列出目录下的子文件夹（只 web 模式实现，供自绘选目录弹窗；桌面端走 pickFolder） */
   browse?(path: string): Promise<BrowseDir>;
   tree(): Promise<TreeNode[]>;
+  /** 订阅 vault 目录外部变化（桌面端为文件系统监听；web 模式空实现），返回取消函数 */
+  listenVaultChanged(cb: () => void): Promise<() => void>;
   readNote(path: string): Promise<NoteRaw>;
   writeNote(path: string, raw: string): Promise<void>;
   /** 在指定文件夹下新建笔记，返回最终路径（重名自动加序号） */

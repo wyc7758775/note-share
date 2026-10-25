@@ -64,14 +64,17 @@ export interface TreeHandlers {
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 
-/** 文件名：主名靠左、后缀靠右的两端对齐（Obsidian 式，后缀极淡对齐成一列） */
+/** 文件名：主名靠左、后缀靠右的两端对齐（Obsidian 式，后缀极淡对齐成一列）；
+ *  .md 笔记不显示后缀（笔记类型由语义表达），附件仍显示后缀 */
 function TreeName({ name }: { name: string }) {
   const i = name.lastIndexOf(".");
   const hasExt = i > 0 && i < name.length - 1;
+  const ext = hasExt ? name.slice(i) : "";
+  const showExt = hasExt && !/^\.md$/i.test(ext);
   return (
     <span className="flex h-full min-w-0 flex-1 items-center justify-between gap-2">
       <span className="truncate">{hasExt ? name.slice(0, i) : name}</span>
-      {hasExt && <span className="shrink-0 text-faint opacity-50">{name.slice(i)}</span>}
+      {showExt && <span className="shrink-0 text-faint opacity-50">{ext}</span>}
     </span>
   );
 }

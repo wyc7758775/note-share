@@ -292,6 +292,61 @@ function VaultApp({
     setTree(await backend.tree());
   }, []);
 
+  /** 外部文件变化（资源管理器增删/重命名）：刷新文件树，并关闭已不存在文件的标签 */
+  const syncExternalChanges = useCallback(async () => {
+    const next = await backend.tree();
+    setTree(next);
+    const valid = new Set<string>();
+    const walk = (nodes: import("./backend").TreeNode[]) => {
+      for (const n of nodes) {
+        valid.add(n.path);
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(next);
+    for (const pane of workspace.paneList) {
+      for (const tab of [...pane.tabs]) {
+        if (tab.path !== HOME_PATH && !valid.has(tab.path)) {
+          workspace.clearPath(tab.path);
+        }
+      }
+    }
+  }, [workspace]);
+
+  // 文件系统监听：外部增删/重命名后（防抖）同步文件树与标签
+  useEffect(() => {
+    let timer = 0;
+    let off: (() => void) | null = null;
+    let disposed = false;
+    const onChanged = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void syncExternalChanges(), 300);
+    };
+    void backend.listenVaultChanged(onChanged).then((cleanup) => {
+      if (disposed) cleanup();
+      else off = cleanup;
+    });
+    return () => {
+      disposed = true;
+      off?.();
+      window.clearTimeout(timer);
+    };
+  }, [syncExternalChanges]);
+
+  // 窗口重新聚焦时同步一次（监听缺失/被系统挂起的兑底，成本仅一次树读取）
+  useEffect(() => {
+    const sync = () => void syncExternalChanges();
+    const onVis = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [syncExternalChanges]);
+
   // 领域装配：名录初始化；文件树/分栏跟随领域事件自动更新。
   // 固定入口：大纲索引装载 + 空工作台启动落地——优先恢复上次关闭前打开的最后一篇笔记
   // （按仓库记忆；文件已删/改名则回退到 Workflowy 大纲）。

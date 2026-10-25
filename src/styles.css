@@ -172,7 +172,7 @@ html[data-theme="dark"] ::selection {
   color: var(--ink);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
-.side-tab /* 标签图标（目标同款：16px 图标块，距左 8px） */
+/* 标签图标（目标同款：16px 图标块，距左 8px） */
 .tab-icon {
   flex: none;
   color: var(--ink-faint);
@@ -256,10 +256,11 @@ body.resizing {
   user-select: none;
   -webkit-user-select: none;
 }
-/* 收起侧栏浮动按钮（无笔记时）：位置与编辑器顶栏的按钮一致（左上） */
+/* 收起侧栏浮动按钮（无笔记时）：垂直与侧栏顶排/标签条同一 28px 按钮行居中，
+   左 10px 与侧栏顶排内边距一致 */
 .side-toggle-float {
   position: absolute;
-  top: 8px;
+  top: 5px;
   left: 10px;
   z-index: 10;
   display: flex;
@@ -1154,20 +1155,46 @@ body {
 .note-toc {
   position: absolute;
   top: 56px;
-  right: 14px;
-  bottom: 36px;
   z-index: 24;
-  width: 212px;
+  /* 高度跟着内容走（背景板不会拖出一大块空白），超过可用高度时列表内部滚动 */
+  max-height: calc(100% - 92px); /* 92 = 上 56 + 下 36 的安全区 */
+  /* 横向几何由 NoteToc 实测后内联写入：left = 正文右缘 + 间距（跟正文走、不贴窗口边），
+     width = 内容需要夹在 [MIN_W, MAX_W] 与右侧剩余空间之间。下面只是开屏前的回退值。 */
+  left: 0;
+  width: 220px;
   display: flex;
+  min-width: 0;
+  transition: width 0.18s ease, left 0.18s ease;
 }
 .note-toc-inner {
   position: relative;
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+  /* 纵向不再撑满：内容多高就多高（超了由 .note-toc-list 滚动） */
   flex-direction: column;
   padding: 9px 4px 9px 6px;
   border-radius: 11px;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  border: 1px solid transparent;
+}
+/* 向左展开、盖住正文时：上背景板（纸底 + 描边 + 阴影），否则文字跟正文叠在一起读不了。
+   注意：padding 保持与常态一致（否则文字可用宽变窄，会把已经量好的宽度挤成省略号），
+   两者只差 border 颜色——常态是透明描边，底色透明，视觉上仍是无底无边。 */
+.note-toc-board .note-toc-inner {
+  border-color: var(--line);
+  background: var(--paper);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+}
+/* 背景板态：不再是"若有若无"的悬浮感，文字直接给到可读对比度 */
+.note-toc-board .note-toc-item {
+  opacity: 1;
+  color: var(--ink-soft);
+}
+.note-toc-board .note-toc-item:hover,
+.note-toc-board .note-toc-item.on {
+  color: var(--ink);
 }
 /* 收起钮：平时与目录一起隐身，hover 目录时浮现 */
 .note-toc-fold {
@@ -1197,6 +1224,7 @@ body {
 }
 .note-toc-list {
   display: flex;
+  min-width: 0;
   min-height: 0;
   flex: 1;
   flex-direction: column;
@@ -1205,7 +1233,15 @@ body {
   overflow-x: hidden;
   padding-right: 2px;
 }
+/* 条目 = 强制收窄到容器宽度的块：flex 子项默认 min-width:auto（内容宽），
+   配上 nowrap 会拒绘收窄 → 溢出后被列表 overflow-x 硬切（没有省略号）。
+   显式 min-width:0 + width:100% 才能真正触发自身的 text-overflow。 */
 .note-toc-item {
+  display: block;
+  flex: none; /* flex 列里不许被压缩高度：超高时交给列表滚动，而不是把每条挤扁 */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: none;
   background: none;
   padding: 2px 8px;
@@ -1215,11 +1251,18 @@ body {
   line-height: 1.65;
   color: var(--ink-faint);
   opacity: 0.72; /* 平时若有若无 */
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+/* 文字层单独负责省略号（button 自身做 ellipsis 在部分内核下不可靠）：
+   单行不换行，超宽出省略号，全文由 hover 的 title 展示 */
+.note-toc-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* hover 目录：整体浮出一档；单条 hover / 当前章：墨色实感 */
 .note-toc:hover .note-toc-item {
@@ -1244,10 +1287,22 @@ body {
   padding-left: 34px;
   font-size: 0.8rem;
 }
-/* 收起态：右缘小圆钮（同样平时低调、hover 加深） */
+/* 离屏测量副本：收起态也要能量出“完整显示所需宽度”，所以不受容器宽度约束、
+   固定在屏幕左侧不可见（不参与布局，也不产生滚动条） */
+.note-toc-measure {
+  top: 0;
+  left: -10000px;
+  max-height: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+/* 离屏副本里条目按自身内容宽度展开（真实目录里是 width:100% 受容器约束） */
+.note-toc-measure .note-toc-item {
+  width: max-content;
+  max-width: none;
+}
 .note-toc-collapsed {
   top: 64px;
-  right: 10px;
   bottom: auto;
   width: auto;
   display: block;

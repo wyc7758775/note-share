@@ -37,6 +37,7 @@ export const webBackend: Backend = {
   pickFolder: async () => null,
   browse: (path) => call<BrowseDir>("fs-browse", { path }),
   tree: () => call<TreeNode[]>("tree"),
+  listenVaultChanged: async () => () => {},
   readNote: (path) => call<NoteRaw>("note", { path }),
   writeNote: (path, raw) => call<void>("note-save", { path, raw }),
   createNote: (folder, title) => call<string>("note-create", { folder, title }),

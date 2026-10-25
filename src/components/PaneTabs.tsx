@@ -32,6 +32,18 @@ function tabLabel(path: string): string {
   return path.split("/").pop()?.replace(/\.(md|excalidraw|canvas)$/i, "") ?? "";
 }
 
+/** 标签图标按文件类型对应：md→note、手绘→pen、白板→canvas、PDF→pdf、图片→image */
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+function tabIcon(path: string) {
+  if (path === HOME_PATH) return "home" as const;
+  if (/\.excalidraw$/i.test(path)) return "pen" as const;
+  if (/\.canvas$/i.test(path)) return "canvas" as const;
+  if (/\.pdf$/i.test(path)) return "pdf" as const;
+  if (IMG_RE.test(path)) return "image" as const;
+  return "note" as const; // .md 笔记（默认）
+}
+
 export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) {
   const { t } = useSettings();
   const { workspace } = useDomain();
@@ -194,7 +206,7 @@ export default function PaneTabs({ pane, active, titleEdge, onNewNote }: Props) 
                 workspace.closeTab(pane.id, tab.id);
               }}
             >
-              <Icon name={isHome ? "home" : "note"} size="lg" className="tab-icon" />
+              <Icon name={tabIcon(tab.path)} size="lg" className="tab-icon" />
               <span className="tab-label">{tabLabel(tab.path)}</span>
               <button
                 className="tab-close"

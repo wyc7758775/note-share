@@ -1,6 +1,7 @@
 // NoteShare 桌面端命令：与 scripts/dev-server.mjs 的 /api 一一对应。
 // 所有 path 参数都是 vault 内相对路径（正斜杠），写入前统一做越界检查。
 use base64::Engine;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::borrow::Cow;
@@ -9,10 +10,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
     vault: Mutex<Option<PathBuf>>,
+    watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
 // ---------- 仓库注册表（应用级配置，独立于任何 vault） ----------
@@ -167,11 +169,42 @@ fn upsert_and_activate(
         None => reg.vaults.push(entry.clone()),
     }
     write_registry(app, &reg)?;
+    let vault_path = p.clone();
     *state.vault.lock().unwrap() = Some(p);
+    restart_watcher(app, state, &vault_path);
     Ok(VaultInfo {
         exists: true,
         ..VaultInfo::from(&entry)
     })
+}
+
+/// 监听 vault 目录的外部变化（资源管理器增删/重命名），结构变化时通知前端刷新。
+/// 事件驱动（无轮询）：只关心 Create/Remove/重命名（Modify(Name)），忽略内容写入
+/// （Modify(Data)），避免应用自身保存时也触发整树重载；前端收到后防抖合并。
+fn restart_watcher(app: &AppHandle, state: &State<AppState>, vault: &Path) {
+    let app_handle = app.clone();
+    let mut watcher = match notify::recommended_watcher(
+        move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                let structural = match event.kind {
+                    notify::EventKind::Create(_) | notify::EventKind::Remove(_) => true,
+                    notify::EventKind::Modify(kind) => {
+                        matches!(kind, notify::event::ModifyKind::Name(_))
+                    }
+                    _ => false,
+                };
+                if structural {
+                    let _ = app_handle.emit("vault-changed", ());
+                }
+            }
+        },
+    ) {
+        Ok(w) => w,
+        Err(_) => return, // 平台不支持/资源受限：放弃监听，前端仍有窗口聚焦兑底
+    };
+    if watcher.watch(vault, RecursiveMode::Recursive).is_ok() {
+        *state.watcher.lock().unwrap() = Some(watcher);
+    }
 }
 
 /// 启动路由到热更资源只做一次（setup 直接导航 / on_page_load 兜底，二者互斥）
@@ -489,6 +522,7 @@ pub fn run() {
         })
         .manage(AppState {
             vault: Mutex::new(None),
+            watcher: Mutex::new(None),
         })
         .setup(|app| {
             // Windows/Linux 去原生标题栏：标签条即顶栏（空白处拖动/双击最大化/窗口
@@ -547,7 +581,9 @@ pub fn run() {
                     .max_by_key(|v| v.last_opened_at)
                 {
                     let st = app.state::<AppState>();
-                    *st.vault.lock().unwrap() = Some(PathBuf::from(&v.path));
+                    let vault_path = PathBuf::from(&v.path);
+                    *st.vault.lock().unwrap() = Some(vault_path.clone());
+                    restart_watcher(app.handle(), &st, &vault_path);
                 }
             }
             // 热更资源有效 → 主窗口改由 hotres 协议加载（仅 release；dev 走 vite devUrl）。

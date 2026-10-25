@@ -62,11 +62,21 @@ export function useCustomCaret(editor: Editor | null, locked: boolean) {
     const lineH = c.bottom - c.top;
     const h = Math.max(6, Math.round(lineH * caretRatio)); // 长短可调（默认 85% 行高）
     const top = c.top - wr.top + (lineH - h) / 2;
-    // 光标放在插入点右侧 1px：与左侧字符留出间距（避免压字）
-    const left = c.left - wr.left + 1;
+
+    // coordsAtPos 的几何：后面有字时 c.left = 下一个字的左边缘（即插入缝隙）；
+    // 行尾无字时 c.left = 上一个字的右边缘（真正的行尾空白起点）。
+    // 因此「居中在缝隙」和「行尾向右让 1px」要分开处理，否则会压到下一字。
+    const doc = view.state.doc;
+    const nextChar = from < doc.content.size ? doc.textBetween(from, from + 1) : "";
+    const beforeChar = nextChar && !/\s/.test(nextChar); // 后面紧跟字母/文字
+    const width = beforeChar ? Math.min(caretWidth, 2) : caretWidth; // 有字改细，行尾保持偏好粗细
+    const left = beforeChar
+      ? c.left - wr.left - width / 2 // 居中在插入缝隙，不贴下一字
+      : c.left - wr.left + 1; // 行尾：向右让 1px，粗条落在空白里
 
     // 大跳动画：垂直超过 1.5 行或水平超过 240px 才平滑飞过去；打字/微移保持即时
-    let transition = "";
+    // 宽度变化始终加过渡，粗↔细平滑变形而不是硬切
+    let transition = "width 140ms ease";
     const prev = prevRef.current;
     if (caretAnimate && prev) {
       const dx = Math.abs(left - prev.left);
@@ -74,7 +84,7 @@ export function useCustomCaret(editor: Editor | null, locked: boolean) {
       if (dy > lineH * 1.5 || dx > 240) {
         const dur = Math.min(320, Math.max(140, Math.round(Math.hypot(dx, dy) / 6)));
         const ease = "cubic-bezier(.22,.61,.36,1)";
-        transition = `top ${dur}ms ${ease}, left ${dur}ms ${ease}`;
+        transition = `width 140ms ease, top ${dur}ms ${ease}, left ${dur}ms ${ease}`;
       }
     }
     prevRef.current = { top, left };
@@ -91,7 +101,7 @@ export function useCustomCaret(editor: Editor | null, locked: boolean) {
 
     const color =
       caretColor === "accent" ? "var(--accent)" : caretColor === "ink" ? "var(--ink)" : caretColor;
-    setCaret({ top, left, width: caretWidth, height: h, color, transition });
+    setCaret({ top, left, width, height: h, color, transition });
 
     // 移动/打字期间保持常亮，停手 500ms 后恢复闪烁
     setSolid(true);

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AssetData,
@@ -23,6 +24,12 @@ export const tauriBackend: Backend = {
     return typeof dir === "string" ? dir : null;
   },
   tree: () => invoke<TreeNode[]>("tree"),
+  listenVaultChanged: async (cb) => {
+    const un = await listen("vault-changed", cb);
+    return () => {
+      void un();
+    };
+  },
   readNote: (path) => invoke<NoteRaw>("read_note", { path }),
   writeNote: (path, raw) => invoke<void>("write_note", { path, raw }),
   createNote: (folder, title) => invoke<string>("create_note", { folder, title }),
