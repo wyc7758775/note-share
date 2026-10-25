@@ -533,6 +533,106 @@ body {
   font-family: Consolas, "JetBrains Mono", monospace;
 }
 
+/* 代码块 NodeView：普通代码块保持原样；mermaid 默认只显示图，可切源码。 */
+.codeblock-node > pre {
+  margin: 0;
+}
+.codeblock-node.is-mermaid {
+  margin: 0.85em 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.codeblock-node.is-mermaid.is-selected {
+  outline: 2px solid rgb(var(--accent-rgb) / 0.28);
+  outline-offset: 2px;
+}
+.mermaid-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 4px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+}
+.mermaid-badge {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+.mermaid-tabs {
+  display: flex;
+  gap: 2px;
+}
+.mermaid-tab {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+.mermaid-tab:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.mermaid-tab.on {
+  background: var(--active-bg);
+  color: var(--ink);
+}
+.codeblock-node.is-mermaid > pre {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.mermaid-body {
+  padding: 12px;
+  overflow-x: auto;
+}
+
+/* Pele 图：用 CSS 变量取色，主题切换无需重建 SVG；字体变量也在这里统一。 */
+.mermaid-preview {
+  position: relative;
+  min-height: 2.4em;
+  --pele-bg: var(--paper);
+  --pele-fg: var(--ink);
+  --pele-muted: var(--ink-soft);
+  --pele-line: var(--ink-soft);
+  --pele-surface: color-mix(in srgb, var(--ink) 7%, var(--paper));
+  --pele-surface-alt: color-mix(in srgb, var(--ink) 12%, var(--paper));
+  --pele-border: var(--line-strong);
+  --pele-accent: var(--accent);
+  --pele-critical: #dc2626;
+  --pele-error: #dc2626;
+  --pele-font: -apple-system, "Segoe UI", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif;
+  --pele-font-mono: Consolas, "JetBrains Mono", monospace;
+  --pele-radius: 8px;
+  --pele-title-weight: 700;
+  --pele-heading-weight: 600;
+  --pele-bold-weight: 700;
+}
+.mermaid-preview .pele {
+  display: block;
+  margin: 0 auto;
+}
+.mermaid-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  pointer-events: none;
+}
+.mermaid-hint.is-error {
+  color: #dc2626;
+}
+
 /* 代码块语法高亮（lowlight/highlight.js 类名，暖色调配深底） */
 .ProseMirror pre code .hljs-comment,
 .ProseMirror pre code .hljs-quote {

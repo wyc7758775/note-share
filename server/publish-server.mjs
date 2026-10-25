@@ -33,6 +33,16 @@ article { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
 .doc-meta { color: #a8a29e; font-size: .82em; margin-bottom: 36px; display: flex; gap: 16px; }
 .doc-meta .tags { color: #b45309; }
 .doc-body img, .doc-body video { max-width: 100%; height: auto; border-radius: 8px; }
+.doc-body .mermaid-fig {
+  margin: 1.5em 0; text-align: center; overflow-x: auto;
+  --pele-bg: #faf9f7; --pele-fg: #292524; --pele-muted: #78716c;
+  --pele-line: #57534e; --pele-surface: #f5f4f2; --pele-surface-alt: #ebe8e3;
+  --pele-border: #d6d3d1; --pele-accent: #b45309; --pele-critical: #dc2626;
+  --pele-error: #dc2626;
+  --pele-font: -apple-system, "Segoe UI", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif;
+  --pele-font-mono: Consolas, "JetBrains Mono", monospace;
+}
+.doc-body .mermaid-fig svg { max-width: 100%; height: auto; }
 .doc-body h1,h2,h3,h4 { font-family: "Noto Serif SC", Georgia, serif; margin: 1.6em 0 .6em; line-height: 1.4; }
 .doc-body p { margin: .9em 0; }
 .doc-body a { color: #b45309; text-decoration: none; border-bottom: 1px solid #d6b48a; }

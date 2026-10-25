@@ -4,7 +4,6 @@ import NoteToc from "./NoteToc";
 import { subtreeMarkdown } from "../outline/parse";
 import { DOMParser as PMDOMParser } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -36,6 +35,7 @@ import PublishPanel from "./PublishPanel";
 import ImageViewer, { type ViewerImage } from "./ImageViewer";
 import { showContextMenu } from "./ContextMenu";
 import { createSlashMenu } from "./SlashMenu";
+import { MermaidCodeBlock } from "./MermaidCodeBlock";
 import { I } from "./icons";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -206,6 +206,24 @@ export default function Editor({
               editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
           },
           {
+            title: s("slMermaid"),
+            desc: s("slMermaidDesc"),
+            icon: "◇",
+            keywords: "mermaid diagram liuchengtu shixutu chart tu",
+            onSelect: ({ editor, range }) => {
+              editor
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent({
+                  type: "codeBlock",
+                  attrs: { language: "mermaid" },
+                  content: [{ type: "text", text: s("slMermaidTemplate") }],
+                })
+                .run();
+            },
+          },
+          {
             title: s("slQuote"),
             desc: s("slQuoteDesc"),
             icon: "❝",
@@ -249,7 +267,7 @@ export default function Editor({
       wikiLinkExtension,
       Wikilink,
       StarterKit.configure({ codeBlock: false }),
-      CodeBlockLowlight.configure({
+      MermaidCodeBlock.configure({
         lowlight: createLowlight(common),
         defaultLanguage: "plaintext",
       }),

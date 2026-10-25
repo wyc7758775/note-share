@@ -1,6 +1,7 @@
 // 生成"单文件 HTML"：内联 CSS、图片转 base64，双击即可打开，也可直接发给朋友。
 import { backend } from "../backend";
 import { pngSibling, isExcalidrawSrc, safeDecode } from "./markdown";
+import { renderMermaidInHtml } from "./mermaid";
 
 export async function composeArticleHtml(
   title: string,
@@ -33,8 +34,10 @@ ${READER_CSS}
 </html>`;
 }
 
-/** 把 HTML 字符串里的 vault 相对 src 替换为 dataURL */
+/** 把 HTML 字符串里的 vault 相对 src 替换为 dataURL；同时把 mermaid 代码块
+ *  渲染成内联 SVG（HTML/PDF/发布共用这条管线）。 */
 export async function inlineAssets(html: string): Promise<string> {
+  html = await renderMermaidInHtml(html);
   const seen = new Map<string, string>();
   const jobs: Promise<void>[] = [];
   html.replace(/src="([^"]+)"/g, (m, src: string) => {
@@ -91,6 +94,16 @@ article { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
   color: #78716c; font-size: .88em;
 }
 .doc-body .excalidraw-fig { margin: 1.5em 0; text-align: center; }
+.doc-body .mermaid-fig {
+  margin: 1.5em 0; text-align: center; overflow-x: auto;
+  --pele-bg: #faf9f7; --pele-fg: #292524; --pele-muted: #78716c;
+  --pele-line: #57534e; --pele-surface: #f5f4f2; --pele-surface-alt: #ebe8e3;
+  --pele-border: #d6d3d1; --pele-accent: #b45309; --pele-critical: #dc2626;
+  --pele-error: #dc2626;
+  --pele-font: -apple-system, "Segoe UI", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif;
+  --pele-font-mono: Consolas, "JetBrains Mono", monospace;
+}
+.doc-body .mermaid-fig svg { max-width: 100%; height: auto; }
 .doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 {
   font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
   line-height: 1.4; margin: 1.6em 0 .6em; font-weight: 700;
