@@ -38,8 +38,8 @@
 |---|---|---|---|
 | `--accent` | 主题色配置（默认 `#b45309`） | `#d97706` | 强调色（运行时内联注入） |
 | `--accent-rgb` | `180 83 9` | `217 119 6` | 强调色 RGB 三元组（派生透明度用） |
-| `--active-bg` | `rgb(var(--accent-rgb) / 0.12)` | `/ 0.25` | 选中项底色 |
-| `--active-bg-hover` | `rgb(var(--accent-rgb) / 0.18)` | `/ 0.35` | 选中项悬停底色 |
+| `--active-bg` | `rgb(var(--accent-rgb) / 0.12)` | `/ 0.18` | 选中项底色 |
+| `--active-bg-hover` | `rgb(var(--accent-rgb) / 0.18)` | `/ 0.26` | 选中项悬停底色 |
 | `--search-hit-bg` | `#fff3a3` | `rgb(250 204 21 / 0.22)` | 搜索命中高亮 |
 
 ### E. 按钮（实心/描边）

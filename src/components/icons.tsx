@@ -244,6 +244,37 @@ export const I = {  chevron: (
       <path d="M8 7.8v3.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
+  code: (
+    // Mermaid 块「切到源码」：左右尖括号 + 斜杠（</>）
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M6 4.5 2.6 8 6 11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 4.5 13.4 8 10 11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.9 3.2 7.1 12.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  ),
+  expand: (
+    // Mermaid 块「放大」：四角向外箭头
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M9.5 2.5h4v4M13.5 2.5 9 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 2.5h-4v4M2.5 2.5 7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.5 13.5h4v-4M13.5 13.5 9 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 13.5h-4v-4M2.5 13.5 7 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  diagram: (
+    // Mermaid 块「切回图表」：两个节点框 + 连线
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="2.5" width="5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="9.5" width="5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4.5 6.5v1.6M4.5 8.1 4.5 9.5M7 4.5h2M9 4.5v5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  close: (
+    // 放大弹窗「关闭」：×
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 /**

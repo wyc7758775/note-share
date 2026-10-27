@@ -463,7 +463,7 @@ export default function Sidebar(props: Props) {
           {hits?.map((h) => (
             <button
               key={h.path}
-              className="tree-row block w-full rounded-md px-2 py-1.5 text-left hover:bg-hover"
+              className="tree-row block w-full rounded-md px-2 py-1.5 text-left"
               title={h.path}
               onClick={(e) =>
                 handlers.onOpenNote(h.path, {

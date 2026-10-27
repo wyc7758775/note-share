@@ -68,8 +68,8 @@ html[data-theme="dark"] {
   --line-strong: #44403c;
   --accent: #d97706;
   --accent-rgb: 217 119 6;
-  --active-bg: rgb(var(--accent-rgb) / 0.25);
-  --active-bg-hover: rgb(var(--accent-rgb) / 0.35);
+  --active-bg: rgb(var(--accent-rgb) / 0.18);
+  --active-bg-hover: rgb(var(--accent-rgb) / 0.26);
   --tabbar-bg: color-mix(in srgb, var(--ink) 16%, var(--paper));
   --btn-bg: #e7e5e4;
   --btn-bg-hover: #d6d3d1;
@@ -538,6 +538,7 @@ body {
   margin: 0;
 }
 .codeblock-node.is-mermaid {
+  position: relative;
   margin: 0.85em 0;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -548,39 +549,45 @@ body {
   outline: 2px solid rgb(var(--accent-rgb) / 0.28);
   outline-offset: 2px;
 }
-.mermaid-head {
+/* 悬停工具栏：右上角浮层，默认隐藏，hover / 键盘聚焦时淡入 */
+.mermaid-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
   display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  pointer-events: none;
+}
+.codeblock-node.is-mermaid:hover .mermaid-tools,
+.codeblock-node.is-mermaid:focus-within .mermaid-tools {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.mermaid-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 8px 4px 10px;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
-}
-.mermaid-badge {
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: var(--ink-faint);
-}
-.mermaid-tabs {
-  display: flex;
-  gap: 2px;
-}
-.mermaid-tab {
-  padding: 2px 8px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--ink-faint);
-  font-size: 0.74rem;
-  line-height: 1.6;
+  cursor: pointer;
 }
-.mermaid-tab:hover {
+.mermaid-btn:hover {
   background: var(--surface-hover);
-  color: var(--ink);
-}
-.mermaid-tab.on {
-  background: var(--active-bg);
   color: var(--ink);
 }
 .codeblock-node.is-mermaid > pre {
@@ -631,6 +638,69 @@ body {
 }
 .mermaid-hint.is-error {
   color: #dc2626;
+}
+
+/* 放大弹窗：全屏遮罩 + 舞台。舞台尺寸由内容盒的 layout 尺寸决定（随缩放长大），
+   上限 92vw/86vh；到顶后舞台不再变大，改为拖拽平移查看其余部分。 */
+.mermaid-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+.mermaid-zoom-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 92vw;
+  max-height: 86vh;
+  padding: 24px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.35);
+  /* 拖拽平移：别让浏览器把它当成滚动手势 / 别选到图里的文字 */
+  touch-action: none;
+  user-select: none;
+}
+/* 内容盒：布局宽度 = 自然宽度 × scale，舞台据此撑开（这就是“窗口跟着变大”） */
+.mermaid-zoom-box {
+  position: relative;
+  flex: none;
+}
+/* 内层只负责绘制：以左上角为原点缩放到内容盒那么大 */
+.mermaid-zoom-svg {
+  transform-origin: top left;
+}
+.mermaid-zoom-svg .pele {
+  margin: 0;
+}
+.mermaid-zoom-svg svg {
+  max-width: 84vw;
+  max-height: 76vh;
+}
+.mermaid-zoom-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 18%, transparent);
+  color: #fff;
+  cursor: pointer;
+}
+.mermaid-zoom-close:hover {
+  background: color-mix(in srgb, #fff 32%, transparent);
 }
 
 /* 代码块语法高亮（lowlight/highlight.js 类名，暖色调配深底） */
@@ -805,19 +875,40 @@ body {
 }
 
 /* ---------- 文件树动效 ---------- */
+/* 行盒保持 30px（整行仍是点击热区）；底色画在内缩 2px 的胶囊伪元素上，
+   相邻行的 hover / 激活底色之间因此永远留一条缝，不会拼成一整块。 */
 .tree-row {
+  position: relative;
+  isolation: isolate; /* 让 ::before 的 z-index:-1 只在本行的层叠上下文内生效 */
   min-height: 30px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
-.tree-row:hover {
+.tree-row::before {
+  content: "";
+  position: absolute;
+  inset: 2px 0;
+  z-index: -1;
+  border-radius: 5px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+.tree-row:hover::before {
   background-color: var(--surface-hover);
 }
-.tree-row-active {
+.tree-row-active::before {
   background-color: var(--active-bg);
-  box-shadow: inset 2px 0 0 0 var(--accent);
 }
-.tree-row-active:hover {
+.tree-row-active:hover::before {
   background-color: var(--active-bg-hover);
+}
+/* 激活态靠文字识别（强调色 + 字重），不画左侧装饰条 */
+.tree-row-active {
+  color: var(--accent);
+  font-weight: 500;
+}
+.tree-row-active .tree-ext {
+  color: rgb(var(--accent-rgb) / 0.55);
+  opacity: 1;
 }
 /* 删除退出动画：淡出 + 塌缩。.tree-row 的 min-height:30px 优先级高于 max-height，
    height/min-height/max-height 必须一起压到 0，否则行只隐不缩、留下空白 */
@@ -844,7 +935,9 @@ body {
 .tree-row-dragging {
   opacity: 0.45;
 }
-.tree-row-drop {
+/* 拖入目标：同样落在内缩胶囊上（选择器加重，压过 :hover 的灰底） */
+.tree-row.tree-row-drop::before,
+.tree-row.tree-row-drop:hover::before {
   background-color: rgb(var(--accent-rgb) / 0.14);
   box-shadow: inset 0 0 0 1.5px rgb(var(--accent-rgb) / 0.5);
 }

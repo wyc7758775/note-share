@@ -74,7 +74,7 @@ function TreeName({ name }: { name: string }) {
   return (
     <span className="flex h-full min-w-0 flex-1 items-center justify-between gap-2">
       <span className="truncate">{hasExt ? name.slice(0, i) : name}</span>
-      {showExt && <span className="shrink-0 text-faint opacity-50">{ext}</span>}
+      {showExt && <span className="tree-ext shrink-0 text-faint opacity-50">{ext}</span>}
     </span>
   );
 }
@@ -322,7 +322,7 @@ function TreeRow({
   const active = isImg || isScene || isCanvas || isPdf;
   return (
     <div
-      className={`${rowCls} ${exitCls} ${active ? "cursor-pointer hover:bg-hover" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
+      className={`${rowCls} ${exitCls} ${active ? "cursor-pointer" : "text-faint"} ${dragging.current ? "tree-row-dragging" : ""}`}
       style={pad}
       title={isScene ? t("clickToEdit") : isCanvas ? t("clickToEditCanvas") : isImg ? t("clickToView") : isPdf ? t("clickToReadPdf") : item.path}
       draggable
