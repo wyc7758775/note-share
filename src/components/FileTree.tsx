@@ -33,7 +33,7 @@ export function InlineInputRow({
     <div className="row-in px-1 py-0.5" style={{ paddingLeft: 10 + depth * 14 }}>
       <input
         ref={ref}
-        className="w-full rounded-md border border-amber-600/40 bg-surface px-2 py-1 text-[0.867rem] outline-none focus:border-amber-700/70 focus:ring-2 focus:ring-amber-700/10"
+        className="w-full rounded-md border border-[var(--line-strong)] bg-surface px-2 py-1 text-[0.867rem] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--active-bg)]"
         value={v}
         placeholder={placeholder}
         onChange={(e) => setV(e.target.value)}

@@ -5,6 +5,7 @@
 
 import type { EventBus } from "./events";
 import type { ThemeBase, ThemeTokens } from "./theme-tokens";
+import { findPreset } from "./theme-tokens";
 
 export type Lang = "zh" | "en";
 export type ThemePref = "light" | "dark" | "system";
@@ -21,6 +22,25 @@ export interface CustomTheme {
   name: string;
   base: ThemeBase; // 生效于哪个基础模式（亮/暗）
   tokens: ThemeTokens;
+}
+
+/** 方案解析结果：不管来自代码里的预设还是用户自定义，投影层只需这一个形状 */
+export interface ThemeScheme {
+  base: ThemeBase;
+  tokens: ThemeTokens;
+}
+
+/** 方案查找（预设 ∪ 自定义）：未知 id → undefined（调用方回退内置主题）。
+ *  预设写在代码里、自定义存在偏好里，两边都不认识「对方」，由本函数合并 ——
+ *  这样服务层不必知道"主题从哪来"，UI 也不必。 */
+export function findScheme(
+  id: string | null,
+  customThemes: readonly CustomTheme[]
+): ThemeScheme | undefined {
+  const preset = findPreset(id);
+  if (preset) return { base: preset.base, tokens: preset.tokens };
+  const custom = id ? customThemes.find((t) => t.id === id) : undefined;
+  return custom ? { base: custom.base, tokens: custom.tokens } : undefined;
 }
 
 export interface PreferencesConfig {
@@ -42,7 +62,7 @@ export interface PreferencesConfig {
   typewriter: boolean;
   /** 光标大跳转动画（跨行长距离移动） */
   caretAnimate: boolean;
-  /** 当前选用的自定义主题 id；null = 内置主题 */
+  /** 当前选用的主题方案 id（内置预设或自定义）；null = 内置主题 */
   themeId: string | null;
   customThemes: CustomTheme[];
 }
@@ -125,18 +145,20 @@ function normCaretColor(v: unknown): string {
 
 /** 归一化 + 钳制：非法字段回退默认（外部数据进领域的唯一入口） */
 export function normalize(input: Partial<PreferencesConfig>): PreferencesConfig {
-  // 自定义主题列表：去重（先到先得）、逐项校验
+  // 自定义主题列表：去重（先到先得）、逐项校验；
+  // 预设 id 是保留字：用户自定义主题不能同名，否则"删不掉的预设"会被用户数据遮蔽
   const seen = new Set<string>();
   const customThemes: CustomTheme[] = [];
   for (const t of Array.isArray(input.customThemes) ? input.customThemes : []) {
     const nt = normTheme(t);
-    if (nt && !seen.has(nt.id)) {
+    if (nt && !seen.has(nt.id) && !findPreset(nt.id)) {
       seen.add(nt.id);
       customThemes.push(nt);
     }
   }
   const themeIdRaw = sanitizeThemeId(input.themeId);
-  const themeId = themeIdRaw && seen.has(themeIdRaw) ? themeIdRaw : null; // 指向不存在 → 回退内置
+  const themeId =
+    themeIdRaw && (findPreset(themeIdRaw) || seen.has(themeIdRaw)) ? themeIdRaw : null; // 指向不存在 → 回退内置
   return {
     version: 1,
     lang: input.lang === "en" ? "en" : "zh",
@@ -208,10 +230,11 @@ export class Preferences {
     this.set({ themeId: id });
   }
 
-  /** 新增或覆盖保存一个自定义主题（按 id upsert）；保存后自动选中 */
+  /** 新增或覆盖保存一个自定义主题（按 id upsert）；保存后自动选中。
+   *  预设 id 是保留字：与预设重名时拒绝保存（静默丢弃，由领域守住不变式） */
   saveTheme(theme: CustomTheme) {
     const id = sanitizeThemeId(theme.id);
-    if (!id) return;
+    if (!id || findPreset(id)) return;
     const rest = this.config.customThemes.filter((t) => t.id !== id);
     this.set({
       customThemes: [...rest, theme],
@@ -219,26 +242,31 @@ export class Preferences {
     });
   }
 
-  /** 删除自定义主题；若当前选中它则回退内置 */
+  /** 删除自定义主题；若当前选中它则回退内置（预设删不掉，不在此列） */
   removeTheme(id: string) {
     const next = this.config.customThemes.filter((t) => t.id !== id);
     this.set({
       customThemes: next,
-      themeId: this.config.themeId === id ? null : this.config.themeId,
+      themeId: this.config.themeId === id && !findPreset(id) ? null : this.config.themeId,
     });
   }
 
-  /** 生成不冲突的主题 id */
+  /** 生成不冲突的主题 id（避让已有自定义主题与预设保留字） */
   nextThemeId(): string {
     for (let i = 1; i < 10000; i++) {
       const id = `ct-${i}`;
-      if (!this.config.customThemes.some((t) => t.id === id)) return id;
+      if (!this.config.customThemes.some((t) => t.id === id) && !findPreset(id)) return id;
     }
     return `ct-${Date.now().toString(36)}`;
   }
 
   themeOf(id: string | null): CustomTheme | undefined {
     return id ? this.config.customThemes.find((t) => t.id === id) : undefined;
+  }
+
+  /** 当前方案（预设或自定义）；null = 内置主题 */
+  schemeOf(id: string | null): ThemeScheme | undefined {
+    return findScheme(id, this.config.customThemes);
   }
 
   private bump() {

@@ -179,7 +179,7 @@ function ImageView({ node, editor, selected, deleteNode, updateAttributes, getPo
   return (
     <NodeViewWrapper>
       <div
-        className={`excalidraw-fig ${selected ? "ring-2 ring-amber-500/60" : ""}`}
+        className={`excalidraw-fig ${selected ? "ring-2 ring-[var(--accent)]" : ""}`}
         onDoubleClick={() => !locked && emitEditScene(src)}
         onClick={() => {
           // 可编辑：右侧面板编辑；锁定：用阅览器看预览图

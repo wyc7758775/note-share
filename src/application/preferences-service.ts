@@ -1,6 +1,7 @@
 // PreferencesService（应用服务）：偏好的唯一 IO 与 DOM 投影入口。
 // - 持久化：localStorage（key `noteshare.prefs`，自动迁移旧 noteshare.lang/theme/accent）
 // - 投影：<html> 的 data-theme / lang / font-size（rem 基准）/ --editor-font-size / --accent*
+//   以及内置主题 ∪ 主题方案的 token（字体/字距也走同一通道）
 //   这些 DOM 状态全部可由 config 全量重建（启动 bootstrap 时重建一次）。
 // 订阅 preferencesChanged 事件 → 应用投影 + 防抖落盘；UI 层不直接读写 localStorage/DOM。
 
@@ -12,7 +13,7 @@ import {
   hexToRgbTriple,
   resolveDark,
 } from "../domain/preferences";
-import { builtin, type ThemeTokens } from "../domain/theme-tokens";
+import { builtin, SCHEME_EXTRA_TOKENS, type ThemeTokens } from "../domain/theme-tokens";
 
 const KEY = "noteshare.prefs";
 
@@ -94,12 +95,21 @@ export class PreferencesService {
     // rem 基准：界面字号 = html 字号（全 UI 字号已 rem 化）
     root.style.fontSize = `${cfg.uiFontSize}px`;
     root.style.setProperty("--editor-font-size", `${cfg.editorFontSize}px`);
-    // 主题 token：基础主题 ∪ 自定义覆盖（base 与当前模式匹配才生效）
-    const custom = cfg.themeId
-      ? cfg.customThemes.find((t) => t.id === cfg.themeId && t.base === (dark ? "dark" : "light"))
-      : undefined;
-    const tokens: ThemeTokens = { ...builtin(dark ? "dark" : "light"), ...(custom?.tokens ?? {}) };
+    // 主题 token：基础主题 ∪ 方案重叠（预设与自定义同一套解析，见 domain/preferences.findScheme）。
+    // 方案只在自己的 base 模式下生效：与当前亮/暗不一致则退回内置主题。
+    const base = dark ? "dark" : "light";
+    const scheme = this.prefs.schemeOf(cfg.themeId);
+    const tokens: ThemeTokens = {
+      ...builtin(base),
+      ...(scheme && scheme.base === base ? scheme.tokens : {}),
+    };
     for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
+    // 非主题常量（字体/字距）不在内置表里，无法靠"重写一遍"恢复默认：
+    // 上一套方案注过 --track-label，切回内置时必须 removeProperty，
+    // 否则内联值残留在 <html> 上，投影就不再是可重建的
+    for (const k of SCHEME_EXTRA_TOKENS) {
+      if (!(k in tokens)) root.style.removeProperty(k);
+    }
     // 强调色独立偏好，最后注入（自定义 token 覆盖不了 accent）
     const hex = dark ? cfg.accent.dark : cfg.accent.light;
     root.style.setProperty("--accent", hex);

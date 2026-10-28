@@ -29,8 +29,7 @@
   --tip-bg: #1c1917;
   --tip-fg: #fafaf9;
   --shadow-card: 0 8px 28px rgb(0 0 0 / 0.13);
-  /* 界面字号 rem 基准与正文字号：由 PreferencesService 内联覆盖，这里是默认回退 */
-  --editor-font-size: 1.067rem;
+  /* 字号 / 字体 / 字距不属于主题色：见下方「非主题常量」块 */
   /* Home 备注占位文案（组件按语言内联覆盖） */
   --note-ph: "备注…";
   /* Home 大纲配色与笔记区统一（结构/交互规格保留 Workflowy，色彩挂应用主题；
@@ -182,6 +181,7 @@ html[data-theme="dark"] ::selection {
 }
 .tab-label {
   font-weight: 500;
+  letter-spacing: var(--track-label);
 }
 .side-scroll {
   min-height: 0;
@@ -395,13 +395,12 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "Noto Sans SC",
-    "PingFang SC", sans-serif;
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 .serif {
-  font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+  font-family: var(--font-serif);
 }
 
 /* ---------- 通用小件 ---------- */
@@ -498,7 +497,7 @@ body {
 .ProseMirror h2,
 .ProseMirror h3,
 .ProseMirror h4 {
-  font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+  font-family: var(--font-serif);
   font-weight: 700;
   line-height: 1.4;
   margin: 1.5em 0 0.5em;
@@ -530,7 +529,7 @@ body {
   font-size: 0.86em;
   line-height: 1.6;
   overflow-x: auto;
-  font-family: Consolas, "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 /* 代码块 NodeView：普通代码块保持原样；mermaid 默认只显示图，可切源码。 */
@@ -758,7 +757,7 @@ body {
   font-weight: 700;
 }
 .ProseMirror code {
-  font-family: Consolas, "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 .ProseMirror :not(pre) > code {
   background: var(--code-bg);
@@ -1856,6 +1855,18 @@ body {
   --icon-stroke-regular: 1.4;
   --icon-stroke-strong: 1.6;
   --i: 0;
+  /* 界面字号 rem 基准与正文字号：由 PreferencesService 内联覆盖，这里是默认回退 */
+  --editor-font-size: 1.067rem;
+  /* 字体家族 token：色调不随亮暗变，故放常量块；主题方案（预设/自定义）可用同名 token
+     整体换字体，回退链必须保留——缺字时逐级降级到系统中文档，不能只剩一个字体名 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "JetBrains Mono",
+    "Cascadia Mono", monospace;
+  /* 小标签字距：默认 0（保持现状）；纸张类主题放宽到 0.1em 出「工程图纸」味。
+     只作用于小号辅助标签，正文与标题不受影响 */
+  --track-label: 0;
 }
 .tab-bar {
   flex: none;
@@ -2326,7 +2337,8 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   margin: 0;
   font-size: 0.767rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  /* 分区标题的字距 = 基础 0.04em + 方案标签字距（纸张主题放宽） */
+  letter-spacing: calc(0.04em + var(--track-label));
   color: var(--ink-faint);
 }
 .settings-section-head {
@@ -2339,6 +2351,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   margin: 0;
   font-size: 0.767rem;
   line-height: 1.5;
+  letter-spacing: var(--track-label);
   color: var(--ink-faint);
 }
 .settings-col {
@@ -2591,7 +2604,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border-radius: 6px;
   background: var(--paper-side);
   font-size: 0.8rem;
-  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  font-family: var(--font-mono);
   color: var(--ink);
   outline: none;
   transition: border-color 0.13s ease, box-shadow 0.13s ease;
@@ -2698,7 +2711,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--paper-side);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.733rem;
   color: var(--ink-faint);
 }
@@ -4297,8 +4310,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   color: var(--wf-text);
   font-size: 1.067rem;
   line-height: 1.6rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-ui);
   /* 系统光标隐藏：与笔记编辑器共用自定义光标（caret-custom） */
   caret-color: transparent;
   /* 推翻笔记编辑器的全局书写留白（min-height/padding-bottom）：

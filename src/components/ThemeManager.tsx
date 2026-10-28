@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { useSettings, type CustomTheme } from "../i18n";
-import { BUILTIN_DARK, BUILTIN_LIGHT } from "../domain/theme-tokens";
+import { BUILTIN_DARK, BUILTIN_LIGHT, PRESETS, type ThemePreset } from "../domain/theme-tokens";
 
 function ThemeRow({
   label,
@@ -78,6 +78,8 @@ export default function ThemeManager() {
   const {
     t,
     dark,
+    theme,
+    setTheme,
     themeId,
     setThemeId,
     customThemes,
@@ -109,10 +111,23 @@ export default function ThemeManager() {
     window.setTimeout(() => setCopiedId((v) => (v === "builtin" ? null : v)), 1500);
   };
 
+  /** 预设也可拷成 JSON：想微调就"拷出来 → 粘贴导入"转成一个自定义主题 */
+  const copyPreset = async (preset: ThemePreset) => {
+    const tpl: CustomTheme = {
+      id: "",
+      name: t(preset.nameKey),
+      base: preset.base,
+      tokens: { ...preset.tokens },
+    };
+    await navigator.clipboard.writeText(JSON.stringify(tpl, null, 2));
+    setCopiedId(preset.id);
+    window.setTimeout(() => setCopiedId((v) => (v === preset.id ? null : v)), 1500);
+  };
+
   const commitRename = (id: string) => {
-    const theme = customThemes.find((x) => x.id === id);
+    const th = customThemes.find((x) => x.id === id);
     const name = nameDraft.trim();
-    if (theme && name) saveTheme({ ...theme, name });
+    if (th && name) saveTheme({ ...th, name });
     setRenamingId(null);
   };
 
@@ -161,6 +176,27 @@ export default function ThemeManager() {
           </MiniBtn>
         }
       />
+      {PRESETS.map((p) => (
+        <ThemeRow
+          key={p.id}
+          label={t(p.nameKey)}
+          sub={`${p.base === "dark" ? t("themeBaseDark") : t("themeBaseLight")} · ${t(p.descKey)}${
+            p.base !== mode ? ` · ${t("themeNotActive")}` : ""
+          }`}
+          active={themeId === p.id}
+          onSelect={() => {
+            setThemeId(p.id);
+            // 方案自带 base：点选时顺手切到该模式，
+            // 否则暗色方案在亮模式下会"点了没反应"（只靠一行小字提示不生效）。
+            if (theme !== p.base) setTheme(p.base);
+          }}
+          actions={
+            <MiniBtn onClick={() => void copyPreset(p)} title={t("themeExport")}>
+              {copiedId === p.id ? t("themeCopied") : "⧉"}
+            </MiniBtn>
+          }
+        />
+      ))}
       {customThemes.map((th) => (
         <ThemeRow
           key={th.id}

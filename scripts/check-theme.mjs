@@ -132,9 +132,76 @@ for (const file of walk(SRC_DIR)) {
   checkRefs(fs.readFileSync(file, "utf8"), path.relative(ROOT, file));
 }
 
+// ---- 5. 预设方案校验（src/domain/theme-tokens.ts）----
+// 预设是代码里的静态事实，不经过偏好归一化，所以拼写错误不会被人拦住：
+//   a. 每个 preset 的 token key 必须落在「对应 base 的内置表 ∪ 非主题常量白名单」
+//      —— 否则注入一个不存在的 --xxx，切到该方案时静默无效
+//   b. token 值不能为空
+//   c. id 必须符合 Preferences.sanitizeThemeId 的字符集，且不重复（否则归一化会被静默剔掉）
+//   d. 白名单里的每个 token 必须在 styles.css 有定义（防"白名单里写了拼错的变量名"）
+const TOKENS_TS = path.join(ROOT, "src", "domain", "theme-tokens.ts");
+const tokensSrc = fs.readFileSync(TOKENS_TS, "utf8");
+
+const tableBody = (name) =>
+  tokensSrc.match(new RegExp(`export const ${name}: ThemeTokens = \\{([\\s\\S]*?)\\n\\};`))?.[1] ?? "";
+const keysOf = (body) => new Set([...body.matchAll(/^\s*"(--[\w-]+)"/gm)].map((m) => m[1]));
+const entriesOf = (body) => {
+  const out = new Map();
+  for (const m of body.matchAll(/^\s*"(--[\w-]+)"\s*:\s*((?:"(?:[^"\\]|\\.)*")|[^,\n]+)/gm))
+    out.set(m[1], m[2].trim());
+  return out;
+};
+
+const lightBody = tableBody("BUILTIN_LIGHT");
+const darkBody = tableBody("BUILTIN_DARK");
+if (!lightBody || !darkBody) errors.push("theme-tokens.ts 里找不到 BUILTIN_LIGHT / BUILTIN_DARK 表");
+// 派生 token（--wf-text 等）整体展开进两张表，校验时也算合法 key
+const wfBody = tableBody("WF_REF");
+const lightKeys = new Set([...keysOf(lightBody), ...keysOf(wfBody)]);
+const darkKeys = new Set([...keysOf(darkBody), ...keysOf(wfBody)]);
+
+const extraBody = tokensSrc.match(/export const SCHEME_EXTRA_TOKENS = \[([\s\S]*?)\] as const;/)?.[1];
+if (extraBody == null) errors.push("theme-tokens.ts 里找不到 SCHEME_EXTRA_TOKENS");
+const extras = new Set([...(extraBody ?? "").matchAll(/"(--[\w-]+)"/g)].map((m) => m[1]));
+for (const v of extras) {
+  if (!defined.has(v)) errors.push(`SCHEME_EXTRA_TOKENS 里的 ${v} 在 styles.css 里没有定义`);
+}
+
+const presetsBody = tokensSrc.match(
+  /export const PRESETS: readonly ThemePreset\[\] = \[([\s\S]*?)\n\];/
+)?.[1];
+if (presetsBody == null) errors.push("theme-tokens.ts 里找不到 PRESETS 表");
+const presetIds = new Set();
+let presetCount = 0;
+for (const m of (presetsBody ?? "").matchAll(
+  /\{\s*id:\s*"([^"]+)"[\s\S]*?base:\s*"(dark|light)",\s*tokens:\s*(\w+)/g
+)) {
+  const [, id, base, table] = m;
+  presetCount++;
+  if (presetIds.has(id)) errors.push(`预设 id 重复：${id}`);
+  presetIds.add(id);
+  if (!/^[a-zA-Z0-9_-]{1,48}$/.test(id))
+    errors.push(`预设 id ${id} 含非法字符（必须匹配 sanitizeThemeId 的字符集）`);
+  const body = tableBody(table);
+  if (!body) {
+    errors.push(`预设 ${id} 引用的 token 表 ${table} 不存在`);
+    continue;
+  }
+  const allowed = new Set([...(base === "dark" ? darkKeys : lightKeys), ...extras]);
+  for (const [key, value] of entriesOf(body)) {
+    if (!allowed.has(key))
+      errors.push(`预设 ${id} 覆盖了 ${base} 基础主题里没有的 token ${key}`);
+    if (!value || value === '""' || value === "''")
+      errors.push(`预设 ${id} 的 ${key} 值为空`);
+  }
+}
+if (presetsBody != null && presetCount === 0) errors.push("PRESETS 表里没有任何预设（解析失败或格式变了）");
+
 if (errors.length) {
   console.error(`✗ 主题检查未通过（${errors.length} 处）：`);
   for (const e of errors) console.error(`  - ${e}`);
   process.exit(1);
 }
-console.log(`✓ 主题检查通过：色板 ${palette.size} 个变量，暗色覆盖 ${dark.size} 个，var() 引用无悬空`);
+console.log(
+  `✓ 主题检查通过：色板 ${palette.size} 个变量，暗色覆盖 ${dark.size} 个，预设 ${presetCount} 套（非主题常量 ${extras.size} 个），var() 引用无悬空`
+);

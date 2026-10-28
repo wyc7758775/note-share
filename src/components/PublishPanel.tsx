@@ -255,7 +255,7 @@ export default function PublishPanel({ editor, pathRef, fmRef, title, onBack }: 
               {pubState === "done" && pubUrl ? (
                 <div className="flex min-w-0 items-center gap-2">
                   <a
-                    className="truncate text-xs text-amber-700 underline"
+                    className="truncate text-xs text-[var(--accent)] underline"
                     href={pubUrl}
                     target="_blank"
                     rel="noreferrer"
